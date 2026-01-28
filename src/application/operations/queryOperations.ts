@@ -7,8 +7,7 @@ import type { Job, JobId } from '../../domain/types/job';
 import type { JobLocation } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
-import type { RWLock } from '../../shared/lock';
-import { withReadLock } from '../../shared/lock';
+import { type RWLock, withReadLock } from '../../shared/lock';
 
 /** Context for query operations */
 export interface QueryContext {

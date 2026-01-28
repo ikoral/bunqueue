@@ -4,7 +4,7 @@
  */
 
 import { type Job, type JobId, type JobInput, isDelayed } from '../domain/types/job';
-import { EventType, type JobLocation, type JobEvent } from '../domain/types/queue';
+import type { JobLocation, JobEvent } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry } from '../domain/types/worker';
 import { Shard } from '../domain/queue/shard';
@@ -357,8 +357,8 @@ export class QueueManager {
   // ============ Background Tasks ============
 
   private startBackgroundTasks(): void {
-    this.cleanupInterval = setInterval(() => this.cleanup(), this.config.cleanupIntervalMs);
-    this.timeoutInterval = setInterval(() => this.checkJobTimeouts(), this.config.jobTimeoutCheckMs);
+    this.cleanupInterval = setInterval(() => { this.cleanup(); }, this.config.cleanupIntervalMs);
+    this.timeoutInterval = setInterval(() => { this.checkJobTimeouts(); }, this.config.jobTimeoutCheckMs);
     this.cronScheduler.start();
   }
 

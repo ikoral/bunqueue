@@ -15,6 +15,8 @@ import {
   type ConnectionState,
 } from './protocol';
 import { uuid } from '../../shared/hash';
+import { tcpLog } from '../../shared/logger';
+import { getRateLimiter } from './rateLimiter';
 
 /** TCP Server configuration */
 export interface TcpServerConfig {
@@ -58,22 +60,28 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         };
 
         connections.set(clientId, socket);
-        console.log(`[TCP] Client connected: ${clientId}`);
+        tcpLog.info('Client connected', { clientId });
       },
 
       async data(socket, data) {
-        const { buffer, ctx } = socket.data;
+        const { buffer, ctx, state } = socket.data;
+        const rateLimiter = getRateLimiter();
+
+        // Check rate limit
+        if (!rateLimiter.isAllowed(state.clientId)) {
+          socket.write(errorResponse('Rate limit exceeded') + '\n');
+          return;
+        }
+
         const text = new TextDecoder().decode(data);
         const lines = buffer.addData(text);
 
         for (const line of lines) {
           const cmd = parseCommand(line);
-
           if (!cmd) {
             socket.write(errorResponse('Invalid command') + '\n');
             continue;
           }
-
           try {
             const response = await handleCommand(cmd, ctx);
             socket.write(serializeResponse(response) + '\n');
@@ -87,11 +95,12 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
       close(socket) {
         const clientId = socket.data.state.clientId;
         connections.delete(clientId);
-        console.log(`[TCP] Client disconnected: ${clientId}`);
+        getRateLimiter().removeClient(clientId);
+        tcpLog.info('Client disconnected', { clientId });
       },
 
       error(_socket, error) {
-        console.error(`[TCP] Error: ${error.message}`);
+        tcpLog.error('Connection error', { error: error.message });
       },
 
       drain(_socket) {
@@ -100,7 +109,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
     },
   });
 
-  console.log(`[TCP] Server listening on ${config.hostname ?? '0.0.0.0'}:${config.port}`);
+  tcpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
 
   return {
     server,
@@ -125,7 +134,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         socket.end();
       }
       connections.clear();
-      console.log('[TCP] Server stopped');
+      tcpLog.info('Server stopped');
     },
   };
 }

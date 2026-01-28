@@ -10,6 +10,7 @@ import { parseCommand, serializeResponse, errorResponse } from './protocol';
 import { constantTimeEqual, uuid } from '../../shared/hash';
 import type { JobEvent } from '../../domain/types/queue';
 import { httpLog, wsLog } from '../../shared/logger';
+import { getRateLimiter } from './rateLimiter';
 
 /** HTTP Server configuration */
 export interface HttpServerConfig {
@@ -80,9 +81,17 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         return corsResponse(corsOrigins);
       }
 
-      // Health check (no auth)
+      // Health check (no auth, no rate limit)
       if (path === '/health') {
         return jsonResponse({ ok: true, status: 'healthy' });
+      }
+
+      // Rate limiting (use IP as client ID for HTTP)
+      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        ?? req.headers.get('x-real-ip')
+        ?? 'unknown';
+      if (!getRateLimiter().isAllowed(clientIp)) {
+        return jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429);
       }
 
       // WebSocket upgrade
@@ -236,7 +245,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     },
   });
 
-  console.log(`[HTTP] Server listening on ${config.hostname ?? '0.0.0.0'}:${config.port}`);
+  httpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
 
   return {
     server,
@@ -266,7 +275,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       sseClients.clear();
 
       void server.stop();
-      console.log('[HTTP] Server stopped');
+      httpLog.info('Server stopped');
     },
   };
 }

@@ -3,7 +3,7 @@
  * Pause, resume, drain, obliterate, clean, list queues
  */
 
-import type { Job, JobId } from '../../domain/types/job';
+import type { JobId } from '../../domain/types/job';
 import type { Shard } from '../../domain/queue/shard';
 import { shardIndex, SHARD_COUNT } from '../../shared/hash';
 

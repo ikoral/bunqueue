@@ -4,8 +4,7 @@
  */
 
 import type { JobId } from '../domain/types/job';
-import type { JobLogEntry } from '../domain/types/worker';
-import { createLogEntry } from '../domain/types/worker';
+import { type JobLogEntry, createLogEntry } from '../domain/types/worker';
 import type { JobLocation } from '../domain/types/queue';
 
 /** Context for job logs operations */
