@@ -87,9 +87,10 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       }
 
       // Rate limiting (use IP as client ID for HTTP)
-      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-        ?? req.headers.get('x-real-ip')
-        ?? 'unknown';
+      const clientIp =
+        req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+        req.headers.get('x-real-ip') ??
+        'unknown';
       if (!getRateLimiter().isAllowed(clientIp)) {
         return jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429);
       }
@@ -131,7 +132,9 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
             });
 
             // Send initial connection message
-            controller.enqueue(new TextEncoder().encode(`data: {"connected":true,"clientId":"${clientId}"}\n\n`));
+            controller.enqueue(
+              new TextEncoder().encode(`data: {"connected":true,"clientId":"${clientId}"}\n\n`)
+            );
           },
           cancel() {
             sseClients.delete(clientId);
@@ -142,8 +145,10 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
           headers: {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': corsOrigins.has('*') ? '*' : Array.from(corsOrigins).join(', '),
+            Connection: 'keep-alive',
+            'Access-Control-Allow-Origin': corsOrigins.has('*')
+              ? '*'
+              : Array.from(corsOrigins).join(', '),
           },
         });
       }

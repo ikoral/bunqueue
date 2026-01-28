@@ -106,9 +106,14 @@ function main(): void {
     const stats = queueManager.getStats();
     const workerStats = queueManager.workerManager.getStats();
     statsLog.info('Queue statistics', {
-      waiting: stats.waiting, active: stats.active, delayed: stats.delayed,
-      completed: stats.completed, dlq: stats.dlq,
-      tcp: tcpServer.getConnectionCount(), ws: httpServer.getWsClientCount(), sse: httpServer.getSseClientCount(),
+      waiting: stats.waiting,
+      active: stats.active,
+      delayed: stats.delayed,
+      completed: stats.completed,
+      dlq: stats.dlq,
+      tcp: tcpServer.getConnectionCount(),
+      ws: httpServer.getWsClientCount(),
+      sse: httpServer.getSseClientCount(),
       workers: `${workerStats.active}/${workerStats.total}`,
     });
   }, 30_000);

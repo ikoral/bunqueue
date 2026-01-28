@@ -20,10 +20,7 @@ export interface JobManagementContext {
 }
 
 /** Cancel a job (remove from queue) */
-export async function cancelJob(
-  jobId: JobId,
-  ctx: JobManagementContext
-): Promise<boolean> {
+export async function cancelJob(jobId: JobId, ctx: JobManagementContext): Promise<boolean> {
   const location = ctx.jobIndex.get(jobId);
   if (!location) return false;
 
@@ -104,10 +101,7 @@ export async function changeJobPriority(
 }
 
 /** Promote delayed job to waiting */
-export async function promoteJob(
-  jobId: JobId,
-  ctx: JobManagementContext
-): Promise<boolean> {
+export async function promoteJob(jobId: JobId, ctx: JobManagementContext): Promise<boolean> {
   const location = ctx.jobIndex.get(jobId);
   if (location?.type !== 'queue') return false;
 
@@ -144,10 +138,7 @@ export async function moveJobToDelayed(
 }
 
 /** Discard job to DLQ */
-export async function discardJob(
-  jobId: JobId,
-  ctx: JobManagementContext
-): Promise<boolean> {
+export async function discardJob(jobId: JobId, ctx: JobManagementContext): Promise<boolean> {
   const location = ctx.jobIndex.get(jobId);
   if (!location) return false;
 

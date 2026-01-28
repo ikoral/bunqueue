@@ -78,8 +78,7 @@ export class WebhookManager {
     };
 
     const matchingWebhooks = Array.from(this.webhooks.values()).filter(
-      (wh) =>
-        wh.enabled && wh.events.includes(event) && (wh.queue === null || wh.queue === queue)
+      (wh) => wh.enabled && wh.events.includes(event) && (wh.queue === null || wh.queue === queue)
     );
 
     // Fire and forget - don't block

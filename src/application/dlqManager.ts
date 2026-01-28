@@ -22,11 +22,7 @@ export function getDlqJobs(queue: string, ctx: DlqContext, count?: number): Job[
 }
 
 /** Retry jobs from DLQ */
-export function retryDlqJobs(
-  queue: string,
-  ctx: DlqContext,
-  jobId?: JobId
-): number {
+export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): number {
   const idx = shardIndex(queue);
   const shard = ctx.shards[idx];
 

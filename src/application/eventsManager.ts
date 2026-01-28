@@ -27,13 +27,15 @@ export class EventsManager {
   }
 
   /** Broadcast event to all subscribers */
-  broadcast(event: Partial<JobEvent> & {
-    eventType: EventType;
-    queue: string;
-    jobId: JobId;
-    timestamp: number;
-    error?: string;
-  }): void {
+  broadcast(
+    event: Partial<JobEvent> & {
+      eventType: EventType;
+      queue: string;
+      jobId: JobId;
+      timestamp: number;
+      error?: string;
+    }
+  ): void {
     // Notify subscribers
     for (const sub of this.subscribers) {
       try {

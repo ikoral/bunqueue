@@ -117,40 +117,69 @@ export class QueueManager {
 
   private getPushContext(): PushContext {
     return {
-      storage: this.storage, shards: this.shards, shardLocks: this.shardLocks,
-      completedJobs: this.completedJobs, customIdMap: this.customIdMap, jobIndex: this.jobIndex,
-      totalPushed: this.metrics.totalPushed, broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
+      storage: this.storage,
+      shards: this.shards,
+      shardLocks: this.shardLocks,
+      completedJobs: this.completedJobs,
+      customIdMap: this.customIdMap,
+      jobIndex: this.jobIndex,
+      totalPushed: this.metrics.totalPushed,
+      broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
     };
   }
 
   private getPullContext(): PullContext {
     return {
-      storage: this.storage, shards: this.shards, shardLocks: this.shardLocks,
-      processingShards: this.processingShards, processingLocks: this.processingLocks,
-      jobIndex: this.jobIndex, totalPulled: this.metrics.totalPulled,
+      storage: this.storage,
+      shards: this.shards,
+      shardLocks: this.shardLocks,
+      processingShards: this.processingShards,
+      processingLocks: this.processingLocks,
+      jobIndex: this.jobIndex,
+      totalPulled: this.metrics.totalPulled,
       broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
     };
   }
 
   private getAckContext(): AckContext {
     return {
-      storage: this.storage, shards: this.shards, shardLocks: this.shardLocks,
-      processingShards: this.processingShards, processingLocks: this.processingLocks,
-      completedJobs: this.completedJobs, jobResults: this.jobResults, jobIndex: this.jobIndex,
-      totalCompleted: this.metrics.totalCompleted, totalFailed: this.metrics.totalFailed,
-      broadcast: this.eventsManager.broadcast.bind(this.eventsManager), onJobCompleted: this.onJobCompleted.bind(this),
+      storage: this.storage,
+      shards: this.shards,
+      shardLocks: this.shardLocks,
+      processingShards: this.processingShards,
+      processingLocks: this.processingLocks,
+      completedJobs: this.completedJobs,
+      jobResults: this.jobResults,
+      jobIndex: this.jobIndex,
+      totalCompleted: this.metrics.totalCompleted,
+      totalFailed: this.metrics.totalFailed,
+      broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
+      onJobCompleted: this.onJobCompleted.bind(this),
     };
   }
 
   private getJobMgmtContext(): jobMgmt.JobManagementContext {
-    return { storage: this.storage, shards: this.shards, processingShards: this.processingShards,
-      jobIndex: this.jobIndex, webhookManager: this.webhookManager };
+    return {
+      storage: this.storage,
+      shards: this.shards,
+      processingShards: this.processingShards,
+      jobIndex: this.jobIndex,
+      webhookManager: this.webhookManager,
+    };
   }
 
   private getQueryContext(): queryOps.QueryContext {
-    return { storage: this.storage, shards: this.shards, shardLocks: this.shardLocks,
-      processingShards: this.processingShards, processingLocks: this.processingLocks,
-      jobIndex: this.jobIndex, completedJobs: this.completedJobs, jobResults: this.jobResults, customIdMap: this.customIdMap };
+    return {
+      storage: this.storage,
+      shards: this.shards,
+      shardLocks: this.shardLocks,
+      processingShards: this.processingShards,
+      processingLocks: this.processingLocks,
+      jobIndex: this.jobIndex,
+      completedJobs: this.completedJobs,
+      jobResults: this.jobResults,
+      customIdMap: this.customIdMap,
+    };
   }
 
   // ============ Core Operations ============
@@ -224,7 +253,13 @@ export class QueueManager {
   }
 
   clean(queue: string, graceMs: number, state?: string, limit?: number): number {
-    return queueControl.cleanQueue(queue, graceMs, { shards: this.shards, jobIndex: this.jobIndex }, state, limit);
+    return queueControl.cleanQueue(
+      queue,
+      graceMs,
+      { shards: this.shards, jobIndex: this.jobIndex },
+      state,
+      limit
+    );
   }
 
   // ============ DLQ Operations (delegated) ============
@@ -292,19 +327,32 @@ export class QueueManager {
   // ============ Job Logs (delegated) ============
 
   addLog(jobId: JobId, message: string, level: 'info' | 'warn' | 'error' = 'info'): boolean {
-    return logsOps.addJobLog(jobId, message, {
-      jobIndex: this.jobIndex,
-      jobLogs: this.jobLogs,
-      maxLogsPerJob: this.maxLogsPerJob,
-    }, level);
+    return logsOps.addJobLog(
+      jobId,
+      message,
+      {
+        jobIndex: this.jobIndex,
+        jobLogs: this.jobLogs,
+        maxLogsPerJob: this.maxLogsPerJob,
+      },
+      level
+    );
   }
 
   getLogs(jobId: JobId): JobLogEntry[] {
-    return logsOps.getJobLogs(jobId, { jobIndex: this.jobIndex, jobLogs: this.jobLogs, maxLogsPerJob: this.maxLogsPerJob });
+    return logsOps.getJobLogs(jobId, {
+      jobIndex: this.jobIndex,
+      jobLogs: this.jobLogs,
+      maxLogsPerJob: this.maxLogsPerJob,
+    });
   }
 
   clearLogs(jobId: JobId): void {
-    logsOps.clearJobLogs(jobId, { jobIndex: this.jobIndex, jobLogs: this.jobLogs, maxLogsPerJob: this.maxLogsPerJob });
+    logsOps.clearJobLogs(jobId, {
+      jobIndex: this.jobIndex,
+      jobLogs: this.jobLogs,
+      maxLogsPerJob: this.maxLogsPerJob,
+    });
   }
 
   // ============ Metrics ============
@@ -357,8 +405,12 @@ export class QueueManager {
   // ============ Background Tasks ============
 
   private startBackgroundTasks(): void {
-    this.cleanupInterval = setInterval(() => { this.cleanup(); }, this.config.cleanupIntervalMs);
-    this.timeoutInterval = setInterval(() => { this.checkJobTimeouts(); }, this.config.jobTimeoutCheckMs);
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, this.config.cleanupIntervalMs);
+    this.timeoutInterval = setInterval(() => {
+      this.checkJobTimeouts();
+    }, this.config.jobTimeoutCheckMs);
     this.cronScheduler.start();
   }
 
@@ -417,7 +469,10 @@ export class QueueManager {
   }
 
   getStats() {
-    let waiting = 0, delayed = 0, active = 0, dlq = 0;
+    let waiting = 0,
+      delayed = 0,
+      active = 0,
+      dlq = 0;
     const now = Date.now();
 
     for (let i = 0; i < SHARD_COUNT; i++) {
@@ -433,7 +488,10 @@ export class QueueManager {
 
     const cronStats = this.cronScheduler.getStats();
     return {
-      waiting, delayed, active, dlq,
+      waiting,
+      delayed,
+      active,
+      dlq,
       completed: this.completedJobs.size,
       totalPushed: this.metrics.totalPushed.value,
       totalPulled: this.metrics.totalPulled.value,

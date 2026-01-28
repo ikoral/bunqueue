@@ -69,12 +69,15 @@ export async function handleRegisterWorker(
   reqId?: string
 ): Promise<Response> {
   const worker = ctx.queueManager.workerManager.register(cmd.name, cmd.queues);
-  return resp.data({
-    workerId: worker.id,
-    name: worker.name,
-    queues: worker.queues,
-    registeredAt: worker.registeredAt,
-  }, reqId);
+  return resp.data(
+    {
+      workerId: worker.id,
+      name: worker.name,
+      queues: worker.queues,
+      registeredAt: worker.registeredAt,
+    },
+    reqId
+  );
 }
 
 export async function handleUnregisterWorker(
@@ -95,19 +98,22 @@ export async function handleListWorkers(
   reqId?: string
 ): Promise<Response> {
   const workers = ctx.queueManager.workerManager.list();
-  return resp.data({
-    workers: workers.map((w) => ({
-      id: w.id,
-      name: w.name,
-      queues: w.queues,
-      registeredAt: w.registeredAt,
-      lastSeen: w.lastSeen,
-      activeJobs: w.activeJobs,
-      processedJobs: w.processedJobs,
-      failedJobs: w.failedJobs,
-    })),
-    stats: ctx.queueManager.workerManager.getStats(),
-  }, reqId);
+  return resp.data(
+    {
+      workers: workers.map((w) => ({
+        id: w.id,
+        name: w.name,
+        queues: w.queues,
+        registeredAt: w.registeredAt,
+        lastSeen: w.lastSeen,
+        activeJobs: w.activeJobs,
+        processedJobs: w.processedJobs,
+        failedJobs: w.failedJobs,
+      })),
+      stats: ctx.queueManager.workerManager.getStats(),
+    },
+    reqId
+  );
 }
 
 // ============ Webhooks ============
@@ -117,19 +123,17 @@ export async function handleAddWebhook(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const webhook = ctx.queueManager.webhookManager.add(
-    cmd.url,
-    cmd.events,
-    cmd.queue,
-    cmd.secret
+  const webhook = ctx.queueManager.webhookManager.add(cmd.url, cmd.events, cmd.queue, cmd.secret);
+  return resp.data(
+    {
+      webhookId: webhook.id,
+      url: webhook.url,
+      events: webhook.events,
+      queue: webhook.queue,
+      createdAt: webhook.createdAt,
+    },
+    reqId
   );
-  return resp.data({
-    webhookId: webhook.id,
-    url: webhook.url,
-    events: webhook.events,
-    queue: webhook.queue,
-    createdAt: webhook.createdAt,
-  }, reqId);
 }
 
 export async function handleRemoveWebhook(
@@ -150,20 +154,23 @@ export async function handleListWebhooks(
   reqId?: string
 ): Promise<Response> {
   const webhooks = ctx.queueManager.webhookManager.list();
-  return resp.data({
-    webhooks: webhooks.map((w) => ({
-      id: w.id,
-      url: w.url,
-      events: w.events,
-      queue: w.queue,
-      createdAt: w.createdAt,
-      lastTriggered: w.lastTriggered,
-      successCount: w.successCount,
-      failureCount: w.failureCount,
-      enabled: w.enabled,
-    })),
-    stats: ctx.queueManager.webhookManager.getStats(),
-  }, reqId);
+  return resp.data(
+    {
+      webhooks: webhooks.map((w) => ({
+        id: w.id,
+        url: w.url,
+        events: w.events,
+        queue: w.queue,
+        createdAt: w.createdAt,
+        lastTriggered: w.lastTriggered,
+        successCount: w.successCount,
+        failureCount: w.failureCount,
+        enabled: w.enabled,
+      })),
+      stats: ctx.queueManager.webhookManager.getStats(),
+    },
+    reqId
+  );
 }
 
 // ============ Prometheus Metrics ============

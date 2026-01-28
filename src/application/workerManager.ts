@@ -23,7 +23,9 @@ export class WorkerManager {
   register(name: string, queues: string[]): Worker {
     const worker = createWorker(name, queues);
     this.workers.set(worker.id, worker);
-    console.log(`[Worker] Registered worker ${worker.id} (${name}) for queues: ${queues.join(', ')}`);
+    console.log(
+      `[Worker] Registered worker ${worker.id} (${name}) for queues: ${queues.join(', ')}`
+    );
     return worker;
   }
 
@@ -86,9 +88,7 @@ export class WorkerManager {
   /** List active workers (seen recently) */
   listActive(): Worker[] {
     const now = Date.now();
-    return Array.from(this.workers.values()).filter(
-      (w) => now - w.lastSeen < WORKER_TIMEOUT_MS
-    );
+    return Array.from(this.workers.values()).filter((w) => now - w.lastSeen < WORKER_TIMEOUT_MS);
   }
 
   /** Get workers for a specific queue */
