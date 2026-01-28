@@ -11,6 +11,7 @@ import {
   getNextIntervalRun,
   expandCronShortcut,
 } from './cronParser';
+import { cronLog } from '../../shared/logger';
 
 /** Cron scheduler configuration */
 export interface CronSchedulerConfig {
@@ -55,7 +56,7 @@ export class CronScheduler {
       void this.tick();
     }, this.config.checkIntervalMs);
 
-    console.log('[Cron] Scheduler started');
+    cronLog.info('Scheduler started');
   }
 
   /**
@@ -66,7 +67,7 @@ export class CronScheduler {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
     }
-    console.log('[Cron] Scheduler stopped');
+    cronLog.info('Scheduler stopped');
   }
 
   /**
@@ -101,7 +102,7 @@ export class CronScheduler {
     const cron = createCronJob(input, nextRun);
     this.cronJobs.set(cron.name, cron);
 
-    console.log(`[Cron] Added job "${cron.name}" - next run: ${new Date(nextRun).toISOString()}`);
+    cronLog.info('Added job', { name: cron.name, nextRun: new Date(nextRun).toISOString() });
 
     return cron;
   }
@@ -112,7 +113,7 @@ export class CronScheduler {
   remove(name: string): boolean {
     const deleted = this.cronJobs.delete(name);
     if (deleted) {
-      console.log(`[Cron] Removed job "${name}"`);
+      cronLog.info('Removed job', { name });
     }
     return deleted;
   }
@@ -138,7 +139,7 @@ export class CronScheduler {
     for (const cron of crons) {
       this.cronJobs.set(cron.name, cron);
     }
-    console.log(`[Cron] Loaded ${crons.length} jobs`);
+    cronLog.info('Loaded jobs', { count: crons.length });
   }
 
   /**
@@ -155,7 +156,7 @@ export class CronScheduler {
 
       // Skip if at limit
       if (isAtLimit(cron)) {
-        console.log(`[Cron] Job "${name}" reached execution limit`);
+        cronLog.info('Job reached execution limit', { name });
         this.cronJobs.delete(name);
         continue;
       }
@@ -178,11 +179,13 @@ export class CronScheduler {
           cron.nextRun = getNextIntervalRun(cron.repeatEvery, now);
         }
 
-        console.log(
-          `[Cron] Executed "${name}" (${cron.executions}x) - next: ${new Date(cron.nextRun).toISOString()}`
-        );
+        cronLog.info('Executed job', {
+          name,
+          executions: cron.executions,
+          nextRun: new Date(cron.nextRun).toISOString(),
+        });
       } catch (err) {
-        console.error(`[Cron] Failed to execute "${name}":`, err);
+        cronLog.error('Failed to execute job', { name, error: String(err) });
       }
     }
   }

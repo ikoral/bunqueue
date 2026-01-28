@@ -103,7 +103,7 @@ function main(): void {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   // Print stats periodically
-  setInterval(() => {
+  const statsInterval = setInterval(() => {
     const stats = queueManager.getStats();
     const workerStats = queueManager.workerManager.getStats();
     statsLog.info('Queue statistics', {
@@ -118,6 +118,11 @@ function main(): void {
       workers: `${workerStats.active}/${workerStats.total}`,
     });
   }, 30_000);
+
+  // Ensure stats interval is cleaned up on shutdown
+  process.on('beforeExit', () => {
+    clearInterval(statsInterval);
+  });
 }
 
 // Enable JSON logging if requested

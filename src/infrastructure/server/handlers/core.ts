@@ -8,7 +8,12 @@ import type { Response } from '../../../domain/types/response';
 import * as resp from '../../../domain/types/response';
 import { jobId } from '../../../domain/types/job';
 import type { HandlerContext } from '../types';
-import { validateQueueName, validateJobData } from '../protocol';
+import {
+  validateQueueName,
+  validateJobData,
+  validateJobOptions,
+  validateNumericField,
+} from '../protocol';
 
 /** Handle PUSH command */
 export async function handlePush(
@@ -21,6 +26,17 @@ export async function handlePush(
 
   const dataError = validateJobData(cmd.data);
   if (dataError) return resp.error(dataError, reqId);
+
+  // Validate numeric fields
+  const optionsError = validateJobOptions({
+    priority: cmd.priority,
+    delay: cmd.delay,
+    timeout: cmd.timeout,
+    maxAttempts: cmd.maxAttempts,
+    backoff: cmd.backoff,
+    ttl: cmd.ttl,
+  });
+  if (optionsError) return resp.error(optionsError, reqId);
 
   const job = await ctx.queueManager.push(cmd.queue, {
     data: cmd.data,
@@ -65,6 +81,10 @@ export async function handlePull(
   const queueError = validateQueueName(cmd.queue);
   if (queueError) return resp.error(queueError, reqId);
 
+  // Validate timeout
+  const timeoutError = validateNumericField(cmd.timeout, 'timeout', { min: 0, max: 60000 });
+  if (timeoutError) return resp.error(timeoutError, reqId);
+
   const job = await ctx.queueManager.pull(cmd.queue, cmd.timeout);
   return resp.nullableJob(job, reqId);
 }
@@ -77,6 +97,10 @@ export async function handlePullBatch(
 ): Promise<Response> {
   const queueError = validateQueueName(cmd.queue);
   if (queueError) return resp.error(queueError, reqId);
+
+  // Validate count
+  const countError = validateNumericField(cmd.count, 'count', { min: 1, max: 1000 });
+  if (countError) return resp.error(countError, reqId);
 
   const jobs = [];
   for (let i = 0; i < cmd.count; i++) {

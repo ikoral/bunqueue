@@ -83,7 +83,43 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
       // Health check (no auth, no rate limit)
       if (path === '/health') {
-        return jsonResponse({ ok: true, status: 'healthy' });
+        const stats = queueManager.getStats();
+        const uptime = process.uptime();
+        const memoryUsage = process.memoryUsage();
+
+        return jsonResponse({
+          ok: true,
+          status: 'healthy',
+          uptime: Math.floor(uptime),
+          version: '1.0.4',
+          queues: {
+            waiting: stats.waiting,
+            active: stats.active,
+            delayed: stats.delayed,
+            completed: stats.completed,
+            dlq: stats.dlq,
+          },
+          connections: {
+            tcp: 0, // Would need server reference
+            ws: wsClients.size,
+            sse: sseClients.size,
+          },
+          memory: {
+            heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+            heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+            rss: Math.round(memoryUsage.rss / 1024 / 1024),
+          },
+        });
+      }
+
+      // Simple liveness probe (minimal response)
+      if (path === '/healthz' || path === '/live') {
+        return new Response('OK', { status: 200 });
+      }
+
+      // Readiness probe (checks if server can accept work)
+      if (path === '/ready') {
+        return jsonResponse({ ok: true, ready: true });
       }
 
       // Rate limiting (use IP as client ID for HTTP)
@@ -115,8 +151,24 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         return undefined;
       }
 
-      // SSE (Server-Sent Events) endpoint - no auth required for basic events
+      // SSE (Server-Sent Events) endpoint - requires auth when enabled
       if (path === '/events' || path.startsWith('/events/')) {
+        // Check authentication for SSE
+        if (authTokens.size > 0) {
+          const authHeader = req.headers.get('Authorization');
+          const token = authHeader?.replace('Bearer ', '') ?? '';
+          let authenticated = false;
+          for (const validToken of authTokens) {
+            if (constantTimeEqual(token, validToken)) {
+              authenticated = true;
+              break;
+            }
+          }
+          if (!authenticated) {
+            return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+          }
+        }
+
         const queueFilter = path.startsWith('/events/queues/')
           ? path.slice('/events/queues/'.length)
           : null;

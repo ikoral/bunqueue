@@ -7,6 +7,7 @@ import type { JobId } from '../domain/types/job';
 import { EventType, type JobEvent } from '../domain/types/queue';
 import type { WebhookManager } from './webhookManager';
 import type { WebhookEvent } from '../domain/types/webhook';
+import { webhookLog } from '../shared/logger';
 
 /** Event subscriber callback */
 export type EventSubscriber = (event: JobEvent) => void;
@@ -24,6 +25,11 @@ export class EventsManager {
       const idx = this.subscribers.indexOf(callback);
       if (idx !== -1) this.subscribers.splice(idx, 1);
     };
+  }
+
+  /** Clear all subscribers (for shutdown) */
+  clear(): void {
+    this.subscribers.length = 0;
   }
 
   /** Broadcast event to all subscribers */
@@ -53,7 +59,14 @@ export class EventsManager {
           data: event.data,
           error: event.error,
         })
-        .catch(() => {});
+        .catch((err: unknown) => {
+          webhookLog.error('Webhook trigger failed', {
+            event: webhookEvent,
+            jobId: String(event.jobId),
+            queue: event.queue,
+            error: String(err),
+          });
+        });
     }
   }
 

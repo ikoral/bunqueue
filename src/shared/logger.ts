@@ -89,3 +89,6 @@ export const httpLog = createLogger('HTTP');
 export const wsLog = createLogger('WS');
 export const cronLog = createLogger('Cron');
 export const statsLog = createLogger('Stats');
+export const storageLog = createLogger('Storage');
+export const queueLog = createLogger('Queue');
+export const webhookLog = createLogger('Webhook');

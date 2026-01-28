@@ -4,6 +4,9 @@
  */
 
 import { type Worker, type WorkerId, createWorker } from '../domain/types/worker';
+import { createLogger } from '../shared/logger';
+
+const workerLog = createLogger('Worker');
 
 /** Worker timeout - consider dead after this many ms without heartbeat */
 const WORKER_TIMEOUT_MS = 30_000;
@@ -23,9 +26,7 @@ export class WorkerManager {
   register(name: string, queues: string[]): Worker {
     const worker = createWorker(name, queues);
     this.workers.set(worker.id, worker);
-    console.log(
-      `[Worker] Registered worker ${worker.id} (${name}) for queues: ${queues.join(', ')}`
-    );
+    workerLog.info('Registered worker', { workerId: worker.id, name, queues });
     return worker;
   }
 
@@ -33,7 +34,7 @@ export class WorkerManager {
   unregister(id: WorkerId): boolean {
     const removed = this.workers.delete(id);
     if (removed) {
-      console.log(`[Worker] Unregistered worker ${id}`);
+      workerLog.info('Unregistered worker', { workerId: id });
     }
     return removed;
   }
@@ -111,7 +112,7 @@ export class WorkerManager {
     for (const [id, worker] of this.workers) {
       if (now - worker.lastSeen > staleTimeout) {
         this.workers.delete(id);
-        console.log(`[Worker] Removed stale worker ${id} (${worker.name})`);
+        workerLog.info('Removed stale worker', { workerId: id, name: worker.name });
       }
     }
   }

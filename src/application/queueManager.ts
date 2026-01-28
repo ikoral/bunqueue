@@ -4,6 +4,7 @@
  */
 
 import { type Job, type JobId, type JobInput, isDelayed } from '../domain/types/job';
+import { queueLog } from '../shared/logger';
 import type { JobLocation, JobEvent } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry } from '../domain/types/worker';
@@ -419,7 +420,12 @@ export class QueueManager {
     for (const procShard of this.processingShards) {
       for (const [jobId, job] of procShard) {
         if (job.timeout && job.startedAt && now - job.startedAt > job.timeout) {
-          this.fail(jobId, 'Job timeout exceeded').catch(() => {});
+          this.fail(jobId, 'Job timeout exceeded').catch((err: unknown) => {
+            queueLog.error('Failed to mark timed out job as failed', {
+              jobId: String(jobId),
+              error: String(err),
+            });
+          });
         }
       }
     }
@@ -463,9 +469,19 @@ export class QueueManager {
   shutdown(): void {
     this.cronScheduler.stop();
     this.workerManager.stop();
+    this.eventsManager.clear();
     if (this.cleanupInterval) clearInterval(this.cleanupInterval);
     if (this.timeoutInterval) clearInterval(this.timeoutInterval);
     this.storage?.close();
+
+    // Clear in-memory collections
+    this.jobIndex.clear();
+    this.completedJobs.clear();
+    this.jobResults.clear();
+    this.jobLogs.clear();
+    for (const shard of this.processingShards) {
+      shard.clear();
+    }
   }
 
   getStats() {

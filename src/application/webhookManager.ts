@@ -10,6 +10,7 @@ import {
   type WebhookPayload,
   createWebhook,
 } from '../domain/types/webhook';
+import { webhookLog } from '../shared/logger';
 
 /** HMAC-SHA256 signature */
 async function signPayload(payload: string, secret: string): Promise<string> {
@@ -39,7 +40,7 @@ export class WebhookManager {
   add(url: string, events: string[], queue?: string, secret?: string): Webhook {
     const webhook = createWebhook(url, events, queue, secret);
     this.webhooks.set(webhook.id, webhook);
-    console.log(`[Webhook] Added webhook ${webhook.id} for ${events.join(', ')}`);
+    webhookLog.info('Added webhook', { webhookId: webhook.id, events });
     return webhook;
   }
 
@@ -47,7 +48,7 @@ export class WebhookManager {
   remove(id: WebhookId): boolean {
     const removed = this.webhooks.delete(id);
     if (removed) {
-      console.log(`[Webhook] Removed webhook ${id}`);
+      webhookLog.info('Removed webhook', { webhookId: id });
     }
     return removed;
   }
@@ -84,7 +85,7 @@ export class WebhookManager {
     // Fire and forget - don't block
     for (const webhook of matchingWebhooks) {
       this.sendWebhook(webhook, payload).catch((err: unknown) => {
-        console.error(`[Webhook] Failed to send to ${webhook.url}:`, err);
+        webhookLog.error('Failed to send webhook', { url: webhook.url, error: String(err) });
       });
     }
   }

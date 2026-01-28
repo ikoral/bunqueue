@@ -8,6 +8,17 @@ import { type Job, type JobId, jobId } from '../../domain/types/job';
 import type { CronJob } from '../../domain/types/cron';
 import { PRAGMA_SETTINGS, SCHEMA, MIGRATION_TABLE, SCHEMA_VERSION } from './schema';
 import { prepareStatements, type StatementName, type DbJob, type DbCron } from './statements';
+import { storageLog } from '../../shared/logger';
+
+/** Safely parse JSON with error handling */
+function safeJsonParse<T>(json: string, fallback: T, context: string): T {
+  try {
+    return JSON.parse(json) as T;
+  } catch (err) {
+    storageLog.error('JSON parse error', { context, error: String(err), json: json.slice(0, 100) });
+    return fallback;
+  }
+}
 
 /** SQLite configuration */
 export interface SqliteConfig {
@@ -116,7 +127,7 @@ export class SqliteStorage {
 
   getResult(jobId: JobId): unknown {
     const row = this.statements.get('getResult')!.get(Number(jobId)) as { result: string } | null;
-    return row ? JSON.parse(row.result) : null;
+    return row ? safeJsonParse(row.result, null, `getResult:${jobId}`) : null;
   }
 
   // ============ Bulk Operations ============
@@ -192,7 +203,7 @@ export class SqliteStorage {
     return rows.map((row) => ({
       name: row.name,
       queue: row.queue,
-      data: JSON.parse(row.data) as unknown,
+      data: safeJsonParse(row.data, {}, `loadCronJobs:${row.name}`),
       schedule: row.schedule,
       repeatEvery: row.repeat_every,
       priority: row.priority,
@@ -209,16 +220,21 @@ export class SqliteStorage {
   // ============ Utilities ============
 
   private rowToJob(row: DbJob): Job {
-    const dependsOn: string[] = row.depends_on ? (JSON.parse(row.depends_on) as string[]) : [];
-    const childrenIds: string[] = row.children_ids
-      ? (JSON.parse(row.children_ids) as string[])
+    const jobContext = `rowToJob:${row.id}`;
+    const dependsOn: string[] = row.depends_on
+      ? safeJsonParse<string[]>(row.depends_on, [], `${jobContext}:dependsOn`)
       : [];
-    const tags: string[] = row.tags ? (JSON.parse(row.tags) as string[]) : [];
+    const childrenIds: string[] = row.children_ids
+      ? safeJsonParse<string[]>(row.children_ids, [], `${jobContext}:childrenIds`)
+      : [];
+    const tags: string[] = row.tags
+      ? safeJsonParse<string[]>(row.tags, [], `${jobContext}:tags`)
+      : [];
 
     return {
       id: jobId(BigInt(row.id)),
       queue: row.queue,
-      data: JSON.parse(row.data) as unknown,
+      data: safeJsonParse(row.data, {}, `${jobContext}:data`),
       priority: row.priority,
       createdAt: row.created_at,
       runAt: row.run_at,

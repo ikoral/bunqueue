@@ -658,6 +658,69 @@ docker compose up -d
 docker compose --profile dev up bunqueue-dev
 ```
 
+## Deployment
+
+bunqueue requires a **persistent server** with filesystem access for SQLite. It is **not compatible** with serverless platforms like Vercel or Cloudflare Workers.
+
+### Compatible Platforms
+
+| Platform | Bun | SQLite | TCP | Notes |
+|----------|:---:|:------:|:---:|-------|
+| [Fly.io](https://fly.io) | ✅ | ✅ | ✅ | Recommended - persistent volumes, global deployment |
+| [Railway](https://railway.app) | ✅ | ✅ | ✅ | Easy deploy from GitHub |
+| [Render](https://render.com) | ✅ | ✅ | ✅ | Docker support, persistent disks |
+| [DigitalOcean](https://digitalocean.com) | ✅ | ✅ | ✅ | App Platform or Droplets |
+| Any VPS | ✅ | ✅ | ✅ | Full control |
+
+### Fly.io (Recommended)
+
+```bash
+# Install flyctl
+curl -L https://fly.io/install.sh | sh
+
+# Launch (uses existing Dockerfile)
+fly launch
+
+# Create persistent volume for SQLite
+fly volumes create bunqueue_data --size 1
+
+# Set secrets
+fly secrets set AUTH_TOKENS=your-secret-token
+
+# Deploy
+fly deploy
+```
+
+Add to `fly.toml`:
+```toml
+[mounts]
+  source = "bunqueue_data"
+  destination = "/app/data"
+
+[env]
+  DATA_PATH = "/app/data/bunqueue.db"
+```
+
+### Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template)
+
+```bash
+# Or via CLI
+railway login
+railway init
+railway up
+```
+
+### Not Compatible
+
+| Platform | Reason |
+|----------|--------|
+| Vercel | Serverless functions, no persistent filesystem, no TCP |
+| Cloudflare Workers | V8 isolates (not Bun), no filesystem, no TCP |
+| AWS Lambda | Serverless, no persistent storage |
+| Netlify Functions | Serverless, no filesystem |
+
 ## Architecture
 
 ```

@@ -19,6 +19,7 @@ import type {
 import type { Response } from '../../../domain/types/response';
 import * as resp from '../../../domain/types/response';
 import type { HandlerContext } from '../types';
+import { validateWebhookUrl } from '../protocol';
 
 // ============ Job Logs ============
 
@@ -123,6 +124,10 @@ export async function handleAddWebhook(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
+  // Validate webhook URL to prevent SSRF
+  const urlError = validateWebhookUrl(cmd.url);
+  if (urlError) return resp.error(urlError, reqId);
+
   const webhook = ctx.queueManager.webhookManager.add(cmd.url, cmd.events, cmd.queue, cmd.secret);
   return resp.data(
     {

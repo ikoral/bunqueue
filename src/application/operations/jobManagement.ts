@@ -9,6 +9,7 @@ import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { WebhookManager } from '../webhookManager';
 import { shardIndex } from '../../shared/hash';
+import { webhookLog } from '../../shared/logger';
 
 /** Context for job management operations */
 export interface JobManagementContext {
@@ -55,8 +56,12 @@ export async function updateJobProgress(
 
   ctx.webhookManager
     .trigger('job.progress', String(jobId), job.queue, { progress: job.progress })
-    .catch(() => {
-      // Ignore webhook errors
+    .catch((err: unknown) => {
+      webhookLog.error('Progress webhook failed', {
+        jobId: String(jobId),
+        queue: job.queue,
+        error: String(err),
+      });
     });
 
   return true;
