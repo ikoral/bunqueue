@@ -42,13 +42,20 @@ bun add bunqueue flashq
 ### Start Server
 
 ```bash
-# Option 1: Run directly
-bunqueue
-
-# Option 2: Run via npx
+# Option 1: Run via npx (recommended)
 npx bunqueue
 
-# Option 3: Docker
+# Option 2: Run via bun
+bunx bunqueue
+
+# Option 3: Run locally after install
+./node_modules/.bin/bunqueue
+
+# Option 4: Global install
+bun add -g bunqueue
+bunqueue
+
+# Option 5: Docker
 docker run -p 6789:6789 -p 6790:6790 ghcr.io/egeominotti/bunqueue
 ```
 
