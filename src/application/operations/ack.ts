@@ -39,6 +39,8 @@ export interface AckContext {
   needsBroadcast?: () => boolean;
   /** Check if any jobs are waiting for dependencies */
   hasPendingDeps?: () => boolean;
+  /** Callback to re-queue repeatable jobs */
+  onRepeat?: (job: Job) => void;
 }
 
 /**
@@ -92,6 +94,14 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
 
   // Notify completion (for dependencies and parent jobs)
   ctx.onJobCompleted(jobId);
+
+  // Handle repeatable jobs
+  if (job.repeat && ctx.onRepeat) {
+    const shouldRepeat = job.repeat.limit === undefined || job.repeat.count < job.repeat.limit;
+    if (shouldRepeat) {
+      ctx.onRepeat(job);
+    }
+  }
 }
 
 /**

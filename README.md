@@ -159,7 +159,10 @@ while (true) {
 - **Persistent Storage** — SQLite with WAL mode
 - **Priority Queues** — FIFO, LIFO, and priority-based ordering
 - **Delayed Jobs** — Schedule jobs for later
+- **Repeatable Jobs** — Recurring jobs with interval and limit
 - **Cron Scheduling** — Recurring jobs with cron expressions
+- **Queue Groups** — Organize queues in namespaces
+- **Flow/Pipelines** — Chain jobs A → B → C with result passing
 - **Retry & Backoff** — Automatic retries with exponential backoff
 - **Dead Letter Queue** — Failed jobs preserved for inspection
 - **Job Dependencies** — Parent-child relationships
@@ -298,6 +301,117 @@ events.on('progress', ({ jobId, data }) => {
 });
 
 await events.close();
+```
+
+### Repeatable Jobs
+
+Jobs that repeat automatically at fixed intervals.
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue('heartbeat');
+
+// Repeat every 5 seconds, max 10 times
+await queue.add('ping', { timestamp: Date.now() }, {
+  repeat: {
+    every: 5000,  // 5 seconds
+    limit: 10,    // max 10 repetitions
+  }
+});
+
+// Infinite repeat (no limit)
+await queue.add('health-check', {}, {
+  repeat: { every: 60000 }  // every minute, forever
+});
+
+const worker = new Worker('heartbeat', async (job) => {
+  console.log('Heartbeat:', job.data);
+  return { ok: true };
+});
+```
+
+### Queue Groups
+
+Organize queues with namespaces.
+
+```typescript
+import { QueueGroup } from 'bunqueue/client';
+
+// Create a group with namespace
+const billing = new QueueGroup('billing');
+
+// Get queues (automatically prefixed)
+const invoices = billing.getQueue('invoices');   // → "billing:invoices"
+const payments = billing.getQueue('payments');   // → "billing:payments"
+
+// Get workers for the group
+const worker = billing.getWorker('invoices', async (job) => {
+  console.log('Processing invoice:', job.data);
+  return { processed: true };
+});
+
+// List all queues in the group
+const queues = billing.listQueues();  // ['invoices', 'payments']
+
+// Bulk operations on the group
+billing.pauseAll();
+billing.resumeAll();
+billing.drainAll();
+```
+
+### FlowProducer (Pipelines)
+
+Chain jobs with dependencies and result passing.
+
+```typescript
+import { FlowProducer, Worker } from 'bunqueue/client';
+
+const flow = new FlowProducer();
+
+// Chain: A → B → C (sequential execution)
+const { jobIds } = await flow.addChain([
+  { name: 'fetch', queueName: 'pipeline', data: { url: 'https://api.example.com' } },
+  { name: 'process', queueName: 'pipeline', data: {} },
+  { name: 'store', queueName: 'pipeline', data: {} },
+]);
+
+// Parallel then merge: [A, B, C] → D
+const result = await flow.addBulkThen(
+  [
+    { name: 'fetch-1', queueName: 'parallel', data: { source: 'api1' } },
+    { name: 'fetch-2', queueName: 'parallel', data: { source: 'api2' } },
+    { name: 'fetch-3', queueName: 'parallel', data: { source: 'api3' } },
+  ],
+  { name: 'merge', queueName: 'parallel', data: {} }
+);
+
+// Tree structure
+await flow.addTree({
+  name: 'root',
+  queueName: 'tree',
+  data: { level: 0 },
+  children: [
+    { name: 'child1', queueName: 'tree', data: { level: 1 } },
+    { name: 'child2', queueName: 'tree', data: { level: 1 } },
+  ],
+});
+
+// Worker with parent result access
+const worker = new Worker('pipeline', async (job) => {
+  if (job.name === 'fetch') {
+    const data = await fetchData(job.data.url);
+    return { data };
+  }
+
+  if (job.name === 'process' && job.data.__flowParentId) {
+    // Get result from previous job in chain
+    const parentResult = flow.getParentResult(job.data.__flowParentId);
+    return { processed: transform(parentResult.data) };
+  }
+
+  return { done: true };
+});
 ```
 
 ### Shutdown

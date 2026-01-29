@@ -25,6 +25,18 @@ export const enum JobState {
   Failed = 'failed',
 }
 
+/** Repeat configuration for repeatable jobs */
+export interface RepeatConfig {
+  /** Repeat every N milliseconds */
+  readonly every?: number;
+  /** Maximum number of repetitions (null = infinite) */
+  readonly limit?: number;
+  /** Cron pattern (alternative to every) */
+  readonly pattern?: string;
+  /** Current repeat count */
+  count: number;
+}
+
 /** Core job structure */
 export interface Job {
   readonly id: JobId;
@@ -70,6 +82,9 @@ export interface Job {
   readonly removeOnComplete: boolean;
   readonly removeOnFail: boolean;
 
+  // Repeat config
+  readonly repeat: RepeatConfig | null;
+
   // Stall detection
   lastHeartbeat: number;
   readonly stallTimeout: number | null;
@@ -95,6 +110,13 @@ export interface JobInput {
   removeOnComplete?: boolean;
   removeOnFail?: boolean;
   stallTimeout?: number;
+  repeat?: {
+    every?: number;
+    limit?: number;
+    pattern?: string;
+    /** Current count (for internal use when re-queueing) */
+    count?: number;
+  };
 }
 
 /** Job creation defaults */
@@ -151,6 +173,15 @@ export function createJob(
 
     removeOnComplete: input.removeOnComplete ?? JOB_DEFAULTS.removeOnComplete,
     removeOnFail: input.removeOnFail ?? JOB_DEFAULTS.removeOnFail,
+
+    repeat: input.repeat
+      ? {
+          every: input.repeat.every,
+          limit: input.repeat.limit,
+          pattern: input.repeat.pattern,
+          count: input.repeat.count ?? 0,
+        }
+      : null,
 
     lastHeartbeat: now,
     stallTimeout: input.stallTimeout ?? null,

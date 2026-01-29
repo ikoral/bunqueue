@@ -189,7 +189,35 @@ export class QueueManager {
       onJobsCompleted: this.onJobsCompleted.bind(this),
       needsBroadcast: this.eventsManager.needsBroadcast.bind(this.eventsManager),
       hasPendingDeps: this.hasPendingDeps.bind(this),
+      onRepeat: this.handleRepeat.bind(this),
     };
+  }
+
+  /** Handle repeatable job - re-queue with incremented count */
+  private handleRepeat(job: Job): void {
+    if (!job.repeat) return;
+
+    const delay = job.repeat.every ?? 0;
+    void this.push(job.queue, {
+      data: job.data,
+      priority: job.priority,
+      delay,
+      maxAttempts: job.maxAttempts,
+      backoff: job.backoff,
+      ttl: job.ttl ?? undefined,
+      timeout: job.timeout ?? undefined,
+      tags: job.tags,
+      groupId: job.groupId ?? undefined,
+      lifo: job.lifo,
+      removeOnComplete: job.removeOnComplete,
+      removeOnFail: job.removeOnFail,
+      repeat: {
+        every: job.repeat.every,
+        limit: job.repeat.limit,
+        pattern: job.repeat.pattern,
+        count: job.repeat.count + 1,
+      },
+    });
   }
 
   private getJobMgmtContext(): jobMgmt.JobManagementContext {

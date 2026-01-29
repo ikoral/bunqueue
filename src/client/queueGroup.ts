@@ -1,0 +1,95 @@
+/**
+ * QueueGroup - Namespace isolation for queues
+ */
+
+import { Queue } from './queue';
+import { Worker } from './worker';
+import { getSharedManager } from './manager';
+import type { QueueOptions, WorkerOptions, Processor } from './types';
+
+/**
+ * QueueGroup provides namespace isolation for queues.
+ * All queues in a group share a common prefix.
+ *
+ * @example
+ * ```typescript
+ * const billing = new QueueGroup('billing');
+ *
+ * const invoices = billing.getQueue('invoices');
+ * const payments = billing.getQueue('payments');
+ *
+ * // Creates queues: "billing:invoices", "billing:payments"
+ *
+ * billing.pauseAll(); // Pauses all billing queues
+ * ```
+ */
+export class QueueGroup {
+  readonly prefix: string;
+
+  constructor(namespace: string) {
+    this.prefix = namespace.endsWith(':') ? namespace : `${namespace}:`;
+  }
+
+  /** Get a queue within this group */
+  getQueue<T = unknown>(name: string, opts?: QueueOptions): Queue<T> {
+    return new Queue<T>(this.prefix + name, opts);
+  }
+
+  /** Create a worker for a queue in this group */
+  getWorker<T = unknown, R = unknown>(
+    name: string,
+    processor: Processor<T, R>,
+    opts?: WorkerOptions
+  ): Worker<T, R> {
+    return new Worker<T, R>(this.prefix + name, processor, opts);
+  }
+
+  /** List all queues in this group */
+  listQueues(): string[] {
+    const manager = getSharedManager();
+    return manager
+      .listQueues()
+      .filter((q) => q.startsWith(this.prefix))
+      .map((q) => q.slice(this.prefix.length));
+  }
+
+  /** Pause all queues in this group */
+  pauseAll(): void {
+    const manager = getSharedManager();
+    for (const queue of manager.listQueues()) {
+      if (queue.startsWith(this.prefix)) {
+        manager.pause(queue);
+      }
+    }
+  }
+
+  /** Resume all queues in this group */
+  resumeAll(): void {
+    const manager = getSharedManager();
+    for (const queue of manager.listQueues()) {
+      if (queue.startsWith(this.prefix)) {
+        manager.resume(queue);
+      }
+    }
+  }
+
+  /** Drain all queues in this group (remove waiting jobs) */
+  drainAll(): void {
+    const manager = getSharedManager();
+    for (const queue of manager.listQueues()) {
+      if (queue.startsWith(this.prefix)) {
+        manager.drain(queue);
+      }
+    }
+  }
+
+  /** Obliterate all queues in this group (remove all data) */
+  obliterateAll(): void {
+    const manager = getSharedManager();
+    for (const queue of manager.listQueues()) {
+      if (queue.startsWith(this.prefix)) {
+        manager.obliterate(queue);
+      }
+    }
+  }
+}

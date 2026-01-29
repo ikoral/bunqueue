@@ -34,18 +34,51 @@ export class Queue<T = unknown> {
       customId: merged.jobId,
       removeOnComplete: merged.removeOnComplete,
       removeOnFail: merged.removeOnFail,
+      repeat: merged.repeat,
     });
 
     return toPublicJob<T>(job, name);
   }
 
-  /** Add multiple jobs */
+  /** Add multiple jobs (batch optimized) */
   async addBulk(jobs: Array<{ name: string; data: T; opts?: JobOptions }>): Promise<Job<T>[]> {
-    const results: Job<T>[] = [];
-    for (const { name, data, opts } of jobs) {
-      results.push(await this.add(name, data, opts));
-    }
-    return results;
+    if (jobs.length === 0) return [];
+
+    const manager = getSharedManager();
+    const now = Date.now();
+
+    // Map to JobInput format
+    const inputs = jobs.map(({ name, data, opts }) => {
+      const merged = { ...this.opts.defaultJobOptions, ...opts };
+      return {
+        data: { name, ...data },
+        priority: merged.priority,
+        delay: merged.delay,
+        maxAttempts: merged.attempts,
+        backoff: merged.backoff,
+        timeout: merged.timeout,
+        customId: merged.jobId,
+        removeOnComplete: merged.removeOnComplete,
+        removeOnFail: merged.removeOnFail,
+        repeat: merged.repeat,
+      };
+    });
+
+    // Single batch push (optimized: single lock, batch INSERT)
+    const jobIds = await manager.pushBatch(this.name, inputs);
+
+    // Create public job objects
+    return jobIds.map((id, i) => ({
+      id: String(id),
+      name: jobs[i].name,
+      data: jobs[i].data,
+      queueName: this.name,
+      attemptsMade: 0,
+      timestamp: now,
+      progress: 0,
+      updateProgress: async () => {},
+      log: async () => {},
+    }));
   }
 
   /** Get a job by ID */

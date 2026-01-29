@@ -338,6 +338,7 @@ export class SqliteStorage {
       progressMessage: row.progress_msg,
       removeOnComplete: row.remove_on_complete === 1,
       removeOnFail: row.remove_on_fail === 1,
+      repeat: null,
       lastHeartbeat: row.last_heartbeat ?? row.created_at,
       stallTimeout: row.stall_timeout,
       stallCount: 0,

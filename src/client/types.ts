@@ -31,6 +31,15 @@ export interface JobOptions {
   jobId?: string;
   removeOnComplete?: boolean;
   removeOnFail?: boolean;
+  /** Repeat configuration for recurring jobs */
+  repeat?: {
+    /** Repeat every N milliseconds */
+    every?: number;
+    /** Maximum repetitions (omit for infinite) */
+    limit?: number;
+    /** Cron pattern (alternative to every) */
+    pattern?: string;
+  };
 }
 
 /** Queue options */

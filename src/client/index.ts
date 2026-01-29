@@ -22,5 +22,8 @@
 export { Queue } from './queue';
 export { Worker } from './worker';
 export { QueueEvents } from './events';
+export { QueueGroup } from './queueGroup';
+export { FlowProducer } from './flow';
 export { shutdownManager } from './manager';
 export type { Job, JobOptions, QueueOptions, WorkerOptions, Processor } from './types';
+export type { FlowStep, FlowResult } from './flow';
