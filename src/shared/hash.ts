@@ -3,6 +3,8 @@
  * FNV-1a implementation for consistent hashing
  */
 
+import { cpus } from 'os';
+
 const FNV_PRIME = 0x01000193;
 const FNV_OFFSET = 0x811c9dc5;
 
@@ -20,11 +22,29 @@ export function fnv1a(str: string): number {
 }
 
 /**
- * Calculate shard index from string
- * Uses 32 shards (& 0x1F mask)
+ * Calculate optimal shard count based on CPU cores
+ * - Must be power of 2 for fast bitwise AND
+ * - At least equal to CPU cores for parallelism
+ * - Capped at 64 to avoid excessive memory overhead
  */
-export const SHARD_COUNT = 32;
-export const SHARD_MASK = 0x1f;
+function calculateShardCount(): number {
+  const cores = cpus().length || 4; // Fallback to 4 if detection fails
+
+  // Find next power of 2 >= cores, capped at 64
+  let shards = 1;
+  while (shards < cores && shards < 64) {
+    shards *= 2;
+  }
+
+  return shards;
+}
+
+/**
+ * Shard configuration - auto-detected from hardware
+ * Uses power of 2 for fast bitwise mask
+ */
+export const SHARD_COUNT = calculateShardCount();
+export const SHARD_MASK = SHARD_COUNT - 1;
 
 export function shardIndex(key: string): number {
   return fnv1a(key) & SHARD_MASK;

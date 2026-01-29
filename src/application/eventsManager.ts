@@ -15,6 +15,8 @@ export type EventSubscriber = (event: JobEvent) => void;
 /** Events manager class */
 export class EventsManager {
   private readonly subscribers: EventSubscriber[] = [];
+  /** Waiters for specific job completions - for efficient WaitJob implementation */
+  private readonly completionWaiters = new Map<string, Array<() => void>>();
 
   constructor(private readonly webhookManager: WebhookManager) {}
 
@@ -30,9 +32,59 @@ export class EventsManager {
   /** Clear all subscribers (for shutdown) */
   clear(): void {
     this.subscribers.length = 0;
+    // Clear all waiters
+    for (const waiters of this.completionWaiters.values()) {
+      for (const resolve of waiters) {
+        resolve();
+      }
+    }
+    this.completionWaiters.clear();
   }
 
-  /** Broadcast event to all subscribers */
+  /**
+   * Wait for a specific job to complete - event-driven, no polling
+   * Returns true if job completed, false if timeout
+   */
+  waitForJobCompletion(jobId: JobId, timeoutMs: number): Promise<boolean> {
+    const jobKey = String(jobId);
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        // Timeout - remove from waiters
+        const waiters = this.completionWaiters.get(jobKey);
+        if (waiters) {
+          const idx = waiters.indexOf(resolveWaiter);
+          if (idx !== -1) waiters.splice(idx, 1);
+          if (waiters.length === 0) this.completionWaiters.delete(jobKey);
+        }
+        resolve(false);
+      }, timeoutMs);
+
+      const resolveWaiter = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+
+      // Add to waiters
+      let waiters = this.completionWaiters.get(jobKey);
+      if (!waiters) {
+        waiters = [];
+        this.completionWaiters.set(jobKey, waiters);
+      }
+      waiters.push(resolveWaiter);
+    });
+  }
+
+  /** Check if broadcast has any listeners - for batch optimizations */
+  needsBroadcast(): boolean {
+    return (
+      this.subscribers.length > 0 ||
+      this.webhookManager.hasEnabledWebhooks() ||
+      this.completionWaiters.size > 0
+    );
+  }
+
+  /** Broadcast event to all subscribers - optimized to skip work when no listeners */
   broadcast(
     event: Partial<JobEvent> & {
       eventType: EventType;
@@ -42,31 +94,57 @@ export class EventsManager {
       error?: string;
     }
   ): void {
+    const hasSubscribers = this.subscribers.length > 0;
+    const hasWebhooks = this.webhookManager.hasEnabledWebhooks();
+    const isCompletion = event.eventType === EventType.Completed;
+    const hasWaiters = isCompletion && this.completionWaiters.size > 0;
+
+    // Fast path: nothing to notify
+    if (!hasSubscribers && !hasWebhooks && !hasWaiters) {
+      return;
+    }
+
     // Notify subscribers
-    for (const sub of this.subscribers) {
-      try {
-        sub(event as JobEvent);
-      } catch {
-        // Ignore subscriber errors
+    if (hasSubscribers) {
+      for (const sub of this.subscribers) {
+        try {
+          sub(event as JobEvent);
+        } catch {
+          // Ignore subscriber errors
+        }
       }
     }
 
-    // Trigger webhooks
-    const webhookEvent = this.mapEventToWebhook(event.eventType);
-    if (webhookEvent) {
-      this.webhookManager
-        .trigger(webhookEvent, String(event.jobId), event.queue, {
-          data: event.data,
-          error: event.error,
-        })
-        .catch((err: unknown) => {
-          webhookLog.error('Webhook trigger failed', {
-            event: webhookEvent,
-            jobId: String(event.jobId),
-            queue: event.queue,
-            error: String(err),
+    // Notify completion waiters for WaitJob - O(1) lookup
+    if (hasWaiters) {
+      const jobKey = String(event.jobId);
+      const waiters = this.completionWaiters.get(jobKey);
+      if (waiters) {
+        this.completionWaiters.delete(jobKey);
+        for (const resolve of waiters) {
+          resolve();
+        }
+      }
+    }
+
+    // Trigger webhooks - only if there are enabled webhooks
+    if (hasWebhooks) {
+      const webhookEvent = this.mapEventToWebhook(event.eventType);
+      if (webhookEvent) {
+        this.webhookManager
+          .trigger(webhookEvent, String(event.jobId), event.queue, {
+            data: event.data,
+            error: event.error,
+          })
+          .catch((err: unknown) => {
+            webhookLog.error('Webhook trigger failed', {
+              event: webhookEvent,
+              jobId: String(event.jobId),
+              queue: event.queue,
+              error: String(err),
+            });
           });
-        });
+      }
     }
   }
 

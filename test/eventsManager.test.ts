@@ -193,4 +193,61 @@ describe('Events Manager', () => {
       expect(events.filter((e) => e === 'pushed').length).toBe(2);
     });
   });
+
+  describe('waitForJobCompletion', () => {
+    test('should resolve when job completes', async () => {
+      const job = await qm.push('test-queue', { data: {} });
+
+      // Start waiting in background
+      const waitPromise = qm.waitForJobCompletion(job.id, 5000);
+
+      // Pull and complete the job
+      const pulledJob = await qm.pull('test-queue');
+      await qm.ack(pulledJob!.id, { result: 'done' });
+
+      // Wait should resolve with true
+      const completed = await waitPromise;
+      expect(completed).toBe(true);
+    });
+
+    test('should timeout if job not completed', async () => {
+      const job = await qm.push('test-queue', { data: {} });
+
+      // Wait with short timeout
+      const completed = await qm.waitForJobCompletion(job.id, 50);
+
+      expect(completed).toBe(false);
+    });
+
+    test('should handle multiple waiters for same job', async () => {
+      const job = await qm.push('test-queue', { data: {} });
+
+      // Start multiple waiters
+      const wait1 = qm.waitForJobCompletion(job.id, 5000);
+      const wait2 = qm.waitForJobCompletion(job.id, 5000);
+      const wait3 = qm.waitForJobCompletion(job.id, 5000);
+
+      // Complete the job
+      const pulledJob = await qm.pull('test-queue');
+      await qm.ack(pulledJob!.id, { result: 'done' });
+
+      // All waiters should resolve
+      const results = await Promise.all([wait1, wait2, wait3]);
+      expect(results).toEqual([true, true, true]);
+    });
+
+    test('should timeout if wait registered after job completes', async () => {
+      // Use removeOnComplete: false to keep job after completion
+      const job = await qm.push('test-queue', { data: {}, removeOnComplete: false });
+
+      // Complete the job first
+      const pulledJob = await qm.pull('test-queue');
+      await qm.ack(pulledJob!.id, { result: 'done' });
+
+      // Wait should timeout because event already fired
+      // This is expected behavior - caller should check job state first
+      const completed = await qm.waitForJobCompletion(job.id, 50);
+      expect(completed).toBe(false);
+    });
+  });
 });

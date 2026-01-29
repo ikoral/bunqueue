@@ -25,28 +25,36 @@ export function getDlqJobs(queue: string, ctx: DlqContext, count?: number): Job[
 export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): number {
   const idx = shardIndex(queue);
   const shard = ctx.shards[idx];
+  const now = Date.now();
 
   if (jobId) {
+    // removeFromDlq already decrements dlq counter
     const job = shard.removeFromDlq(queue, jobId);
     if (job) {
       job.attempts = 0;
-      job.runAt = Date.now();
+      job.runAt = now;
       shard.getQueue(queue).push(job);
+      // Update running counters for O(1) stats and temporal index
+      const isDelayed = job.runAt > now;
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
       ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
       return 1;
     }
     return 0;
   }
 
-  // Retry all
+  // Retry all - clearDlq already decrements dlq counter
   const jobs = shard.getDlq(queue);
   const count = jobs.length;
   shard.clearDlq(queue);
 
   for (const job of jobs) {
     job.attempts = 0;
-    job.runAt = Date.now();
+    job.runAt = now;
     shard.getQueue(queue).push(job);
+    // Update running counters for O(1) stats and temporal index
+    const isDelayed = job.runAt > now;
+    shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
   }
 

@@ -44,6 +44,8 @@ import { Logger, serverLog, statsLog } from './shared/logger';
 import { stopRateLimiter } from './infrastructure/server/rateLimiter';
 import { VERSION } from './shared/version';
 import { S3BackupManager } from './infrastructure/backup';
+import { SHARD_COUNT } from './shared/hash';
+import { cpus } from 'os';
 
 /** Server configuration from environment */
 interface ServerConfig {
@@ -98,6 +100,7 @@ ${dim}────────────────────────�
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
   ${yellow}●${reset} Backup ${config.s3BackupEnabled ? `${green}S3 enabled${reset}` : `${dim}disabled${reset}`}
+  ${dim}●${reset} Shards ${bold}${SHARD_COUNT}${reset} ${dim}(${cpus().length} CPU cores)${reset}
 
 ${dim}─────────────────────────────────────────────────${reset}
 

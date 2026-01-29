@@ -1,6 +1,7 @@
 /**
  * Async Lock implementation
  * Provides read-write locks with timeout support
+ * Optimized with O(1) queue operations using wrapped resolvers
  */
 
 /** Lock acquisition result */
@@ -16,13 +17,20 @@ export class LockTimeoutError extends Error {
   }
 }
 
+/** Wrapper for queue entries to enable O(1) cancellation */
+interface QueueEntry {
+  resolve: () => void;
+  cancelled: boolean;
+}
+
 /**
  * Simple async mutex lock
  * FIFO ordering for fairness
+ * O(1) timeout cancellation using marked entries instead of indexOf+splice
  */
 export class AsyncLock {
   private locked = false;
-  private readonly queue: Array<() => void> = [];
+  private readonly queue: QueueEntry[] = [];
 
   /**
    * Acquire the lock
@@ -38,16 +46,20 @@ export class AsyncLock {
       }
 
       await new Promise<void>((resolve) => {
+        const entry: QueueEntry = { resolve, cancelled: false };
+
         const timer = setTimeout(() => {
-          const idx = this.queue.indexOf(resolve);
-          if (idx !== -1) this.queue.splice(idx, 1);
+          // O(1) cancellation - just mark as cancelled
+          entry.cancelled = true;
           resolve();
         }, remaining);
 
-        this.queue.push(() => {
+        entry.resolve = () => {
           clearTimeout(timer);
           resolve();
-        });
+        };
+
+        this.queue.push(entry);
       });
     }
 
@@ -56,8 +68,15 @@ export class AsyncLock {
     return {
       release: () => {
         this.locked = false;
-        const next = this.queue.shift();
-        if (next) next();
+        // Skip cancelled entries - O(k) where k = cancelled entries at head
+        let next = this.queue.shift();
+        while (next) {
+          if (!next.cancelled) {
+            next.resolve();
+            break;
+          }
+          next = this.queue.shift();
+        }
       },
     };
   }
@@ -67,7 +86,7 @@ export class AsyncLock {
     return this.locked;
   }
 
-  /** Get queue length */
+  /** Get queue length (includes cancelled entries) */
   getQueueLength(): number {
     return this.queue.length;
   }
@@ -77,13 +96,14 @@ export class AsyncLock {
  * Read-Write Lock
  * Multiple readers OR single writer
  * Writers have priority to prevent starvation
+ * O(1) timeout cancellation using marked entries
  */
 export class RWLock {
   private readers = 0;
   private writer = false;
   private writerWaiting = 0;
-  private readonly readerQueue: Array<() => void> = [];
-  private readonly writerQueue: Array<() => void> = [];
+  private readonly readerQueue: QueueEntry[] = [];
+  private readonly writerQueue: QueueEntry[] = [];
 
   /**
    * Acquire read lock
@@ -100,16 +120,20 @@ export class RWLock {
       }
 
       await new Promise<void>((resolve) => {
+        const entry: QueueEntry = { resolve, cancelled: false };
+
         const timer = setTimeout(() => {
-          const idx = this.readerQueue.indexOf(resolve);
-          if (idx !== -1) this.readerQueue.splice(idx, 1);
+          // O(1) cancellation - just mark as cancelled
+          entry.cancelled = true;
           resolve();
         }, remaining);
 
-        this.readerQueue.push(() => {
+        entry.resolve = () => {
           clearTimeout(timer);
           resolve();
-        });
+        };
+
+        this.readerQueue.push(entry);
       });
     }
 
@@ -119,8 +143,15 @@ export class RWLock {
       release: () => {
         this.readers--;
         if (this.readers === 0 && this.writerWaiting > 0) {
-          const next = this.writerQueue.shift();
-          if (next) next();
+          // Skip cancelled entries
+          let next = this.writerQueue.shift();
+          while (next) {
+            if (!next.cancelled) {
+              next.resolve();
+              break;
+            }
+            next = this.writerQueue.shift();
+          }
         }
       },
     };
@@ -129,8 +160,16 @@ export class RWLock {
   /**
    * Acquire write lock
    * Exclusive access, no readers or other writers
+   * Optimized: synchronous fast path when uncontested
    */
   async acquireWrite(timeoutMs: number = 5000): Promise<LockGuard> {
+    // Fast path: uncontested - acquire synchronously without Promise overhead
+    if (!this.writer && this.readers === 0) {
+      this.writer = true;
+      return this.createWriteGuard();
+    }
+
+    // Slow path: contention - wait asynchronously
     const start = Date.now();
     this.writerWaiting++;
 
@@ -142,42 +181,59 @@ export class RWLock {
         }
 
         await new Promise<void>((resolve) => {
+          const entry: QueueEntry = { resolve, cancelled: false };
+
           const timer = setTimeout(() => {
-            const idx = this.writerQueue.indexOf(resolve);
-            if (idx !== -1) this.writerQueue.splice(idx, 1);
+            // O(1) cancellation - just mark as cancelled
+            entry.cancelled = true;
             resolve();
           }, remaining);
 
-          this.writerQueue.push(() => {
+          entry.resolve = () => {
             clearTimeout(timer);
             resolve();
-          });
+          };
+
+          this.writerQueue.push(entry);
         });
       }
 
       this.writerWaiting--;
       this.writer = true;
 
-      return {
-        release: () => {
-          this.writer = false;
-          // Notify waiting writers first (priority)
-          if (this.writerWaiting > 0) {
-            const next = this.writerQueue.shift();
-            if (next) next();
-          } else {
-            // Then notify all waiting readers
-            const readers = this.readerQueue.splice(0);
-            for (const reader of readers) {
-              reader();
-            }
-          }
-        },
-      };
+      return this.createWriteGuard();
     } catch (e) {
       this.writerWaiting--;
       throw e;
     }
+  }
+
+  /** Create write lock guard - extracted to avoid code duplication */
+  private createWriteGuard(): LockGuard {
+    return {
+      release: () => {
+        this.writer = false;
+        // Notify waiting writers first (priority)
+        if (this.writerWaiting > 0) {
+          // Skip cancelled entries
+          let next = this.writerQueue.shift();
+          while (next) {
+            if (!next.cancelled) {
+              next.resolve();
+              return;
+            }
+            next = this.writerQueue.shift();
+          }
+        }
+        // Then notify all waiting readers (skip cancelled)
+        const readers = this.readerQueue.splice(0);
+        for (const entry of readers) {
+          if (!entry.cancelled) {
+            entry.resolve();
+          }
+        }
+      },
+    };
   }
 
   /** Get current state */

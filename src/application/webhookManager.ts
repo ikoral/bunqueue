@@ -12,17 +12,28 @@ import {
 } from '../domain/types/webhook';
 import { webhookLog } from '../shared/logger';
 
-/** HMAC-SHA256 signature */
+/** Singleton TextEncoder for HMAC operations */
+const textEncoder = new TextEncoder();
+
+/** Cache for imported crypto keys - avoids expensive importKey per request */
+const keyCache = new Map<string, CryptoKey>();
+
+/** HMAC-SHA256 signature with key caching */
 async function signPayload(payload: string, secret: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  // Get cached key or import new one
+  let key = keyCache.get(secret);
+  if (!key) {
+    key = await crypto.subtle.importKey(
+      'raw',
+      textEncoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    keyCache.set(secret, key);
+  }
+
+  const signature = await crypto.subtle.sign('HMAC', key, textEncoder.encode(payload));
   return Array.from(new Uint8Array(signature))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
@@ -36,16 +47,26 @@ export class WebhookManager {
   private readonly maxRetries = 3;
   private readonly retryDelay = 1000;
 
+  /** Running counter for enabled webhooks - avoids O(n) filter in getStats */
+  private enabledCount = 0;
+
   /** Add a webhook */
   add(url: string, events: string[], queue?: string, secret?: string): Webhook {
     const webhook = createWebhook(url, events, queue, secret);
     this.webhooks.set(webhook.id, webhook);
+    if (webhook.enabled) {
+      this.enabledCount++;
+    }
     webhookLog.info('Added webhook', { webhookId: webhook.id, events });
     return webhook;
   }
 
   /** Remove a webhook */
   remove(id: WebhookId): boolean {
+    const webhook = this.webhooks.get(id);
+    if (webhook?.enabled) {
+      this.enabledCount--;
+    }
     const removed = this.webhooks.delete(id);
     if (removed) {
       webhookLog.info('Removed webhook', { webhookId: id });
@@ -56,6 +77,18 @@ export class WebhookManager {
   /** Get webhook by ID */
   get(id: WebhookId): Webhook | undefined {
     return this.webhooks.get(id);
+  }
+
+  /** Set webhook enabled state - properly maintains running counter */
+  setEnabled(id: WebhookId, enabled: boolean): boolean {
+    const webhook = this.webhooks.get(id);
+    if (!webhook) return false;
+
+    if (webhook.enabled !== enabled) {
+      webhook.enabled = enabled;
+      this.enabledCount += enabled ? 1 : -1;
+    }
+    return true;
   }
 
   /** List all webhooks */
@@ -135,11 +168,16 @@ export class WebhookManager {
     throw lastError ?? new Error('Webhook delivery failed after max retries');
   }
 
-  /** Get stats */
+  /** Check if there are any enabled webhooks - O(1) */
+  hasEnabledWebhooks(): boolean {
+    return this.enabledCount > 0;
+  }
+
+  /** Get stats - O(1) using running counter */
   getStats() {
     return {
       total: this.webhooks.size,
-      enabled: Array.from(this.webhooks.values()).filter((w) => w.enabled).length,
+      enabled: this.enabledCount,
     };
   }
 }

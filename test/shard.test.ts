@@ -134,4 +134,143 @@ describe('Shard', () => {
     expect(shard.isUniqueAvailable('emails', 'key1')).toBe(true);
     expect(shard.isGroupActive('emails', 'group1')).toBe(false);
   });
+
+  describe('running stats', () => {
+    test('should track queued jobs count', () => {
+      const shard = new Shard();
+      const job1 = makeJob(1, 'emails');
+      const job2 = makeJob(2, 'emails');
+
+      shard.incrementQueued(job1.id, false);
+      shard.incrementQueued(job2.id, false);
+
+      expect(shard.getStats().queuedJobs).toBe(2);
+
+      shard.decrementQueued(job1.id);
+      expect(shard.getStats().queuedJobs).toBe(1);
+    });
+
+    test('should track delayed jobs separately', () => {
+      const shard = new Shard();
+      const job1 = makeJob(1, 'emails');
+      const job2 = makeJob(2, 'emails');
+
+      shard.incrementQueued(job1.id, false); // Not delayed
+      shard.incrementQueued(job2.id, true); // Delayed
+
+      const stats = shard.getStats();
+      expect(stats.queuedJobs).toBe(2);
+      expect(stats.delayedJobs).toBe(1);
+    });
+
+    test('should track DLQ count in stats', () => {
+      const shard = new Shard();
+      const job = makeJob(1, 'emails');
+
+      shard.addToDlq(job);
+
+      expect(shard.getStats().dlqJobs).toBe(1);
+    });
+
+    test('should handle decrement for already removed job', () => {
+      const shard = new Shard();
+      const job = makeJob(1, 'emails');
+
+      // Decrement without incrementing first
+      shard.decrementQueued(job.id);
+
+      // Should not go negative
+      expect(shard.getStats().queuedJobs).toBe(0);
+    });
+  });
+
+  describe('dependency index', () => {
+    test('should register dependencies', () => {
+      const shard = new Shard();
+      const parentId = jobId('parent-1');
+      const childId = jobId('child-1');
+
+      shard.registerDependencies(childId, [parentId]);
+
+      const waiting = shard.getJobsWaitingFor(parentId);
+      expect(waiting).toBeDefined();
+      expect(waiting!.has(childId)).toBe(true);
+    });
+
+    test('should unregister dependencies', () => {
+      const shard = new Shard();
+      const parentId = jobId('parent-1');
+      const childId = jobId('child-1');
+
+      shard.registerDependencies(childId, [parentId]);
+      shard.unregisterDependencies(childId, [parentId]);
+
+      const waiting = shard.getJobsWaitingFor(parentId);
+      expect(waiting?.has(childId)).toBeFalsy();
+    });
+
+    test('should track multiple children per parent', () => {
+      const shard = new Shard();
+      const parentId = jobId('parent-1');
+      const child1 = jobId('child-1');
+      const child2 = jobId('child-2');
+      const child3 = jobId('child-3');
+
+      shard.registerDependencies(child1, [parentId]);
+      shard.registerDependencies(child2, [parentId]);
+      shard.registerDependencies(child3, [parentId]);
+
+      const waiting = shard.getJobsWaitingFor(parentId);
+      expect(waiting?.size).toBe(3);
+    });
+
+    test('should return undefined for unknown parent', () => {
+      const shard = new Shard();
+      const waiting = shard.getJobsWaitingFor(jobId('unknown'));
+      expect(waiting).toBeUndefined();
+    });
+  });
+
+  describe('temporal index', () => {
+    test('should track jobs by creation time', () => {
+      const shard = new Shard();
+      const now = Date.now();
+
+      const job1 = makeJob(1, 'emails');
+      const job2 = makeJob(2, 'emails');
+
+      // Increment with timestamps
+      shard.incrementQueued(job1.id, false, now - 10000, 'emails');
+      shard.incrementQueued(job2.id, false, now - 5000, 'emails');
+
+      // Get jobs older than 3 seconds
+      const oldJobs = shard.getOldJobs('emails', 3000, 10);
+
+      expect(oldJobs.length).toBe(2);
+    });
+
+    test('should limit returned jobs', () => {
+      const shard = new Shard();
+      const now = Date.now();
+
+      for (let i = 0; i < 10; i++) {
+        const job = makeJob(i, 'emails');
+        shard.incrementQueued(job.id, false, now - 10000, 'emails');
+      }
+
+      const oldJobs = shard.getOldJobs('emails', 1000, 3);
+      expect(oldJobs.length).toBe(3);
+    });
+
+    test('should filter by queue', () => {
+      const shard = new Shard();
+      const now = Date.now();
+
+      shard.incrementQueued(jobId('job-1'), false, now - 10000, 'emails');
+      shard.incrementQueued(jobId('job-2'), false, now - 10000, 'notifications');
+
+      const emailJobs = shard.getOldJobs('emails', 1000, 10);
+      expect(emailJobs.length).toBe(1);
+    });
+  });
 });

@@ -54,7 +54,10 @@ export function listAllQueues(ctx: QueueControlContext): string[] {
   return Array.from(queues);
 }
 
-/** Clean old jobs from queue */
+/**
+ * Clean old jobs from queue
+ * Uses temporal index for O(log n + k) instead of O(n) full scan
+ */
 export function cleanQueue(
   queue: string,
   graceMs: number,
@@ -64,25 +67,26 @@ export function cleanQueue(
 ): number {
   const idx = shardIndex(queue);
   const shard = ctx.shards[idx];
-  const now = Date.now();
   const maxJobs = limit ?? 1000;
   let cleaned = 0;
 
   if (!state || state === 'waiting' || state === 'delayed') {
     const q = shard.getQueue(queue);
-    const toRemove: JobId[] = [];
 
-    for (const job of q.values()) {
-      if (now - job.createdAt > graceMs) {
-        toRemove.push(job.id);
-        if (toRemove.length >= maxJobs) break;
+    // Use temporal index for efficient lookup of old jobs
+    const oldJobs = shard.getOldJobs(queue, graceMs, maxJobs);
+
+    for (const { jobId } of oldJobs) {
+      // Verify job still exists in queue before removing
+      if (q.has(jobId)) {
+        q.remove(jobId);
+        // Update counters
+        shard.decrementQueued(jobId);
+        // Remove from temporal index
+        shard.removeFromTemporalIndex(jobId);
+        ctx.jobIndex.delete(jobId);
+        cleaned++;
       }
-    }
-
-    for (const id of toRemove) {
-      q.remove(id);
-      ctx.jobIndex.delete(id);
-      cleaned++;
     }
   }
 

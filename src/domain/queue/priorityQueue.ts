@@ -212,6 +212,50 @@ export class IndexedPriorityQueue {
     this.generation = 0n;
   }
 
+  /**
+   * Get the ratio of stale entries in the heap
+   * Used to decide when to compact
+   */
+  getStaleRatio(): number {
+    if (this.heap.length === 0) return 0;
+    return 1 - this.index.size / this.heap.length;
+  }
+
+  /**
+   * Compact the heap by removing stale entries
+   * Call when stale ratio exceeds threshold (e.g., 20%)
+   * O(n) operation but reclaims memory and improves performance
+   */
+  compact(): void {
+    if (this.heap.length === 0) return;
+
+    // Filter out stale entries
+    const validEntries: HeapEntry[] = [];
+    for (const entry of this.heap) {
+      const indexed = this.index.get(entry.jobId);
+      if (indexed?.generation === entry.generation) {
+        validEntries.push(entry);
+      }
+    }
+
+    // Rebuild heap - O(n) heapify
+    this.heap = validEntries;
+    this.heapify();
+  }
+
+  /** Rebuild heap property from arbitrary array - O(n) */
+  private heapify(): void {
+    // Start from last non-leaf node and bubble down
+    for (let i = Math.floor(this.heap.length / 2) - 1; i >= 0; i--) {
+      this.bubbleDown(i);
+    }
+  }
+
+  /** Check if compaction is needed (stale ratio > threshold) */
+  needsCompaction(threshold: number = 0.2): boolean {
+    return this.getStaleRatio() > threshold;
+  }
+
   // ============ Heap Operations ============
 
   private removeTop(): void {

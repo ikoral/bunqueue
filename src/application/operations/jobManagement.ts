@@ -33,6 +33,8 @@ export async function cancelJob(jobId: JobId, ctx: JobManagementContext): Promis
       const shard = ctx.shards[location.shardIdx];
       const job = shard.getQueue(location.queueName).remove(jobId);
       if (job) {
+        // Update running counters for O(1) stats
+        shard.decrementQueued(jobId);
         if (job.uniqueKey) shard.releaseUniqueKey(location.queueName, job.uniqueKey);
         ctx.jobIndex.delete(jobId);
         ctx.storage?.deleteJob(jobId);
@@ -161,12 +163,17 @@ export async function moveJobToDelayed(
   if (!job) return false;
 
   // Then add back to queue with lock
-  job.runAt = Date.now() + delay;
+  const now = Date.now();
+  job.runAt = now + delay;
   job.startedAt = null;
   const idx = shardIndex(job.queue);
 
   await withWriteLock(ctx.shardLocks[idx], () => {
-    ctx.shards[idx].getQueue(job.queue).push(job);
+    const shard = ctx.shards[idx];
+    shard.getQueue(job.queue).push(job);
+    // Update running counters for O(1) stats and temporal index (job is delayed since delay > 0)
+    const isDelayed = job.runAt > now;
+    shard.incrementQueued(jobId, isDelayed, job.createdAt, job.queue);
     ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
   });
 
@@ -182,7 +189,13 @@ export async function discardJob(jobId: JobId, ctx: JobManagementContext): Promi
 
   if (location.type === 'queue') {
     job = await withWriteLock(ctx.shardLocks[location.shardIdx], () => {
-      return ctx.shards[location.shardIdx].getQueue(location.queueName).remove(jobId);
+      const shard = ctx.shards[location.shardIdx];
+      const removed = shard.getQueue(location.queueName).remove(jobId);
+      if (removed) {
+        // Update running counters for O(1) stats
+        shard.decrementQueued(jobId);
+      }
+      return removed;
     });
   } else if (location.type === 'processing') {
     const procIdx = processingShardIndex(jobId);
@@ -197,6 +210,7 @@ export async function discardJob(jobId: JobId, ctx: JobManagementContext): Promi
     const validJob = job; // Local reference for closure
     const idx = shardIndex(validJob.queue);
     await withWriteLock(ctx.shardLocks[idx], () => {
+      // addToDlq already updates dlq counter
       ctx.shards[idx].addToDlq(validJob);
       ctx.jobIndex.set(jobId, { type: 'dlq', queueName: validJob.queue });
     });

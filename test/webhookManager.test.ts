@@ -92,14 +92,73 @@ describe('WebhookManager', () => {
     });
   });
 
+  describe('setEnabled', () => {
+    test('should disable webhook', () => {
+      const webhook = manager.add('https://example.com/hook', ['job.completed']);
+      expect(webhook.enabled).toBe(true);
+
+      const result = manager.setEnabled(webhook.id, false);
+      expect(result).toBe(true);
+      expect(webhook.enabled).toBe(false);
+    });
+
+    test('should enable webhook', () => {
+      const webhook = manager.add('https://example.com/hook', ['job.completed']);
+      manager.setEnabled(webhook.id, false);
+
+      const result = manager.setEnabled(webhook.id, true);
+      expect(result).toBe(true);
+      expect(webhook.enabled).toBe(true);
+    });
+
+    test('should return false for non-existent webhook', () => {
+      const result = manager.setEnabled('non-existent', false);
+      expect(result).toBe(false);
+    });
+
+    test('should not change counter if already in desired state', () => {
+      manager.add('https://example.com/hook1', ['job.completed']);
+      const w2 = manager.add('https://example.com/hook2', ['job.failed']);
+
+      // Disable w2
+      manager.setEnabled(w2.id, false);
+      expect(manager.getStats().enabled).toBe(1);
+
+      // Disable again - should not change counter
+      manager.setEnabled(w2.id, false);
+      expect(manager.getStats().enabled).toBe(1);
+
+      // Enable twice - should not increase counter twice
+      manager.setEnabled(w2.id, true);
+      manager.setEnabled(w2.id, true);
+      expect(manager.getStats().enabled).toBe(2);
+    });
+
+    test('should update enabled count correctly when removing disabled webhook', () => {
+      const w1 = manager.add('https://example.com/hook1', ['job.completed']);
+      const w2 = manager.add('https://example.com/hook2', ['job.failed']);
+
+      manager.setEnabled(w2.id, false);
+      expect(manager.getStats().enabled).toBe(1);
+
+      // Remove disabled webhook - enabled count should stay same
+      manager.remove(w2.id);
+      expect(manager.getStats().enabled).toBe(1);
+
+      // Remove enabled webhook - enabled count should decrease
+      manager.remove(w1.id);
+      expect(manager.getStats().enabled).toBe(0);
+    });
+  });
+
   describe('getStats', () => {
     test('should return correct stats', () => {
       manager.add('https://example.com/hook1', ['job.completed']);
       const w2 = manager.add('https://example.com/hook2', ['job.failed']);
       manager.add('https://example.com/hook3', ['job.pushed']);
 
-      // Disable one webhook
-      w2.enabled = false;
+      // Disable one webhook using setEnabled method
+      manager.setEnabled(w2.id, false);
 
       const stats = manager.getStats();
       expect(stats.total).toBe(3);

@@ -89,8 +89,13 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
     // Insert based on state
     if (needsWaitingDeps) {
       shard.waitingDeps.set(job.id, job);
+      // Register in dependency index for O(1) lookup when deps complete
+      shard.registerDependencies(job.id, job.dependsOn);
     } else {
       shard.getQueue(queue).push(job);
+      // Update running counters for O(1) stats and temporal index for cleanQueue
+      const isDelayed = job.runAt > Date.now();
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
       shard.notify();
     }
 
@@ -130,10 +135,14 @@ export async function pushJobBatch(
   await withWriteLock(ctx.shardLocks[idx], () => {
     const shard = ctx.shards[idx];
     const q = shard.getQueue(queue);
+    const now = Date.now();
 
     for (const job of jobs) {
       q.push(job);
       ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+      // Update running counters for O(1) stats and temporal index for cleanQueue
+      const isDelayed = job.runAt > now;
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
     }
 
     shard.notify();

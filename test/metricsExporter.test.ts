@@ -138,7 +138,7 @@ describe('Metrics Exporter', () => {
       webhookManager.add('https://example.com/hook1', ['job.completed']);
       const w2 = webhookManager.add('https://example.com/hook2', ['job.failed']);
       webhookManager.add('https://example.com/hook3', ['job.pushed']);
-      w2.enabled = false;
+      webhookManager.setEnabled(w2.id, false);
 
       const output = generatePrometheusMetrics(stats, workerManager, webhookManager);
 

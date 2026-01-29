@@ -1,6 +1,7 @@
 /**
  * Protocol Rate Limiter
  * Prevents abuse by limiting requests per client
+ * Uses sliding window with O(1) amortized check instead of O(n) filter
  */
 
 export interface RateLimiterConfig {
@@ -15,9 +16,59 @@ const DEFAULT_CONFIG: RateLimiterConfig = {
   cleanupIntervalMs: 60_000,
 };
 
+/**
+ * Sliding window deque for O(1) amortized rate limiting
+ * Timestamps are stored in sorted order (oldest first)
+ * Expired timestamps are removed lazily from the head
+ */
+class SlidingWindowDeque {
+  private timestamps: number[] = [];
+  private head = 0; // Index of first valid element
+
+  /** Add a timestamp and return current count in window */
+  add(now: number, windowMs: number): number {
+    // Remove expired timestamps from head - O(k) where k = expired count
+    while (this.head < this.timestamps.length && now - this.timestamps[this.head] >= windowMs) {
+      this.head++;
+    }
+
+    // Compact array if head has moved too far (prevents memory leak)
+    if (this.head > 1000) {
+      this.timestamps = this.timestamps.slice(this.head);
+      this.head = 0;
+    }
+
+    // Add new timestamp
+    this.timestamps.push(now);
+
+    // Return count of valid timestamps
+    return this.timestamps.length - this.head;
+  }
+
+  /** Get current count in window */
+  getCount(now: number, windowMs: number): number {
+    // Remove expired timestamps from head
+    while (this.head < this.timestamps.length && now - this.timestamps[this.head] >= windowMs) {
+      this.head++;
+    }
+    return this.timestamps.length - this.head;
+  }
+
+  /** Check if empty */
+  isEmpty(): boolean {
+    return this.head >= this.timestamps.length;
+  }
+
+  /** Clear all timestamps */
+  clear(): void {
+    this.timestamps = [];
+    this.head = 0;
+  }
+}
+
 /** Rate limiter for protocol-level request limiting */
 export class ProtocolRateLimiter {
-  private readonly requests = new Map<string, number[]>();
+  private readonly requests = new Map<string, SlidingWindowDeque>();
   private readonly config: RateLimiterConfig;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -26,29 +77,39 @@ export class ProtocolRateLimiter {
     this.startCleanup();
   }
 
-  /** Check if a request from clientId is allowed */
+  /** Check if a request from clientId is allowed - O(1) amortized */
   isAllowed(clientId: string): boolean {
     const now = Date.now();
-    const timestamps = this.requests.get(clientId) ?? [];
+    let deque = this.requests.get(clientId);
 
-    // Remove timestamps outside the window
-    const valid = timestamps.filter((t) => now - t < this.config.windowMs);
+    if (!deque) {
+      deque = new SlidingWindowDeque();
+      this.requests.set(clientId, deque);
+    }
 
-    if (valid.length >= this.config.maxRequests) {
+    // Get current count before adding
+    const currentCount = deque.getCount(now, this.config.windowMs);
+
+    if (currentCount >= this.config.maxRequests) {
       return false;
     }
 
-    valid.push(now);
-    this.requests.set(clientId, valid);
+    // Add new timestamp
+    deque.add(now, this.config.windowMs);
     return true;
   }
 
-  /** Get remaining requests for a client */
+  /** Get remaining requests for a client - O(1) amortized */
   getRemaining(clientId: string): number {
     const now = Date.now();
-    const timestamps = this.requests.get(clientId) ?? [];
-    const valid = timestamps.filter((t) => now - t < this.config.windowMs);
-    return Math.max(0, this.config.maxRequests - valid.length);
+    const deque = this.requests.get(clientId);
+
+    if (!deque) {
+      return this.config.maxRequests;
+    }
+
+    const currentCount = deque.getCount(now, this.config.windowMs);
+    return Math.max(0, this.config.maxRequests - currentCount);
   }
 
   /** Remove a client from tracking */
@@ -65,16 +126,22 @@ export class ProtocolRateLimiter {
     }
   }
 
-  /** Clean up old entries */
+  /** Clean up old entries - O(n) but runs infrequently */
   private cleanup(): void {
     const now = Date.now();
-    for (const [clientId, timestamps] of this.requests) {
-      const valid = timestamps.filter((t) => now - t < this.config.windowMs);
-      if (valid.length === 0) {
-        this.requests.delete(clientId);
-      } else {
-        this.requests.set(clientId, valid);
+    const toDelete: string[] = [];
+
+    for (const [clientId, deque] of this.requests) {
+      // Force count update to clean expired timestamps
+      deque.getCount(now, this.config.windowMs);
+
+      if (deque.isEmpty()) {
+        toDelete.push(clientId);
       }
+    }
+
+    for (const clientId of toDelete) {
+      this.requests.delete(clientId);
     }
   }
 

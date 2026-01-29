@@ -18,6 +18,11 @@ export class WorkerManager {
   private readonly workers = new Map<WorkerId, Worker>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
+  /** Running counters for O(1) stats - avoids O(n) reduce operations */
+  private totalProcessedCounter = 0;
+  private totalFailedCounter = 0;
+  private totalActiveJobsCounter = 0;
+
   constructor() {
     this.startCleanup();
   }
@@ -32,6 +37,11 @@ export class WorkerManager {
 
   /** Unregister a worker */
   unregister(id: WorkerId): boolean {
+    const worker = this.workers.get(id);
+    if (worker) {
+      // Adjust running counters before removal
+      this.totalActiveJobsCounter -= worker.activeJobs;
+    }
     const removed = this.workers.delete(id);
     if (removed) {
       workerLog.info('Unregistered worker', { workerId: id });
@@ -57,6 +67,7 @@ export class WorkerManager {
     const worker = this.workers.get(id);
     if (worker) {
       worker.activeJobs++;
+      this.totalActiveJobsCounter++;
       worker.lastSeen = Date.now();
     }
   }
@@ -65,8 +76,12 @@ export class WorkerManager {
   jobCompleted(id: WorkerId): void {
     const worker = this.workers.get(id);
     if (worker) {
-      worker.activeJobs = Math.max(0, worker.activeJobs - 1);
+      if (worker.activeJobs > 0) {
+        worker.activeJobs--;
+        this.totalActiveJobsCounter--;
+      }
       worker.processedJobs++;
+      this.totalProcessedCounter++;
       worker.lastSeen = Date.now();
     }
   }
@@ -75,8 +90,12 @@ export class WorkerManager {
   jobFailed(id: WorkerId): void {
     const worker = this.workers.get(id);
     if (worker) {
-      worker.activeJobs = Math.max(0, worker.activeJobs - 1);
+      if (worker.activeJobs > 0) {
+        worker.activeJobs--;
+        this.totalActiveJobsCounter--;
+      }
       worker.failedJobs++;
+      this.totalFailedCounter++;
       worker.lastSeen = Date.now();
     }
   }
@@ -111,6 +130,8 @@ export class WorkerManager {
 
     for (const [id, worker] of this.workers) {
       if (now - worker.lastSeen > staleTimeout) {
+        // Adjust running counters before removal
+        this.totalActiveJobsCounter -= worker.activeJobs;
         this.workers.delete(id);
         workerLog.info('Removed stale worker', { workerId: id, name: worker.name });
       }
@@ -125,18 +146,24 @@ export class WorkerManager {
     }
   }
 
-  /** Get stats */
+  /** Get stats - O(n) only for active count, O(1) for other metrics */
   getStats() {
-    const workers = Array.from(this.workers.values());
     const now = Date.now();
-    const active = workers.filter((w) => now - w.lastSeen < WORKER_TIMEOUT_MS);
+    let activeWorkers = 0;
+
+    // Only iterate once for active count (time-based, can't use counter)
+    for (const worker of this.workers.values()) {
+      if (now - worker.lastSeen < WORKER_TIMEOUT_MS) {
+        activeWorkers++;
+      }
+    }
 
     return {
-      total: workers.length,
-      active: active.length,
-      totalProcessed: workers.reduce((sum, w) => sum + w.processedJobs, 0),
-      totalFailed: workers.reduce((sum, w) => sum + w.failedJobs, 0),
-      activeJobs: workers.reduce((sum, w) => sum + w.activeJobs, 0),
+      total: this.workers.size,
+      active: activeWorkers,
+      totalProcessed: this.totalProcessedCounter,
+      totalFailed: this.totalFailedCounter,
+      activeJobs: this.totalActiveJobsCounter,
     };
   }
 }

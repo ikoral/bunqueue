@@ -63,7 +63,7 @@ export async function handleDiscard(
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found', reqId);
 }
 
-/** Handle WaitJob command - wait for job completion */
+/** Handle WaitJob command - wait for job completion (event-driven, no polling) */
 export async function handleWaitJob(
   cmd: Extract<Command, { cmd: 'WaitJob' }>,
   ctx: HandlerContext,
@@ -71,16 +71,21 @@ export async function handleWaitJob(
 ): Promise<Response> {
   const jid = jobId(cmd.id);
   const timeout = cmd.timeout ?? 30000;
-  const deadline = Date.now() + timeout;
 
-  while (Date.now() < deadline) {
-    const job = await ctx.queueManager.getJob(jid);
-    if (!job) return resp.error('Job not found', reqId);
-    if (job.completedAt) {
-      const result = ctx.queueManager.getResult(jid);
-      return { ok: true, completed: true, result, reqId } as Response;
-    }
-    await new Promise((r) => setTimeout(r, 100));
+  // First check if job exists and is already completed
+  const job = await ctx.queueManager.getJob(jid);
+  if (!job) return resp.error('Job not found', reqId);
+  if (job.completedAt) {
+    const result = ctx.queueManager.getResult(jid);
+    return { ok: true, completed: true, result, reqId } as Response;
+  }
+
+  // Wait for completion event - event-driven, no polling
+  const completed = await ctx.queueManager.waitForJobCompletion(jid, timeout);
+
+  if (completed) {
+    const result = ctx.queueManager.getResult(jid);
+    return { ok: true, completed: true, result, reqId } as Response;
   }
 
   return { ok: true, completed: false, reqId } as Response;

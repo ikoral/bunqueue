@@ -12,6 +12,25 @@ import type { JobEvent } from '../../domain/types/queue';
 import { httpLog, wsLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
 
+/** Singleton TextEncoder for SSE messages - avoids allocation per message */
+const textEncoder = new TextEncoder();
+
+/** Singleton TextDecoder for WebSocket messages */
+const textDecoder = new TextDecoder();
+
+/**
+ * Validate auth token against valid tokens set - O(n) but single function
+ * Uses constant-time comparison to prevent timing attacks
+ */
+function validateAuthToken(token: string, authTokens: Set<string>): boolean {
+  for (const validToken of authTokens) {
+    if (constantTimeEqual(token, validToken)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** HTTP Server configuration */
 export interface HttpServerConfig {
   port: number;
@@ -60,7 +79,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     for (const [, client] of sseClients) {
       if (!client.queueFilter || client.queueFilter === event.queue) {
         try {
-          client.controller.enqueue(new TextEncoder().encode(sseMessage));
+          client.controller.enqueue(textEncoder.encode(sseMessage));
         } catch {
           // Client disconnected, will be cleaned up
         }
@@ -157,14 +176,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         if (authTokens.size > 0) {
           const authHeader = req.headers.get('Authorization');
           const token = authHeader?.replace('Bearer ', '') ?? '';
-          let authenticated = false;
-          for (const validToken of authTokens) {
-            if (constantTimeEqual(token, validToken)) {
-              authenticated = true;
-              break;
-            }
-          }
-          if (!authenticated) {
+          if (!validateAuthToken(token, authTokens)) {
             return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
           }
         }
@@ -185,7 +197,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
             // Send initial connection message
             controller.enqueue(
-              new TextEncoder().encode(`data: {"connected":true,"clientId":"${clientId}"}\n\n`)
+              textEncoder.encode(`data: {"connected":true,"clientId":"${clientId}"}\n\n`)
             );
           },
           cancel() {
@@ -210,14 +222,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         if (config.requireAuthForMetrics && authTokens.size > 0) {
           const authHeader = req.headers.get('Authorization');
           const token = authHeader?.replace('Bearer ', '') ?? '';
-          let authenticated = false;
-          for (const validToken of authTokens) {
-            if (constantTimeEqual(token, validToken)) {
-              authenticated = true;
-              break;
-            }
-          }
-          if (!authenticated) {
+          if (!validateAuthToken(token, authTokens)) {
             return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
           }
         }
@@ -231,14 +236,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       if (authTokens.size > 0) {
         const authHeader = req.headers.get('Authorization');
         const token = authHeader?.replace('Bearer ', '') ?? '';
-        let authenticated = false;
-        for (const validToken of authTokens) {
-          if (constantTimeEqual(token, validToken)) {
-            authenticated = true;
-            break;
-          }
-        }
-        if (!authenticated) {
+        if (!validateAuthToken(token, authTokens)) {
           return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
         }
       }
@@ -266,7 +264,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       },
 
       async message(ws, message) {
-        const text = typeof message === 'string' ? message : new TextDecoder().decode(message);
+        const text = typeof message === 'string' ? message : textDecoder.decode(message);
         const cmd = parseCommand(text);
 
         if (!cmd) {

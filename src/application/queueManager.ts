@@ -3,7 +3,7 @@
  * Core orchestrator for all queue operations
  */
 
-import { type Job, type JobId, type JobInput, isDelayed } from '../domain/types/job';
+import type { Job, JobId, JobInput } from '../domain/types/job';
 import { queueLog } from '../shared/logger';
 import type { JobLocation, JobEvent } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
@@ -17,15 +17,21 @@ import { EventsManager } from './eventsManager';
 import { RWLock, withWriteLock } from '../shared/lock';
 import { shardIndex, SHARD_COUNT } from '../shared/hash';
 import { pushJob, pushJobBatch, type PushContext } from './operations/push';
-import { pullJob, type PullContext } from './operations/pull';
-import { ackJob, failJob, type AckContext } from './operations/ack';
+import { pullJob, pullJobBatch, type PullContext } from './operations/pull';
+import {
+  ackJob,
+  ackJobBatch,
+  ackJobBatchWithResults,
+  failJob,
+  type AckContext,
+} from './operations/ack';
 import * as queueControl from './operations/queueControl';
 import * as jobMgmt from './operations/jobManagement';
 import * as queryOps from './operations/queryOperations';
 import * as dlqOps from './dlqManager';
 import * as logsOps from './jobLogsManager';
 import { generatePrometheusMetrics } from './metricsExporter';
-import { LRUMap, LRUSet, type SetLike } from '../shared/lru';
+import { LRUMap, BoundedSet, BoundedMap, type SetLike } from '../shared/lru';
 
 /** Queue Manager configuration */
 export interface QueueManagerConfig {
@@ -66,8 +72,8 @@ export class QueueManager {
 
   // Global indexes (bounded with LRU eviction)
   private readonly jobIndex = new Map<JobId, JobLocation>();
-  private readonly completedJobs!: LRUSet<JobId>;
-  private readonly jobResults!: LRUMap<JobId, unknown>;
+  private readonly completedJobs!: BoundedSet<JobId>;
+  private readonly jobResults!: BoundedMap<JobId, unknown>;
   private readonly customIdMap!: LRUMap<string, JobId>;
   private readonly jobLogs!: LRUMap<JobId, JobLogEntry[]>;
 
@@ -99,15 +105,18 @@ export class QueueManager {
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private timeoutInterval: ReturnType<typeof setInterval> | null = null;
 
+  // Queue names cache for O(1) listQueues instead of O(32 * queues)
+  private readonly queueNamesCache = new Set<string>();
+
   constructor(config: QueueManagerConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.storage = config.dataPath ? new SqliteStorage({ path: config.dataPath }) : null;
 
-    // Initialize bounded collections with LRU eviction
-    this.completedJobs = new LRUSet<JobId>(this.config.maxCompletedJobs, (jobId) => {
+    // Initialize bounded collections - BoundedSet is faster for completedJobs (no recency tracking needed)
+    this.completedJobs = new BoundedSet<JobId>(this.config.maxCompletedJobs, (jobId) => {
       this.jobIndex.delete(jobId);
     });
-    this.jobResults = new LRUMap<JobId, unknown>(this.config.maxJobResults);
+    this.jobResults = new BoundedMap<JobId, unknown>(this.config.maxJobResults);
     this.customIdMap = new LRUMap<string, JobId>(this.config.maxCustomIds);
     this.jobLogs = new LRUMap<JobId, JobLogEntry[]>(this.config.maxJobLogs);
 
@@ -177,6 +186,9 @@ export class QueueManager {
       totalFailed: this.metrics.totalFailed,
       broadcast: this.eventsManager.broadcast.bind(this.eventsManager),
       onJobCompleted: this.onJobCompleted.bind(this),
+      onJobsCompleted: this.onJobsCompleted.bind(this),
+      needsBroadcast: this.eventsManager.needsBroadcast.bind(this.eventsManager),
+      hasPendingDeps: this.hasPendingDeps.bind(this),
     };
   }
 
@@ -209,10 +221,14 @@ export class QueueManager {
   // ============ Core Operations ============
 
   async push(queue: string, input: JobInput): Promise<Job> {
+    // Register queue name in cache for O(1) listQueues
+    this.registerQueueName(queue);
     return pushJob(queue, input, this.getPushContext());
   }
 
   async pushBatch(queue: string, inputs: JobInput[]): Promise<JobId[]> {
+    // Register queue name in cache for O(1) listQueues
+    this.registerQueueName(queue);
     return pushJobBatch(queue, inputs, this.getPushContext());
   }
 
@@ -220,8 +236,23 @@ export class QueueManager {
     return pullJob(queue, timeoutMs, this.getPullContext());
   }
 
+  /** Pull multiple jobs in single lock acquisition - O(1) instead of O(n) locks */
+  async pullBatch(queue: string, count: number, timeoutMs: number = 0): Promise<Job[]> {
+    return pullJobBatch(queue, count, timeoutMs, this.getPullContext());
+  }
+
   async ack(jobId: JobId, result?: unknown): Promise<void> {
     return ackJob(jobId, result, this.getAckContext());
+  }
+
+  /** Acknowledge multiple jobs in parallel with Promise.all */
+  async ackBatch(jobIds: JobId[]): Promise<void> {
+    return ackJobBatch(jobIds, this.getAckContext());
+  }
+
+  /** Acknowledge multiple jobs with individual results - batch optimized */
+  async ackBatchWithResults(items: Array<{ id: JobId; result: unknown }>): Promise<void> {
+    return ackJobBatchWithResults(items, this.getAckContext());
   }
 
   async fail(jobId: JobId, error?: string): Promise<void> {
@@ -270,10 +301,23 @@ export class QueueManager {
 
   obliterate(queue: string): void {
     queueControl.obliterateQueue(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    // Remove from cache
+    this.unregisterQueueName(queue);
   }
 
   listQueues(): string[] {
-    return queueControl.listAllQueues({ shards: this.shards, jobIndex: this.jobIndex });
+    // O(1) using cache instead of O(32 * queues) iterating all shards
+    return Array.from(this.queueNamesCache);
+  }
+
+  /** Register queue name in cache - called when first job is pushed */
+  private registerQueueName(queue: string): void {
+    this.queueNamesCache.add(queue);
+  }
+
+  /** Unregister queue name from cache - called on obliterate */
+  private unregisterQueueName(queue: string): void {
+    this.queueNamesCache.delete(queue);
   }
 
   clean(queue: string, graceMs: number, state?: string, limit?: number): number {
@@ -413,6 +457,11 @@ export class QueueManager {
     return this.eventsManager.subscribe(callback);
   }
 
+  /** Wait for job completion - event-driven, no polling */
+  waitForJobCompletion(jobId: JobId, timeoutMs: number): Promise<boolean> {
+    return this.eventsManager.waitForJobCompletion(jobId, timeoutMs);
+  }
+
   // ============ Internal State Access (for validation) ============
 
   /** Get job index for dependency validation */
@@ -434,44 +483,95 @@ export class QueueManager {
   }
 
   /**
+   * Batch version of onJobCompleted - more efficient for large batches
+   */
+  private onJobsCompleted(completedIds: JobId[]): void {
+    for (const id of completedIds) {
+      this.pendingDepChecks.add(id);
+    }
+  }
+
+  /**
+   * Check if there are any jobs waiting for dependencies
+   * Used to skip dependency tracking when not needed
+   */
+  private hasPendingDeps(): boolean {
+    // Check if any shard has waiting dependencies
+    for (const shard of this.shards) {
+      if (shard.waitingDeps.size > 0) return true;
+    }
+    return false;
+  }
+
+  /**
    * Process pending dependency checks in a separate task
-   * This runs periodically to check if waiting jobs can now proceed
+   * Uses reverse index for O(m) where m = jobs waiting on completed deps
+   * Instead of O(n) full scan of all waiting deps
    */
   private async processPendingDependencies(): Promise<void> {
     if (this.pendingDepChecks.size === 0) return;
 
-    // Clear the pending set and process
+    // Copy and clear the pending set
+    const completedIds = Array.from(this.pendingDepChecks);
     this.pendingDepChecks.clear();
 
-    // Check each shard for jobs that can now proceed
-    for (let i = 0; i < SHARD_COUNT; i++) {
-      const shard = this.shards[i];
-      const jobsToPromote: Job[] = [];
+    // Collect jobs to check by shard
+    const jobsToCheckByShard = new Map<number, Set<JobId>>();
 
-      // Find jobs whose dependencies are all complete
-      // Use read-like access first (no modification)
-      for (const [_id, job] of shard.waitingDeps) {
-        if (job.dependsOn.every((dep) => this.completedJobs.has(dep))) {
-          jobsToPromote.push(job);
+    // Use reverse index to find only affected jobs - O(m) instead of O(n)
+    for (const completedId of completedIds) {
+      for (let i = 0; i < SHARD_COUNT; i++) {
+        const waitingJobIds = this.shards[i].getJobsWaitingFor(completedId);
+        if (waitingJobIds && waitingJobIds.size > 0) {
+          let shardJobs = jobsToCheckByShard.get(i);
+          if (!shardJobs) {
+            shardJobs = new Set();
+            jobsToCheckByShard.set(i, shardJobs);
+          }
+          for (const jobId of waitingJobIds) {
+            shardJobs.add(jobId);
+          }
         }
       }
-
-      // Now acquire lock and modify
-      if (jobsToPromote.length > 0) {
-        await withWriteLock(this.shardLocks[i], () => {
-          for (const job of jobsToPromote) {
-            if (shard.waitingDeps.has(job.id)) {
-              shard.waitingDeps.delete(job.id);
-              shard.getQueue(job.queue).push(job);
-              this.jobIndex.set(job.id, { type: 'queue', shardIdx: i, queueName: job.queue });
-            }
-          }
-          if (jobsToPromote.length > 0) {
-            shard.notify();
-          }
-        });
-      }
     }
+
+    // Process each shard that has affected jobs - in parallel using Promise.all
+    await Promise.all(
+      Array.from(jobsToCheckByShard.entries()).map(async ([i, jobIdsToCheck]) => {
+        const shard = this.shards[i];
+        const jobsToPromote: Job[] = [];
+
+        // Check only the affected jobs, not all waiting deps
+        for (const jobId of jobIdsToCheck) {
+          const job = shard.waitingDeps.get(jobId);
+          if (job?.dependsOn.every((dep) => this.completedJobs.has(dep))) {
+            jobsToPromote.push(job);
+          }
+        }
+
+        // Now acquire lock and modify
+        if (jobsToPromote.length > 0) {
+          await withWriteLock(this.shardLocks[i], () => {
+            const now = Date.now();
+            for (const job of jobsToPromote) {
+              if (shard.waitingDeps.has(job.id)) {
+                shard.waitingDeps.delete(job.id);
+                // Unregister from dependency index
+                shard.unregisterDependencies(job.id, job.dependsOn);
+                shard.getQueue(job.queue).push(job);
+                // Update running counters for O(1) stats and temporal index
+                const isDelayed = job.runAt > now;
+                shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue);
+                this.jobIndex.set(job.id, { type: 'queue', shardIdx: i, queueName: job.queue });
+              }
+            }
+            if (jobsToPromote.length > 0) {
+              shard.notify();
+            }
+          });
+        }
+      })
+    );
   }
 
   // ============ Background Tasks ============
@@ -513,18 +613,36 @@ export class QueueManager {
       const idx = shardIndex(job.queue);
       this.shards[idx].getQueue(job.queue).push(job);
       this.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+      // Register queue name in cache
+      this.registerQueueName(job.queue);
     }
     this.cronScheduler.load(this.storage.loadCronJobs());
   }
 
+  // eslint-disable-next-line complexity
   private cleanup(): void {
     // LRU collections auto-evict, but we still need to clean up:
     // 1. Orphaned processing shard entries (jobs stuck in processing)
     // 2. Stale waiting dependencies
     // 3. Orphaned unique keys and active groups
+    // 4. Refresh delayed job counters (jobs that became ready)
 
     const now = Date.now();
     const stallTimeout = 30 * 60 * 1000; // 30 minutes max for processing
+
+    // Refresh delayed counters - update jobs that have become ready
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      this.shards[i].refreshDelayedCount(now);
+    }
+
+    // Compact priority queues if stale ratio > 20% (reclaim memory)
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      for (const q of this.shards[i].queues.values()) {
+        if (q.needsCompaction(0.2)) {
+          q.compact();
+        }
+      }
+    }
 
     // Clean orphaned processing entries
     for (let i = 0; i < SHARD_COUNT; i++) {
@@ -548,16 +666,18 @@ export class QueueManager {
     const depTimeout = 60 * 60 * 1000; // 1 hour
     for (let i = 0; i < SHARD_COUNT; i++) {
       const shard = this.shards[i];
-      const stale: JobId[] = [];
-      for (const [id, job] of shard.waitingDeps) {
+      const stale: Job[] = [];
+      for (const [_id, job] of shard.waitingDeps) {
         if (now - job.createdAt > depTimeout) {
-          stale.push(id);
+          stale.push(job);
         }
       }
-      for (const id of stale) {
-        shard.waitingDeps.delete(id);
-        this.jobIndex.delete(id);
-        queueLog.warn('Cleaned stale waiting dependency', { jobId: String(id) });
+      for (const job of stale) {
+        shard.waitingDeps.delete(job.id);
+        // Remove from dependency index
+        shard.unregisterDependencies(job.id, job.dependsOn);
+        this.jobIndex.delete(job.id);
+        queueLog.warn('Cleaned stale waiting dependency', { jobId: String(job.id) });
       }
     }
 
@@ -612,11 +732,13 @@ export class QueueManager {
     this.jobLogs.clear();
     this.customIdMap.clear();
     this.pendingDepChecks.clear();
+    this.queueNamesCache.clear();
     for (const shard of this.processingShards) {
       shard.clear();
     }
     for (const shard of this.shards) {
       shard.waitingDeps.clear();
+      shard.dependencyIndex.clear();
       shard.waitingChildren.clear();
       shard.uniqueKeys.clear();
       shard.activeGroups.clear();
@@ -628,16 +750,17 @@ export class QueueManager {
       delayed = 0,
       active = 0,
       dlq = 0;
-    const now = Date.now();
 
+    // O(32) instead of O(n) - use running counters from each shard
     for (let i = 0; i < SHARD_COUNT; i++) {
-      for (const q of this.shards[i].queues.values()) {
-        for (const job of q.values()) {
-          if (isDelayed(job, now)) delayed++;
-          else waiting++;
-        }
-      }
-      for (const d of this.shards[i].dlq.values()) dlq += d.length;
+      const shardStats = this.shards[i].getStats();
+      const queuedTotal = shardStats.queuedJobs;
+      const delayedInShard = shardStats.delayedJobs;
+
+      // waiting = queued jobs that are not delayed
+      waiting += Math.max(0, queuedTotal - delayedInShard);
+      delayed += delayedInShard;
+      dlq += shardStats.dlqJobs;
       active += this.processingShards[i].size;
     }
 

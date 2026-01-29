@@ -102,7 +102,7 @@ export async function handlePull(
   return resp.nullableJob(job, reqId);
 }
 
-/** Handle PULLB (batch pull) command */
+/** Handle PULLB (batch pull) command - uses optimized single-lock batch pull */
 export async function handlePullBatch(
   cmd: Extract<Command, { cmd: 'PULLB' }>,
   ctx: HandlerContext,
@@ -115,12 +115,8 @@ export async function handlePullBatch(
   const countError = validateNumericField(cmd.count, 'count', { min: 1, max: 1000 });
   if (countError) return resp.error(countError, reqId);
 
-  const jobs = [];
-  for (let i = 0; i < cmd.count; i++) {
-    const job = await ctx.queueManager.pull(cmd.queue, 0);
-    if (!job) break;
-    jobs.push(job);
-  }
+  // Use optimized batch pull - O(1) lock instead of O(n) locks
+  const jobs = await ctx.queueManager.pullBatch(cmd.queue, cmd.count, 0);
   return resp.jobs(jobs, reqId);
 }
 
@@ -134,15 +130,14 @@ export async function handleAck(
   return resp.ok(undefined, reqId);
 }
 
-/** Handle ACKB (batch ack) command */
+/** Handle ACKB (batch ack) command - uses Promise.all for parallel execution */
 export async function handleAckBatch(
   cmd: Extract<Command, { cmd: 'ACKB' }>,
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  for (const id of cmd.ids) {
-    await ctx.queueManager.ack(jobId(id));
-  }
+  // Use optimized batch ack with Promise.all for parallel execution
+  await ctx.queueManager.ackBatch(cmd.ids.map((id) => jobId(id)));
   return resp.ok(undefined, reqId);
 }
 
