@@ -23,19 +23,26 @@ function color(text: string, colorCode: string): string {
   return supportsColor ? `${colorCode}${text}${colors.reset}` : text;
 }
 
+/** Safely convert unknown value to string */
+function str(value: unknown, fallback = ''): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value as string | number | boolean | bigint | symbol);
+}
+
 /** Format a job object for display */
 function formatJob(job: Record<string, unknown>): string {
   const lines = [
-    `${color('Job:', colors.bold)} ${String(job.id)}`,
-    `  Queue:      ${String(job.queue)}`,
-    `  State:      ${String(job.state ?? 'unknown')}`,
-    `  Priority:   ${String(job.priority)}`,
-    `  Attempts:   ${String(job.attempts)}/${String(job.maxAttempts)}`,
+    `${color('Job:', colors.bold)} ${str(job.id)}`,
+    `  Queue:      ${str(job.queue)}`,
+    `  State:      ${str(job.state, 'unknown')}`,
+    `  Priority:   ${str(job.priority)}`,
+    `  Attempts:   ${str(job.attempts)}/${str(job.maxAttempts)}`,
     `  Data:       ${JSON.stringify(job.data)}`,
   ];
 
   if (job.progress !== undefined && job.progress !== 0) {
-    lines.push(`  Progress:   ${String(job.progress)}%`);
+    lines.push(`  Progress:   ${str(job.progress)}%`);
   }
   if (job.createdAt) {
     lines.push(`  Created:    ${new Date(job.createdAt as number).toISOString()}`);
@@ -44,7 +51,7 @@ function formatJob(job: Record<string, unknown>): string {
     lines.push(`  Started:    ${new Date(job.startedAt as number).toISOString()}`);
   }
   if (job.error) {
-    lines.push(`  Error:      ${color(String(job.error), colors.red)}`);
+    lines.push(`  Error:      ${color(str(job.error), colors.red)}`);
   }
 
   return lines.join('\n');
@@ -66,11 +73,11 @@ function formatJobsTable(jobs: Record<string, unknown>[]): string {
 
   const rows = jobs.map((job) =>
     [
-      String(job.id).padEnd(20),
-      String(job.queue).padEnd(15),
-      String(job.state ?? '-').padEnd(12),
-      String(job.priority).padEnd(10),
-      `${String(job.attempts)}/${String(job.maxAttempts)}`,
+      str(job.id).padEnd(20),
+      str(job.queue).padEnd(15),
+      str(job.state, '-').padEnd(12),
+      str(job.priority).padEnd(10),
+      `${str(job.attempts)}/${str(job.maxAttempts)}`,
     ].join(' ')
   );
 
@@ -82,19 +89,19 @@ function formatStats(stats: Record<string, unknown>): string {
   const lines = [
     color('Server Statistics:', colors.bold),
     '',
-    `  ${color('Waiting:', colors.cyan)}     ${stats.waiting ?? 0}`,
-    `  ${color('Active:', colors.green)}      ${stats.active ?? 0}`,
-    `  ${color('Delayed:', colors.yellow)}     ${stats.delayed ?? 0}`,
-    `  ${color('Completed:', colors.dim)}   ${stats.completed ?? 0}`,
-    `  ${color('Failed:', colors.red)}      ${stats.failed ?? 0}`,
-    `  ${color('DLQ:', colors.red)}         ${stats.dlq ?? 0}`,
+    `  ${color('Waiting:', colors.cyan)}     ${str(stats.waiting, '0')}`,
+    `  ${color('Active:', colors.green)}      ${str(stats.active, '0')}`,
+    `  ${color('Delayed:', colors.yellow)}     ${str(stats.delayed, '0')}`,
+    `  ${color('Completed:', colors.dim)}   ${str(stats.completed, '0')}`,
+    `  ${color('Failed:', colors.red)}      ${str(stats.failed, '0')}`,
+    `  ${color('DLQ:', colors.red)}         ${str(stats.dlq, '0')}`,
   ];
 
   if (stats.totalPushed !== undefined) {
-    lines.push('', `  Total Pushed:    ${stats.totalPushed}`);
-    lines.push(`  Total Pulled:    ${stats.totalPulled}`);
-    lines.push(`  Total Completed: ${stats.totalCompleted}`);
-    lines.push(`  Total Failed:    ${stats.totalFailed}`);
+    lines.push('', `  Total Pushed:    ${str(stats.totalPushed)}`);
+    lines.push(`  Total Pulled:    ${str(stats.totalPulled)}`);
+    lines.push(`  Total Completed: ${str(stats.totalCompleted)}`);
+    lines.push(`  Total Failed:    ${str(stats.totalFailed)}`);
   }
 
   return lines.join('\n');
@@ -122,8 +129,11 @@ function formatCronJobs(jobs: Record<string, unknown>[]): string {
   }
 
   const lines = jobs.map((job) => {
-    const schedule = job.schedule ?? `every ${String(job.repeatEvery)}ms`;
-    return `  ${color(String(job.name), colors.bold)}\n    Queue: ${String(job.queue)}\n    Schedule: ${String(schedule)}\n    Executions: ${String(job.executions)}`;
+    const schedule =
+      job.schedule !== null && job.schedule !== undefined
+        ? str(job.schedule)
+        : `every ${str(job.repeatEvery)}ms`;
+    return `  ${color(str(job.name), colors.bold)}\n    Queue: ${str(job.queue)}\n    Schedule: ${schedule}\n    Executions: ${str(job.executions)}`;
   });
 
   return lines.join('\n\n');
@@ -138,7 +148,7 @@ function formatWorkers(workers: Record<string, unknown>[]): string {
   return workers
     .map(
       (w) =>
-        `  ${color(String(w.id), colors.bold)}: ${String(w.name)} (${(w.queues as string[]).join(', ')})`
+        `  ${color(str(w.id), colors.bold)}: ${str(w.name)} (${(w.queues as string[]).join(', ')})`
     )
     .join('\n');
 }
@@ -152,7 +162,7 @@ function formatWebhooks(webhooks: Record<string, unknown>[]): string {
   return webhooks
     .map(
       (w) =>
-        `  ${color(String(w.id), colors.bold)}: ${String(w.url)}\n    Events: ${(w.events as string[]).join(', ')}`
+        `  ${color(str(w.id), colors.bold)}: ${str(w.url)}\n    Events: ${(w.events as string[]).join(', ')}`
     )
     .join('\n\n');
 }
@@ -166,7 +176,7 @@ function formatDlqJobs(jobs: Record<string, unknown>[]): string {
   return jobs
     .map(
       (job) =>
-        `  ${color(String(job.jobId), colors.bold)}\n    Queue: ${String(job.queue)}\n    Error: ${color(String(job.error ?? 'Unknown'), colors.red)}\n    Failed: ${new Date(job.failedAt as number).toISOString()}`
+        `  ${color(str(job.jobId), colors.bold)}\n    Queue: ${str(job.queue)}\n    Error: ${color(str(job.error, 'Unknown'), colors.red)}\n    Failed: ${new Date(job.failedAt as number).toISOString()}`
     )
     .join('\n\n');
 }
@@ -181,7 +191,7 @@ function formatLogs(logs: Record<string, unknown>[]): string {
     .map((log) => {
       const levelColor =
         log.level === 'error' ? colors.red : log.level === 'warn' ? colors.yellow : colors.dim;
-      return `  [${new Date(log.timestamp as number).toISOString()}] ${color(String(log.level).toUpperCase(), levelColor)}: ${String(log.message)}`;
+      return `  [${new Date(log.timestamp as number).toISOString()}] ${color(str(log.level).toUpperCase(), levelColor)}: ${str(log.message)}`;
     })
     .join('\n');
 }
@@ -253,7 +263,7 @@ function formatSuccess(response: Record<string, unknown>, command: string): stri
 
   // State
   if ('state' in response) {
-    return `State: ${String(response.state)}`;
+    return `State: ${str(response.state)}`;
   }
 
   // Result
@@ -263,7 +273,8 @@ function formatSuccess(response: Record<string, unknown>, command: string): stri
 
   // Progress
   if ('progress' in response) {
-    return `Progress: ${String(response.progress)}%${response.message ? ` - ${String(response.message)}` : ''}`;
+    const msg = response.message ? ` - ${str(response.message)}` : '';
+    return `Progress: ${str(response.progress)}%${msg}`;
   }
 
   // Paused status
@@ -275,7 +286,7 @@ function formatSuccess(response: Record<string, unknown>, command: string): stri
 
   // Count
   if ('count' in response) {
-    return `Count: ${String(response.count)}`;
+    return `Count: ${str(response.count)}`;
   }
 
   // Metrics (Prometheus format)
@@ -298,7 +309,7 @@ export function formatOutput(
   }
 
   if (!response.ok) {
-    return formatError(String(response.error ?? 'Unknown error'), false);
+    return formatError(str(response.error, 'Unknown error'), false);
   }
 
   return formatSuccess(response, command);

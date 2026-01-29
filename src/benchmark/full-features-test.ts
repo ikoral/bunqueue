@@ -138,10 +138,8 @@ async function main() {
 
     // Child should not be available until parent is completed
     const childBefore = await qm.pull('deps', 0);
-    await test(
-      'parent pulled first (child blocked)',
-      () => (childBefore?.data as any).type === 'parent'
-    );
+    await test('parent pulled first (child blocked)', () =>
+      (childBefore?.data as any).type === 'parent');
 
     // Complete parent
     await qm.ack(childBefore!.id);
@@ -150,10 +148,8 @@ async function main() {
     await new Promise((r) => setTimeout(r, 1200));
 
     const childAfter = await qm.pull('deps', 0);
-    await test(
-      'child available after parent completes',
-      () => !!childAfter && (childAfter.data as any).type === 'child'
-    );
+    await test('child available after parent completes', () =>
+      !!childAfter && (childAfter.data as any).type === 'child');
     if (childAfter) await qm.ack(childAfter.id);
   });
 
