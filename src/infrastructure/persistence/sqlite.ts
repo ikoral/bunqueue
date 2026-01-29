@@ -1,21 +1,29 @@
 /**
  * SQLite Storage Implementation
  * Persistence layer using Bun's native SQLite
+ * Uses MessagePack for ~2-3x faster serialization than JSON
  */
 
 import { Database } from 'bun:sqlite';
+import { encode, decode } from '@msgpack/msgpack';
 import { type Job, type JobId, jobId } from '../../domain/types/job';
 import type { CronJob } from '../../domain/types/cron';
 import { PRAGMA_SETTINGS, SCHEMA, MIGRATION_TABLE, SCHEMA_VERSION } from './schema';
 import { prepareStatements, type StatementName, type DbJob, type DbCron } from './statements';
 import { storageLog } from '../../shared/logger';
 
-/** Safely parse JSON with error handling */
-function safeJsonParse<T>(json: string, fallback: T, context: string): T {
+/** Encode data to MessagePack buffer */
+function pack(data: unknown): Uint8Array {
+  return encode(data);
+}
+
+/** Decode MessagePack buffer to data */
+function unpack<T>(buffer: Uint8Array | null, fallback: T, context: string): T {
+  if (!buffer) return fallback;
   try {
-    return JSON.parse(json) as T;
+    return decode(buffer) as T;
   } catch (err) {
-    storageLog.error('JSON parse error', { context, error: String(err), json: json.slice(0, 100) });
+    storageLog.error('MessagePack decode error', { context, error: String(err) });
     return fallback;
   }
 }
@@ -26,20 +34,48 @@ export interface SqliteConfig {
   walMode?: boolean;
   synchronous?: 'OFF' | 'NORMAL' | 'FULL';
   cacheSize?: number;
+  /** Write buffer size (default: 100) */
+  writeBufferSize?: number;
+  /** Write buffer flush interval in ms (default: 50) */
+  writeBufferFlushMs?: number;
 }
 
 /**
- * SQLite Storage class
+ * SQLite Storage class with write buffering for high throughput
  */
 export class SqliteStorage {
   private db: Database;
   private readonly statements: Map<StatementName, ReturnType<Database['prepare']>>;
+
+  // Write buffer for batching inserts
+  private writeBuffer: Job[] = [];
+  private readonly writeBufferSize: number;
+  private writeBufferTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: SqliteConfig) {
     this.db = new Database(config.path, { create: true });
     this.db.run(PRAGMA_SETTINGS);
     this.migrate();
     this.statements = prepareStatements(this.db);
+
+    // Initialize write buffer
+    this.writeBufferSize = config.writeBufferSize ?? 100;
+    const flushInterval = config.writeBufferFlushMs ?? 50;
+
+    // Auto-flush timer
+    this.writeBufferTimer = setInterval(() => {
+      this.flushWriteBuffer();
+    }, flushInterval);
+  }
+
+  /** Flush write buffer to disk */
+  flushWriteBuffer(): void {
+    if (this.writeBuffer.length === 0) return;
+
+    const jobs = this.writeBuffer;
+    this.writeBuffer = [];
+
+    this.insertJobsBatchInternal(jobs);
   }
 
   private migrate(): void {
@@ -58,13 +94,24 @@ export class SqliteStorage {
 
   // ============ Job Operations ============
 
+  /** Insert job using write buffer for better throughput */
   insertJob(job: Job): void {
+    this.writeBuffer.push(job);
+
+    // Flush if buffer is full
+    if (this.writeBuffer.length >= this.writeBufferSize) {
+      this.flushWriteBuffer();
+    }
+  }
+
+  /** Insert job immediately (bypass buffer) */
+  insertJobImmediate(job: Job): void {
     this.statements
       .get('insertJob')!
       .run(
         job.id,
         job.queue,
-        JSON.stringify(job.data),
+        pack(job.data),
         job.priority,
         job.createdAt,
         job.runAt,
@@ -75,9 +122,9 @@ export class SqliteStorage {
         job.timeout,
         job.uniqueKey,
         job.customId,
-        job.dependsOn.length > 0 ? JSON.stringify(job.dependsOn) : null,
+        job.dependsOn.length > 0 ? pack(job.dependsOn) : null,
         job.parentId,
-        job.tags.length > 0 ? JSON.stringify(job.tags) : null,
+        job.tags.length > 0 ? pack(job.tags) : null,
         job.runAt > Date.now() ? 'delayed' : 'waiting',
         job.lifo ? 1 : 0,
         job.groupId,
@@ -98,7 +145,7 @@ export class SqliteStorage {
   markFailed(job: Job, error: string | null): void {
     this.statements
       .get('insertDlq')!
-      .run(job.id, job.queue, JSON.stringify(job.data), error, Date.now(), job.attempts);
+      .run(job.id, job.queue, pack(job.data), error, Date.now(), job.attempts);
   }
 
   updateForRetry(job: Job): void {
@@ -117,24 +164,38 @@ export class SqliteStorage {
   }
 
   storeResult(jobId: JobId, result: unknown): void {
-    this.statements.get('insertResult')!.run(jobId, JSON.stringify(result), Date.now());
+    this.statements.get('insertResult')!.run(jobId, pack(result), Date.now());
   }
 
   getResult(jobId: JobId): unknown {
-    const row = this.statements.get('getResult')!.get(jobId) as { result: string } | null;
-    return row ? safeJsonParse(row.result, null, `getResult:${jobId}`) : null;
+    const row = this.statements.get('getResult')!.get(jobId) as { result: Uint8Array } | null;
+    return row ? unpack(row.result, null, `getResult:${jobId}`) : null;
   }
 
   // ============ Bulk Operations ============
 
+  /** Insert batch of jobs (adds to buffer) */
   insertJobsBatch(jobs: Job[]): void {
+    for (const job of jobs) {
+      this.writeBuffer.push(job);
+    }
+    // Flush if buffer is full
+    if (this.writeBuffer.length >= this.writeBufferSize) {
+      this.flushWriteBuffer();
+    }
+  }
+
+  /** Internal: Insert batch directly with transaction */
+  private insertJobsBatchInternal(jobs: Job[]): void {
+    if (jobs.length === 0) return;
+
     const stmt = this.statements.get('insertJob')!;
     this.db.transaction(() => {
       for (const job of jobs) {
         stmt.run(
           job.id,
           job.queue,
-          JSON.stringify(job.data),
+          pack(job.data),
           job.priority,
           job.createdAt,
           job.runAt,
@@ -145,9 +206,9 @@ export class SqliteStorage {
           job.timeout,
           job.uniqueKey,
           job.customId,
-          job.dependsOn.length > 0 ? JSON.stringify(job.dependsOn) : null,
+          job.dependsOn.length > 0 ? pack(job.dependsOn) : null,
           job.parentId,
-          job.tags.length > 0 ? JSON.stringify(job.tags) : null,
+          job.tags.length > 0 ? pack(job.tags) : null,
           job.runAt > Date.now() ? 'delayed' : 'waiting',
           job.lifo ? 1 : 0,
           job.groupId,
@@ -183,7 +244,7 @@ export class SqliteStorage {
       .run(
         cron.name,
         cron.queue,
-        JSON.stringify(cron.data),
+        pack(cron.data),
         cron.schedule,
         cron.repeatEvery,
         cron.priority,
@@ -198,7 +259,7 @@ export class SqliteStorage {
     return rows.map((row) => ({
       name: row.name,
       queue: row.queue,
-      data: safeJsonParse(row.data, {}, `loadCronJobs:${row.name}`),
+      data: unpack(row.data, {}, `loadCronJobs:${row.name}`),
       schedule: row.schedule,
       repeatEvery: row.repeat_every,
       priority: row.priority,
@@ -217,19 +278,19 @@ export class SqliteStorage {
   private rowToJob(row: DbJob): Job {
     const jobContext = `rowToJob:${row.id}`;
     const dependsOn: string[] = row.depends_on
-      ? safeJsonParse<string[]>(row.depends_on, [], `${jobContext}:dependsOn`)
+      ? unpack<string[]>(row.depends_on, [], `${jobContext}:dependsOn`)
       : [];
     const childrenIds: string[] = row.children_ids
-      ? safeJsonParse<string[]>(row.children_ids, [], `${jobContext}:childrenIds`)
+      ? unpack<string[]>(row.children_ids, [], `${jobContext}:childrenIds`)
       : [];
     const tags: string[] = row.tags
-      ? safeJsonParse<string[]>(row.tags, [], `${jobContext}:tags`)
+      ? unpack<string[]>(row.tags, [], `${jobContext}:tags`)
       : [];
 
     return {
       id: jobId(row.id),
       queue: row.queue,
-      data: safeJsonParse(row.data, {}, `${jobContext}:data`),
+      data: unpack(row.data, {}, `${jobContext}:data`),
       priority: row.priority,
       createdAt: row.created_at,
       runAt: row.run_at,
@@ -260,6 +321,15 @@ export class SqliteStorage {
   }
 
   close(): void {
+    // Stop auto-flush timer
+    if (this.writeBufferTimer) {
+      clearInterval(this.writeBufferTimer);
+      this.writeBufferTimer = null;
+    }
+
+    // Flush any remaining buffered writes
+    this.flushWriteBuffer();
+
     this.db.close();
   }
 

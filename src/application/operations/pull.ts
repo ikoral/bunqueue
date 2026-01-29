@@ -69,8 +69,9 @@ export async function pullJob(
       return null;
     }
 
-    // Wait briefly and retry
-    await new Promise((r) => setTimeout(r, 50));
+    // Wait for notification or timeout (event-based, not polling)
+    const remaining = deadline - Date.now();
+    await ctx.shards[idx].waitForJob(remaining);
   }
 }
 

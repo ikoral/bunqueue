@@ -15,10 +15,11 @@ PRAGMA page_size = 4096;
 /** Main schema creation */
 export const SCHEMA = `
 -- Jobs table (using UUIDv7 for job IDs)
+-- Uses BLOB for data fields (MessagePack serialization for ~2-3x faster than JSON)
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     queue TEXT NOT NULL,
-    data TEXT NOT NULL,
+    data BLOB NOT NULL,
     priority INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     run_at INTEGER NOT NULL,
@@ -31,10 +32,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     timeout INTEGER,
     unique_key TEXT,
     custom_id TEXT,
-    depends_on TEXT,
+    depends_on BLOB,
     parent_id TEXT,
-    children_ids TEXT,
-    tags TEXT,
+    children_ids BLOB,
+    tags BLOB,
     state TEXT NOT NULL DEFAULT 'waiting',
     lifo INTEGER NOT NULL DEFAULT 0,
     group_id TEXT,
@@ -58,19 +59,19 @@ CREATE INDEX IF NOT EXISTS idx_jobs_custom_id
 CREATE INDEX IF NOT EXISTS idx_jobs_parent
     ON jobs(parent_id) WHERE parent_id IS NOT NULL;
 
--- Job results storage
+-- Job results storage (BLOB for MessagePack)
 CREATE TABLE IF NOT EXISTS job_results (
     job_id TEXT PRIMARY KEY,
-    result TEXT,
+    result BLOB,
     completed_at INTEGER NOT NULL
 );
 
--- Dead letter queue
+-- Dead letter queue (BLOB for MessagePack)
 CREATE TABLE IF NOT EXISTS dlq (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id TEXT NOT NULL,
     queue TEXT NOT NULL,
-    data TEXT NOT NULL,
+    data BLOB NOT NULL,
     error TEXT,
     failed_at INTEGER NOT NULL,
     attempts INTEGER NOT NULL
@@ -79,11 +80,11 @@ CREATE TABLE IF NOT EXISTS dlq (
 CREATE INDEX IF NOT EXISTS idx_dlq_queue ON dlq(queue);
 CREATE INDEX IF NOT EXISTS idx_dlq_job_id ON dlq(job_id);
 
--- Cron jobs
+-- Cron jobs (BLOB for MessagePack)
 CREATE TABLE IF NOT EXISTS cron_jobs (
     name TEXT PRIMARY KEY,
     queue TEXT NOT NULL,
-    data TEXT NOT NULL,
+    data BLOB NOT NULL,
     schedule TEXT,
     repeat_every INTEGER,
     priority INTEGER NOT NULL DEFAULT 0,
@@ -110,7 +111,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {

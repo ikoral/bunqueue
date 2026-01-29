@@ -20,6 +20,9 @@ interface HeapEntry {
  * Order: higher priority first, then:
  *   - LIFO: newer jobs first (by jobId descending, since UUID7 is time-ordered)
  *   - FIFO: earlier runAt first, then older jobs first (by jobId ascending)
+ *
+ * Uses direct string comparison instead of localeCompare for ~10-50x faster performance.
+ * This works because UUID7 is ASCII-only and lexicographically sortable.
  */
 function compareEntries(a: HeapEntry, b: HeapEntry): number {
   // Higher priority first
@@ -30,7 +33,11 @@ function compareEntries(a: HeapEntry, b: HeapEntry): number {
   // For LIFO: newer jobs (higher UUID7) should come first
   // UUID7 contains timestamp, so lexicographic comparison gives time order
   if (a.lifo && b.lifo) {
-    return b.jobId.localeCompare(a.jobId);
+    // Direct comparison mimicking localeCompare(b, a) for descending order
+    // b > a means b is newer, should come first (return positive to put b before a)
+    if (b.jobId > a.jobId) return 1;
+    if (b.jobId < a.jobId) return -1;
+    return 0;
   }
 
   // For FIFO or mixed: earlier runAt first
@@ -39,7 +46,10 @@ function compareEntries(a: HeapEntry, b: HeapEntry): number {
   }
 
   // Then by jobId (older first for FIFO)
-  return a.jobId.localeCompare(b.jobId);
+  // a < b means a is older, should come first (return negative)
+  if (a.jobId < b.jobId) return -1;
+  if (a.jobId > b.jobId) return 1;
+  return 0;
 }
 
 /**

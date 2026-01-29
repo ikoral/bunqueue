@@ -43,17 +43,42 @@ export class Shard {
   /** Concurrency limiters per queue */
   readonly concurrencyLimiters = new Map<string, ConcurrencyLimiter>();
 
-  /** Notification callback for new jobs */
-  private notifyCallback: (() => void) | null = null;
+  /** Waiters for new jobs (condition variable pattern) */
+  private waiters: Array<() => void> = [];
 
-  /** Set notification callback */
-  onNotify(callback: () => void): void {
-    this.notifyCallback = callback;
+  /** Notify that jobs are available - wakes all waiters */
+  notify(): void {
+    const toNotify = this.waiters.splice(0);
+    for (const waiter of toNotify) {
+      waiter();
+    }
   }
 
-  /** Notify that jobs are available */
-  notify(): void {
-    this.notifyCallback?.();
+  /** Wait for a job to become available (with timeout) */
+  waitForJob(timeoutMs: number): Promise<void> {
+    if (timeoutMs <= 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      let resolved = false;
+
+      const cleanup = () => {
+        if (resolved) return;
+        resolved = true;
+        const idx = this.waiters.indexOf(waiterFn);
+        if (idx !== -1) this.waiters.splice(idx, 1);
+        resolve();
+      };
+
+      const waiterFn = () => cleanup();
+
+      // Add to waiters
+      this.waiters.push(waiterFn);
+
+      // Timeout fallback
+      setTimeout(cleanup, Math.min(timeoutMs, 100)); // Max 100ms wait to allow checking other conditions
+    });
   }
 
   // ============ Queue Operations ============
