@@ -26,6 +26,8 @@
 
 ## Why bunqueue?
 
+> ⚠️ **Bun only** — bunqueue requires [Bun](https://bun.sh) runtime. Node.js is not supported.
+
 **Every other job queue requires external infrastructure.** bunqueue doesn't.
 
 | Library | Requires |
@@ -60,6 +62,7 @@ import { Queue, Worker } from 'bunqueue/client';
 ## Quick Install
 
 ```bash
+# Requires Bun runtime (https://bun.sh)
 bun add bunqueue
 ```
 
