@@ -38,6 +38,19 @@ export async function handlePush(
   });
   if (optionsError) return resp.error(optionsError, reqId);
 
+  // Validate dependsOn references exist
+  if (cmd.dependsOn && cmd.dependsOn.length > 0) {
+    for (const depId of cmd.dependsOn) {
+      const depJobId = jobId(depId);
+      const exists =
+        ctx.queueManager.getJobIndex().has(depJobId) ||
+        ctx.queueManager.getCompletedJobs().has(depJobId);
+      if (!exists) {
+        return resp.error(`Dependency job not found: ${depId}`, reqId);
+      }
+    }
+  }
+
   const job = await ctx.queueManager.push(cmd.queue, {
     data: cmd.data,
     priority: cmd.priority,

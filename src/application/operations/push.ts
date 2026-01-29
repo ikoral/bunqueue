@@ -60,8 +60,8 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
   const now = Date.now();
   const job = createJob(id, queue, input, now);
 
-  // Check dependencies
-  const needsWaitingDeps =
+  // Pre-check dependencies (optimization to avoid unnecessary lock contention)
+  const mayNeedWaitingDeps =
     job.dependsOn.length > 0 && !job.dependsOn.every((depId) => ctx.completedJobs.has(depId));
 
   // Insert into shard
@@ -80,6 +80,11 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
     if (job.uniqueKey) {
       shard.registerUniqueKey(queue, job.uniqueKey);
     }
+
+    // Double-check dependencies inside lock to avoid race condition
+    // (a dependency might have completed between pre-check and lock acquisition)
+    const needsWaitingDeps =
+      mayNeedWaitingDeps && !job.dependsOn.every((depId) => ctx.completedJobs.has(depId));
 
     // Insert based on state
     if (needsWaitingDeps) {

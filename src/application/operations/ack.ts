@@ -51,7 +51,7 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
   });
 
   if (!job) {
-    throw new Error('Job not found');
+    throw new Error(`Job not found or not in processing state: ${jobId}`);
   }
 
   // Release resources
@@ -108,7 +108,7 @@ export async function failJob(
   });
 
   if (!job) {
-    throw new Error('Job not found');
+    throw new Error(`Job not found or not in processing state: ${jobId}`);
   }
 
   // Increment attempts

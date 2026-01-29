@@ -25,7 +25,7 @@ import * as queryOps from './operations/queryOperations';
 import * as dlqOps from './dlqManager';
 import * as logsOps from './jobLogsManager';
 import { generatePrometheusMetrics } from './metricsExporter';
-import { LRUMap, LRUSet } from '../shared/lru';
+import { LRUMap, LRUSet, type SetLike } from '../shared/lru';
 
 /** Queue Manager configuration */
 export interface QueueManagerConfig {
@@ -411,6 +411,18 @@ export class QueueManager {
 
   subscribe(callback: (event: JobEvent) => void): () => void {
     return this.eventsManager.subscribe(callback);
+  }
+
+  // ============ Internal State Access (for validation) ============
+
+  /** Get job index for dependency validation */
+  getJobIndex(): Map<JobId, JobLocation> {
+    return this.jobIndex;
+  }
+
+  /** Get completed jobs set for dependency validation */
+  getCompletedJobs(): SetLike<JobId> {
+    return this.completedJobs;
   }
 
   /**
