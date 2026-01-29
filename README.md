@@ -59,9 +59,7 @@ bunqueue
 docker run -p 6789:6789 -p 6790:6790 ghcr.io/egeominotti/bunqueue
 ```
 
-<p align="center">
-  <img src=".github/terminal.png" alt="bunqueue server running" width="600" />
-</p>
+<img src=".github/terminal.png" alt="bunqueue server running" width="600" />
 
 ### Production Setup
 
