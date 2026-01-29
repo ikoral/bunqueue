@@ -52,6 +52,52 @@ npx bunqueue
 docker run -p 6789:6789 -p 6790:6790 ghcr.io/egeominotti/bunqueue
 ```
 
+### Production Setup
+
+For production, enable **persistence** and **authentication**:
+
+```bash
+# With environment variables
+DATA_PATH=./data/bunqueue.db AUTH_TOKENS=your-secret-token bunqueue
+
+# Or with custom ports
+TCP_PORT=6789 HTTP_PORT=6790 DATA_PATH=./data/bunqueue.db AUTH_TOKENS=token1,token2 bunqueue
+```
+
+Or create a `.env` file:
+
+```env
+# Server ports
+TCP_PORT=6789
+HTTP_PORT=6790
+HOST=0.0.0.0
+
+# Persistence (required for production)
+DATA_PATH=./data/bunqueue.db
+
+# Authentication (recommended for production)
+AUTH_TOKENS=your-secret-token-1,your-secret-token-2
+
+# Optional: Protect metrics endpoint
+METRICS_AUTH=true
+```
+
+Then run:
+
+```bash
+bunqueue
+```
+
+Output:
+```
+bunqueue server running
+
+TCP:  0.0.0.0:6789
+HTTP: 0.0.0.0:6790
+Data: ./data/bunqueue.db
+Auth: enabled (2 tokens)
+```
+
 ### Use SDK
 
 ```typescript
