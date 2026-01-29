@@ -59,7 +59,7 @@ function compareEntries(a: HeapEntry, b: HeapEntry): number {
  */
 export class IndexedPriorityQueue {
   private heap: HeapEntry[] = [];
-  private index: Map<JobId, { job: Job; generation: number }> = new Map();
+  private readonly index: Map<JobId, { job: Job; generation: number }> = new Map();
   private generation = 0n;
 
   /** Get current size */

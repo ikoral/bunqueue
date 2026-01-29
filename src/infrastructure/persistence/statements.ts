@@ -73,7 +73,7 @@ export function prepareStatements(
 export interface DbJob {
   id: string;
   queue: string;
-  data: Uint8Array;  // MessagePack BLOB
+  data: Uint8Array; // MessagePack BLOB
   priority: number;
   created_at: number;
   run_at: number;
@@ -86,10 +86,10 @@ export interface DbJob {
   timeout: number | null;
   unique_key: string | null;
   custom_id: string | null;
-  depends_on: Uint8Array | null;  // MessagePack BLOB
+  depends_on: Uint8Array | null; // MessagePack BLOB
   parent_id: string | null;
-  children_ids: Uint8Array | null;  // MessagePack BLOB
-  tags: Uint8Array | null;  // MessagePack BLOB
+  children_ids: Uint8Array | null; // MessagePack BLOB
+  tags: Uint8Array | null; // MessagePack BLOB
   state: string;
   lifo: number;
   group_id: string | null;
@@ -105,7 +105,7 @@ export interface DbJob {
 export interface DbCron {
   name: string;
   queue: string;
-  data: Uint8Array;  // MessagePack BLOB
+  data: Uint8Array; // MessagePack BLOB
   schedule: string | null;
   repeat_every: number | null;
   priority: number;

@@ -10,21 +10,21 @@ import { jobId } from '../../../domain/types/job';
 import type { HandlerContext } from '../types';
 
 /** Handle Dlq command - get DLQ jobs */
-export async function handleDlq(
+export function handleDlq(
   cmd: Extract<Command, { cmd: 'Dlq' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const jobs = ctx.queueManager.getDlq(cmd.queue, cmd.count);
   return resp.jobs(jobs, reqId);
 }
 
 /** Handle RetryDlq command - retry DLQ jobs */
-export async function handleRetryDlq(
+export function handleRetryDlq(
   cmd: Extract<Command, { cmd: 'RetryDlq' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const jid = cmd.jobId ? jobId(cmd.jobId) : undefined;
   const count = ctx.queueManager.retryDlq(cmd.queue, jid);
   return {
@@ -35,11 +35,11 @@ export async function handleRetryDlq(
 }
 
 /** Handle PurgeDlq command - clear DLQ */
-export async function handlePurgeDlq(
+export function handlePurgeDlq(
   cmd: Extract<Command, { cmd: 'PurgeDlq' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const count = ctx.queueManager.purgeDlq(cmd.queue);
   return {
     ok: true,

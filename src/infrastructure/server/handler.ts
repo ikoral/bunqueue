@@ -95,6 +95,202 @@ function handleAuth(
   return resp.error('Invalid token', reqId);
 }
 
+/** Route core commands (PUSH, PULL, ACK, FAIL) */
+async function routeCoreCommand(
+  cmd: Command,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response | null> {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'PUSH':
+      return handlePush(cmd, ctx, reqId);
+    case 'PUSHB':
+      return handlePushBatch(cmd, ctx, reqId);
+    case 'PULL':
+      return handlePull(cmd, ctx, reqId);
+    case 'PULLB':
+      return handlePullBatch(cmd, ctx, reqId);
+    case 'ACK':
+      return handleAck(cmd, ctx, reqId);
+    case 'ACKB':
+      return handleAckBatch(cmd, ctx, reqId);
+    case 'FAIL':
+      return handleFail(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route query commands */
+async function routeQueryCommand(
+  cmd: Command,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response | null> {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'GetJob':
+      return handleGetJob(cmd, ctx, reqId);
+    case 'GetState':
+      return handleGetState(cmd, ctx, reqId);
+    case 'GetResult':
+      return handleGetResult(cmd, ctx, reqId);
+    case 'GetJobCounts':
+      return handleGetJobCounts(cmd, ctx, reqId);
+    case 'GetJobByCustomId':
+      return handleGetJobByCustomId(cmd, ctx, reqId);
+    case 'GetJobs':
+      return handleGetJobs(cmd, ctx, reqId);
+    case 'Count':
+      return handleCount(cmd, ctx, reqId);
+    case 'GetProgress':
+      return handleGetProgress(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route management commands */
+async function routeManagementCommand(
+  cmd: Command,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response | null> {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'Cancel':
+      return handleCancel(cmd, ctx, reqId);
+    case 'Progress':
+      return handleProgress(cmd, ctx, reqId);
+    case 'Update':
+      return handleUpdate(cmd, ctx, reqId);
+    case 'ChangePriority':
+      return handleChangePriority(cmd, ctx, reqId);
+    case 'Promote':
+      return handlePromote(cmd, ctx, reqId);
+    case 'MoveToDelayed':
+      return handleMoveToDelayed(cmd, ctx, reqId);
+    case 'Discard':
+      return handleDiscard(cmd, ctx, reqId);
+    case 'WaitJob':
+      return handleWaitJob(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route queue control commands */
+function routeQueueControlCommand(
+  cmd: Command,
+  ctx: HandlerContext,
+  reqId?: string
+): Response | null {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'Pause':
+      return handlePause(cmd, ctx, reqId);
+    case 'Resume':
+      return handleResume(cmd, ctx, reqId);
+    case 'IsPaused':
+      return handleIsPaused(cmd, ctx, reqId);
+    case 'Drain':
+      return handleDrain(cmd, ctx, reqId);
+    case 'Obliterate':
+      return handleObliterate(cmd, ctx, reqId);
+    case 'ListQueues':
+      return handleListQueues(cmd, ctx, reqId);
+    case 'Clean':
+      return handleClean(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route DLQ commands */
+function routeDlqCommand(cmd: Command, ctx: HandlerContext, reqId?: string): Response | null {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'Dlq':
+      return handleDlq(cmd, ctx, reqId);
+    case 'RetryDlq':
+      return handleRetryDlq(cmd, ctx, reqId);
+    case 'PurgeDlq':
+      return handlePurgeDlq(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route rate limit commands */
+function routeRateLimitCommand(cmd: Command, ctx: HandlerContext, reqId?: string): Response | null {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'RateLimit':
+      return handleRateLimit(cmd, ctx, reqId);
+    case 'RateLimitClear':
+      return handleRateLimitClear(cmd, ctx, reqId);
+    case 'SetConcurrency':
+      return handleSetConcurrency(cmd, ctx, reqId);
+    case 'ClearConcurrency':
+      return handleClearConcurrency(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route cron commands */
+function routeCronCommand(cmd: Command, ctx: HandlerContext, reqId?: string): Response | null {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'Cron':
+      return handleCron(cmd, ctx, reqId);
+    case 'CronDelete':
+      return handleCronDelete(cmd, ctx, reqId);
+    case 'CronList':
+      return handleCronList(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route monitoring commands */
+function routeMonitoringCommand(
+  cmd: Command,
+  ctx: HandlerContext,
+  reqId?: string
+): Response | null {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'Stats':
+      return handleStats(ctx, reqId);
+    case 'Metrics':
+      return handleMetrics(ctx, reqId);
+    case 'Prometheus':
+      return handlePrometheus(cmd, ctx, reqId);
+    case 'AddLog':
+      return handleAddLog(cmd, ctx, reqId);
+    case 'GetLogs':
+      return handleGetLogs(cmd, ctx, reqId);
+    case 'Heartbeat':
+      return handleHeartbeat(cmd, ctx, reqId);
+    case 'RegisterWorker':
+      return handleRegisterWorker(cmd, ctx, reqId);
+    case 'UnregisterWorker':
+      return handleUnregisterWorker(cmd, ctx, reqId);
+    case 'ListWorkers':
+      return handleListWorkers(cmd, ctx, reqId);
+    case 'AddWebhook':
+      return handleAddWebhook(cmd, ctx, reqId);
+    case 'RemoveWebhook':
+      return handleRemoveWebhook(cmd, ctx, reqId);
+    case 'ListWebhooks':
+      return handleListWebhooks(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
 /**
  * Main command handler - routes to specific handlers
  */
@@ -112,137 +308,34 @@ export async function handleCommand(cmd: Command, ctx: HandlerContext): Promise<
       return resp.error('Not authenticated', reqId);
     }
 
-    // Route to handler
-    switch (cmd.cmd) {
-      // Core operations
-      case 'PUSH':
-        return await handlePush(cmd, ctx, reqId);
-      case 'PUSHB':
-        return await handlePushBatch(cmd, ctx, reqId);
-      case 'PULL':
-        return await handlePull(cmd, ctx, reqId);
-      case 'PULLB':
-        return await handlePullBatch(cmd, ctx, reqId);
-      case 'ACK':
-        return await handleAck(cmd, ctx, reqId);
-      case 'ACKB':
-        return await handleAckBatch(cmd, ctx, reqId);
-      case 'FAIL':
-        return await handleFail(cmd, ctx, reqId);
+    // Route through command groups
+    let result: Response | null;
 
-      // Query operations
-      case 'GetJob':
-        return await handleGetJob(cmd, ctx, reqId);
-      case 'GetState':
-        return await handleGetState(cmd, ctx, reqId);
-      case 'GetResult':
-        return await handleGetResult(cmd, ctx, reqId);
-      case 'GetJobCounts':
-        return await handleGetJobCounts(cmd, ctx, reqId);
-      case 'GetJobByCustomId':
-        return await handleGetJobByCustomId(cmd, ctx, reqId);
-      case 'GetJobs':
-        return await handleGetJobs(cmd, ctx, reqId);
-      case 'Count':
-        return await handleCount(cmd, ctx, reqId);
-      case 'GetProgress':
-        return await handleGetProgress(cmd, ctx, reqId);
+    result = await routeCoreCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // Management operations
-      case 'Cancel':
-        return await handleCancel(cmd, ctx, reqId);
-      case 'Progress':
-        return await handleProgress(cmd, ctx, reqId);
-      case 'Update':
-        return await handleUpdate(cmd, ctx, reqId);
-      case 'ChangePriority':
-        return await handleChangePriority(cmd, ctx, reqId);
-      case 'Promote':
-        return await handlePromote(cmd, ctx, reqId);
-      case 'MoveToDelayed':
-        return await handleMoveToDelayed(cmd, ctx, reqId);
-      case 'Discard':
-        return await handleDiscard(cmd, ctx, reqId);
-      case 'WaitJob':
-        return await handleWaitJob(cmd, ctx, reqId);
+    result = await routeQueryCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // Queue control
-      case 'Pause':
-        return await handlePause(cmd, ctx, reqId);
-      case 'Resume':
-        return await handleResume(cmd, ctx, reqId);
-      case 'IsPaused':
-        return await handleIsPaused(cmd, ctx, reqId);
-      case 'Drain':
-        return await handleDrain(cmd, ctx, reqId);
-      case 'Obliterate':
-        return await handleObliterate(cmd, ctx, reqId);
-      case 'ListQueues':
-        return await handleListQueues(cmd, ctx, reqId);
-      case 'Clean':
-        return await handleClean(cmd, ctx, reqId);
+    result = await routeManagementCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // DLQ operations
-      case 'Dlq':
-        return await handleDlq(cmd, ctx, reqId);
-      case 'RetryDlq':
-        return await handleRetryDlq(cmd, ctx, reqId);
-      case 'PurgeDlq':
-        return await handlePurgeDlq(cmd, ctx, reqId);
+    result = routeQueueControlCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // Rate limiting
-      case 'RateLimit':
-        return await handleRateLimit(cmd, ctx, reqId);
-      case 'RateLimitClear':
-        return await handleRateLimitClear(cmd, ctx, reqId);
-      case 'SetConcurrency':
-        return await handleSetConcurrency(cmd, ctx, reqId);
-      case 'ClearConcurrency':
-        return await handleClearConcurrency(cmd, ctx, reqId);
+    result = routeDlqCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // Cron operations
-      case 'Cron':
-        return await handleCron(cmd, ctx, reqId);
-      case 'CronDelete':
-        return await handleCronDelete(cmd, ctx, reqId);
-      case 'CronList':
-        return await handleCronList(cmd, ctx, reqId);
+    result = routeRateLimitCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // Monitoring
-      case 'Stats':
-        return handleStats(ctx, reqId);
-      case 'Metrics':
-        return handleMetrics(ctx, reqId);
-      case 'Prometheus':
-        return await handlePrometheus(cmd, ctx, reqId);
+    result = routeCronCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // Job Logs
-      case 'AddLog':
-        return await handleAddLog(cmd, ctx, reqId);
-      case 'GetLogs':
-        return await handleGetLogs(cmd, ctx, reqId);
+    result = routeMonitoringCommand(cmd, ctx, reqId);
+    if (result) return result;
 
-      // Workers
-      case 'Heartbeat':
-        return await handleHeartbeat(cmd, ctx, reqId);
-      case 'RegisterWorker':
-        return await handleRegisterWorker(cmd, ctx, reqId);
-      case 'UnregisterWorker':
-        return await handleUnregisterWorker(cmd, ctx, reqId);
-      case 'ListWorkers':
-        return await handleListWorkers(cmd, ctx, reqId);
-
-      // Webhooks
-      case 'AddWebhook':
-        return await handleAddWebhook(cmd, ctx, reqId);
-      case 'RemoveWebhook':
-        return await handleRemoveWebhook(cmd, ctx, reqId);
-      case 'ListWebhooks':
-        return await handleListWebhooks(cmd, ctx, reqId);
-
-      default:
-        return resp.error(`Unknown command: ${(cmd as Command).cmd}`, reqId);
-    }
+    return resp.error(`Unknown command: ${cmd.cmd}`, reqId);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return resp.error(message, reqId);

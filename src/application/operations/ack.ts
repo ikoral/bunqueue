@@ -7,7 +7,8 @@ import { type Job, type JobId, calculateBackoff, canRetry } from '../../domain/t
 import type { JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
-import { RWLock, withWriteLock } from '../../shared/lock';
+import type { RWLock } from '../../shared/lock';
+import { withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
 import type { SetLike, MapLike } from '../../shared/lru';
 
@@ -124,6 +125,11 @@ export async function failJob(
       shard.getQueue(job.queue).push(job);
       ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
       ctx.storage?.updateForRetry(job);
+    } else if (job.removeOnFail) {
+      // Remove completely - don't add to DLQ
+      ctx.jobIndex.delete(jobId);
+      ctx.storage?.deleteJob(jobId);
+      ctx.totalFailed.value++;
     } else {
       // Move to DLQ
       shard.addToDlq(job);

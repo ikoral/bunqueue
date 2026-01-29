@@ -44,7 +44,7 @@ export interface SqliteConfig {
  * SQLite Storage class with write buffering for high throughput
  */
 export class SqliteStorage {
-  private db: Database;
+  private readonly db: Database;
   private readonly statements: Map<StatementName, ReturnType<Database['prepare']>>;
 
   // Write buffer for batching inserts
@@ -283,9 +283,7 @@ export class SqliteStorage {
     const childrenIds: string[] = row.children_ids
       ? unpack<string[]>(row.children_ids, [], `${jobContext}:childrenIds`)
       : [];
-    const tags: string[] = row.tags
-      ? unpack<string[]>(row.tags, [], `${jobContext}:tags`)
-      : [];
+    const tags: string[] = row.tags ? unpack<string[]>(row.tags, [], `${jobContext}:tags`) : [];
 
     return {
       id: jobId(row.id),

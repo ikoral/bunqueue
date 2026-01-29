@@ -66,10 +66,10 @@ export class QueueManager {
 
   // Global indexes (bounded with LRU eviction)
   private readonly jobIndex = new Map<JobId, JobLocation>();
-  private completedJobs!: LRUSet<JobId>;
-  private jobResults!: LRUMap<JobId, unknown>;
-  private customIdMap!: LRUMap<string, JobId>;
-  private jobLogs!: LRUMap<JobId, JobLogEntry[]>;
+  private readonly completedJobs!: LRUSet<JobId>;
+  private readonly jobResults!: LRUMap<JobId, unknown>;
+  private readonly customIdMap!: LRUMap<string, JobId>;
+  private readonly jobLogs!: LRUMap<JobId, JobLogEntry[]>;
 
   // Deferred dependency resolution queue (to avoid lock order violations)
   private readonly pendingDepChecks = new Set<JobId>();

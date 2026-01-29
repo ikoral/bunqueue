@@ -89,51 +89,51 @@ export async function handleWaitJob(
 // ============ Queue Control ============
 
 /** Handle IsPaused command */
-export async function handleIsPaused(
+export function handleIsPaused(
   cmd: Extract<Command, { cmd: 'IsPaused' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const paused = ctx.queueManager.isPaused(cmd.queue);
   return { ok: true, paused, reqId } as Response;
 }
 
 /** Handle Obliterate command */
-export async function handleObliterate(
+export function handleObliterate(
   cmd: Extract<Command, { cmd: 'Obliterate' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   ctx.queueManager.obliterate(cmd.queue);
   return resp.ok(undefined, reqId);
 }
 
 /** Handle ListQueues command */
-export async function handleListQueues(
+export function handleListQueues(
   _cmd: Extract<Command, { cmd: 'ListQueues' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const queues = ctx.queueManager.listQueues();
   return { ok: true, queues, reqId } as Response;
 }
 
 /** Handle Clean command */
-export async function handleClean(
+export function handleClean(
   cmd: Extract<Command, { cmd: 'Clean' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const count = ctx.queueManager.clean(cmd.queue, cmd.grace, cmd.state, cmd.limit);
   return { ok: true, count, reqId } as Response;
 }
 
 /** Handle Count command */
-export async function handleCount(
+export function handleCount(
   cmd: Extract<Command, { cmd: 'Count' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const count = ctx.queueManager.count(cmd.queue);
   return { ok: true, count, reqId } as Response;
 }
@@ -141,41 +141,41 @@ export async function handleCount(
 // ============ Rate Limiting ============
 
 /** Handle RateLimit command */
-export async function handleRateLimit(
+export function handleRateLimit(
   cmd: Extract<Command, { cmd: 'RateLimit' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   ctx.queueManager.setRateLimit(cmd.queue, cmd.limit);
   return resp.ok(undefined, reqId);
 }
 
 /** Handle RateLimitClear command */
-export async function handleRateLimitClear(
+export function handleRateLimitClear(
   cmd: Extract<Command, { cmd: 'RateLimitClear' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   ctx.queueManager.clearRateLimit(cmd.queue);
   return resp.ok(undefined, reqId);
 }
 
 /** Handle SetConcurrency command */
-export async function handleSetConcurrency(
+export function handleSetConcurrency(
   cmd: Extract<Command, { cmd: 'SetConcurrency' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   ctx.queueManager.setConcurrency(cmd.queue, cmd.limit);
   return resp.ok(undefined, reqId);
 }
 
 /** Handle ClearConcurrency command */
-export async function handleClearConcurrency(
+export function handleClearConcurrency(
   cmd: Extract<Command, { cmd: 'ClearConcurrency' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   ctx.queueManager.clearConcurrency(cmd.queue);
   return resp.ok(undefined, reqId);
 }

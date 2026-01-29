@@ -9,11 +9,11 @@ import * as resp from '../../../domain/types/response';
 import type { HandlerContext } from '../types';
 
 /** Handle Cron command - add cron job */
-export async function handleCron(
+export function handleCron(
   cmd: Extract<Command, { cmd: 'Cron' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   try {
     const cron = ctx.queueManager.addCron({
       name: cmd.name,
@@ -41,21 +41,21 @@ export async function handleCron(
 }
 
 /** Handle CronDelete command - delete cron job */
-export async function handleCronDelete(
+export function handleCronDelete(
   cmd: Extract<Command, { cmd: 'CronDelete' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const removed = ctx.queueManager.removeCron(cmd.name);
   return removed ? resp.ok(undefined, reqId) : resp.error('Cron job not found', reqId);
 }
 
 /** Handle CronList command - list cron jobs */
-export async function handleCronList(
+export function handleCronList(
   _cmd: Extract<Command, { cmd: 'CronList' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const crons = ctx.queueManager.listCrons();
   return {
     ok: true,

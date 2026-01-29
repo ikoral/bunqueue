@@ -44,7 +44,7 @@ export class Shard {
   readonly concurrencyLimiters = new Map<string, ConcurrencyLimiter>();
 
   /** Waiters for new jobs (condition variable pattern) */
-  private waiters: Array<() => void> = [];
+  private readonly waiters: Array<() => void> = [];
 
   /** Notify that jobs are available - wakes all waiters */
   notify(): void {
@@ -71,7 +71,9 @@ export class Shard {
         resolve();
       };
 
-      const waiterFn = () => cleanup();
+      const waiterFn = () => {
+        cleanup();
+      };
 
       // Add to waiters
       this.waiters.push(waiterFn);

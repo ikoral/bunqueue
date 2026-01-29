@@ -7,7 +7,8 @@ import { type Job, type JobId, isExpired, isReady } from '../../domain/types/job
 import type { JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
-import { RWLock, withWriteLock } from '../../shared/lock';
+import type { RWLock } from '../../shared/lock';
+import { withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
 
 /** Pull operation context */
@@ -50,7 +51,8 @@ export async function pullJob(
       ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
 
       // Persist state change
-      ctx.storage?.markActive(job.id, job.startedAt!);
+      const startedAt = job.startedAt ?? Date.now();
+      ctx.storage?.markActive(job.id, startedAt);
 
       // Update metrics
       ctx.totalPulled.value++;

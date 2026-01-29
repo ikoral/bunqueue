@@ -43,21 +43,21 @@ export async function handleGetState(
 }
 
 /** Handle GetResult command */
-export async function handleGetResult(
+export function handleGetResult(
   cmd: Extract<Command, { cmd: 'GetResult' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const result = ctx.queueManager.getResult(jobId(cmd.id));
   return { ok: true, id: cmd.id, result, reqId } as Response;
 }
 
 /** Handle GetJobCounts command */
-export async function handleGetJobCounts(
+export function handleGetJobCounts(
   _cmd: Extract<Command, { cmd: 'GetJobCounts' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const stats = ctx.queueManager.getStats();
   // For a specific queue, we'd need per-queue stats
   // For now return global stats
@@ -74,21 +74,21 @@ export async function handleGetJobCounts(
 }
 
 /** Handle GetJobByCustomId command */
-export async function handleGetJobByCustomId(
+export function handleGetJobByCustomId(
   cmd: Extract<Command, { cmd: 'GetJobByCustomId' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const job = ctx.queueManager.getJobByCustomId(cmd.customId);
   return job ? resp.job(job, reqId) : resp.error('Job not found', reqId);
 }
 
 /** Handle GetJobs command - list jobs with filtering */
-export async function handleGetJobs(
+export function handleGetJobs(
   _cmd: Extract<Command, { cmd: 'GetJobs' }>,
   _ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   // Simplified implementation - full version would filter by state and paginate
   // For now, return empty list - full implementation would iterate shards
   return resp.jobs([], reqId);

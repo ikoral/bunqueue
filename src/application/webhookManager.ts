@@ -32,9 +32,9 @@ async function signPayload(payload: string, secret: string): Promise<string> {
  * Webhook Manager
  */
 export class WebhookManager {
-  private webhooks = new Map<WebhookId, Webhook>();
-  private maxRetries = 3;
-  private retryDelay = 1000;
+  private readonly webhooks = new Map<WebhookId, Webhook>();
+  private readonly maxRetries = 3;
+  private readonly retryDelay = 1000;
 
   /** Add a webhook */
   add(url: string, events: string[], queue?: string, secret?: string): Webhook {

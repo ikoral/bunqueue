@@ -81,7 +81,9 @@ export class EventsManager {
         return 'job.completed';
       case EventType.Failed:
         return 'job.failed';
-      default:
+      case EventType.Progress:
+      case EventType.Stalled:
+        // These events don't have webhook mappings
         return null;
     }
   }

@@ -32,11 +32,11 @@ export async function handleProgress(
 }
 
 /** Handle GetProgress command */
-export async function handleGetProgress(
+export function handleGetProgress(
   cmd: Extract<Command, { cmd: 'GetProgress' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const progress = ctx.queueManager.getProgress(jobId(cmd.id));
   if (!progress) return resp.error('Job not found or not active', reqId);
   return {
@@ -48,31 +48,31 @@ export async function handleGetProgress(
 }
 
 /** Handle Pause command */
-export async function handlePause(
+export function handlePause(
   cmd: Extract<Command, { cmd: 'Pause' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   ctx.queueManager.pause(cmd.queue);
   return resp.ok(undefined, reqId);
 }
 
 /** Handle Resume command */
-export async function handleResume(
+export function handleResume(
   cmd: Extract<Command, { cmd: 'Resume' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   ctx.queueManager.resume(cmd.queue);
   return resp.ok(undefined, reqId);
 }
 
 /** Handle Drain command */
-export async function handleDrain(
+export function handleDrain(
   cmd: Extract<Command, { cmd: 'Drain' }>,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const count = ctx.queueManager.drain(cmd.queue);
   return { ok: true, count, reqId } as Response;
 }

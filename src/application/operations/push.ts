@@ -13,7 +13,8 @@ import {
 import type { JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
-import { RWLock, withWriteLock } from '../../shared/lock';
+import type { RWLock } from '../../shared/lock';
+import { withWriteLock } from '../../shared/lock';
 import { shardIndex } from '../../shared/hash';
 import type { SetLike, MapLike } from '../../shared/lru';
 

@@ -23,11 +23,7 @@ import { validateWebhookUrl } from '../protocol';
 
 // ============ Job Logs ============
 
-export async function handleAddLog(
-  cmd: AddLogCommand,
-  ctx: HandlerContext,
-  reqId?: string
-): Promise<Response> {
+export function handleAddLog(cmd: AddLogCommand, ctx: HandlerContext, reqId?: string): Response {
   const jid = jobId(cmd.id);
   const level = cmd.level ?? 'info';
   const success = ctx.queueManager.addLog(jid, cmd.message, level);
@@ -38,11 +34,7 @@ export async function handleAddLog(
   return resp.error('Job not found', reqId);
 }
 
-export async function handleGetLogs(
-  cmd: GetLogsCommand,
-  ctx: HandlerContext,
-  reqId?: string
-): Promise<Response> {
+export function handleGetLogs(cmd: GetLogsCommand, ctx: HandlerContext, reqId?: string): Response {
   const jid = jobId(cmd.id);
   const logs = ctx.queueManager.getLogs(jid);
   return resp.data({ logs }, reqId);
@@ -50,11 +42,11 @@ export async function handleGetLogs(
 
 // ============ Worker Heartbeat ============
 
-export async function handleHeartbeat(
+export function handleHeartbeat(
   cmd: HeartbeatCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const success = ctx.queueManager.workerManager.heartbeat(cmd.id);
   if (success) {
     return resp.data({ ok: true }, reqId);
@@ -64,11 +56,11 @@ export async function handleHeartbeat(
 
 // ============ Worker Management ============
 
-export async function handleRegisterWorker(
+export function handleRegisterWorker(
   cmd: RegisterWorkerCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const worker = ctx.queueManager.workerManager.register(cmd.name, cmd.queues);
   return resp.data(
     {
@@ -81,11 +73,11 @@ export async function handleRegisterWorker(
   );
 }
 
-export async function handleUnregisterWorker(
+export function handleUnregisterWorker(
   cmd: UnregisterWorkerCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const success = ctx.queueManager.workerManager.unregister(cmd.workerId);
   if (success) {
     return resp.data({ removed: true }, reqId);
@@ -93,11 +85,11 @@ export async function handleUnregisterWorker(
   return resp.error('Worker not found', reqId);
 }
 
-export async function handleListWorkers(
+export function handleListWorkers(
   _cmd: ListWorkersCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const workers = ctx.queueManager.workerManager.list();
   return resp.data(
     {
@@ -119,11 +111,11 @@ export async function handleListWorkers(
 
 // ============ Webhooks ============
 
-export async function handleAddWebhook(
+export function handleAddWebhook(
   cmd: AddWebhookCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   // Validate webhook URL to prevent SSRF
   const urlError = validateWebhookUrl(cmd.url);
   if (urlError) return resp.error(urlError, reqId);
@@ -141,11 +133,11 @@ export async function handleAddWebhook(
   );
 }
 
-export async function handleRemoveWebhook(
+export function handleRemoveWebhook(
   cmd: RemoveWebhookCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const success = ctx.queueManager.webhookManager.remove(cmd.webhookId);
   if (success) {
     return resp.data({ removed: true }, reqId);
@@ -153,11 +145,11 @@ export async function handleRemoveWebhook(
   return resp.error('Webhook not found', reqId);
 }
 
-export async function handleListWebhooks(
+export function handleListWebhooks(
   _cmd: ListWebhooksCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const webhooks = ctx.queueManager.webhookManager.list();
   return resp.data(
     {
@@ -180,11 +172,11 @@ export async function handleListWebhooks(
 
 // ============ Prometheus Metrics ============
 
-export async function handlePrometheus(
+export function handlePrometheus(
   _cmd: PrometheusCommand,
   ctx: HandlerContext,
   reqId?: string
-): Promise<Response> {
+): Response {
   const metrics = ctx.queueManager.getPrometheusMetrics();
   return resp.data({ metrics }, reqId);
 }

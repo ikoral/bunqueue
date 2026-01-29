@@ -15,7 +15,7 @@ const WORKER_TIMEOUT_MS = 30_000;
  * Worker Manager
  */
 export class WorkerManager {
-  private workers = new Map<WorkerId, Worker>();
+  private readonly workers = new Map<WorkerId, Worker>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
