@@ -66,7 +66,12 @@ export class Queue<T = unknown> {
   /** Get job counts by state */
   getJobCounts(): { waiting: number; active: number; completed: number; failed: number } {
     const stats = getSharedManager().getStats();
-    return { waiting: stats.waiting, active: stats.active, completed: 0, failed: stats.dlq };
+    return {
+      waiting: stats.waiting,
+      active: stats.active,
+      completed: stats.completed,
+      failed: stats.dlq,
+    };
   }
 
   /** Pause the queue */

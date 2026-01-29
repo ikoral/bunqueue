@@ -57,6 +57,15 @@ export type QueueEventType =
   | 'removed'
   | 'drained';
 
+/** Extract user data from stored job data (removes internal 'name' field) */
+function extractUserData(jobData: unknown): unknown {
+  if (typeof jobData === 'object' && jobData !== null) {
+    const { name: _name, ...userData } = jobData as Record<string, unknown>;
+    return userData;
+  }
+  return jobData;
+}
+
 /** Convert internal job to public job (with methods) */
 export function createPublicJob<T>(
   job: InternalJob,
@@ -68,7 +77,7 @@ export function createPublicJob<T>(
   return {
     id,
     name,
-    data: job.data as T,
+    data: extractUserData(job.data) as T,
     queueName: job.queue,
     attemptsMade: job.attempts,
     timestamp: job.createdAt,
@@ -84,7 +93,7 @@ export function toPublicJob<T>(job: InternalJob, name: string): Job<T> {
   return {
     id,
     name,
-    data: job.data as T,
+    data: extractUserData(job.data) as T,
     queueName: job.queue,
     attemptsMade: job.attempts,
     timestamp: job.createdAt,
