@@ -24,6 +24,39 @@
 
 ---
 
+## Why bunqueue?
+
+**Every other job queue requires external infrastructure.** bunqueue doesn't.
+
+| Library | Requires |
+|---------|----------|
+| BullMQ | ❌ Redis |
+| Agenda | ❌ MongoDB |
+| Bee-Queue | ❌ Redis |
+| pg-boss | ❌ PostgreSQL |
+| Celery | ❌ Redis/RabbitMQ |
+| **bunqueue** | ✅ **Nothing. Zero. Nada.** |
+
+bunqueue is the **only** job queue with:
+- **BullMQ-compatible API** — Same `Queue`, `Worker`, `QueueEvents` you know
+- **Zero external dependencies** — No Redis, no MongoDB, no nothing
+- **Persistent storage** — SQLite survives restarts, no data loss
+- **100K+ jobs/sec** — Faster than Redis-based queues
+- **Single file deployment** — Just your app, that's it
+
+```bash
+# Others: Install Redis, configure connection, manage infrastructure...
+# bunqueue:
+bun add bunqueue
+```
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+// That's it. You're done. Start queuing.
+```
+
+---
+
 ## Quick Install
 
 ```bash
