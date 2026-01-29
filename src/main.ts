@@ -1,8 +1,40 @@
 #!/usr/bin/env bun
 /**
  * bunqueue - High-performance job queue server for Bun
- * Main entry point
+ * Main entry point - routes to CLI for client commands or starts server
  */
+
+// Check for CLI client commands (not server mode)
+const clientCommands = [
+  'push',
+  'pull',
+  'ack',
+  'fail',
+  'job',
+  'queue',
+  'dlq',
+  'cron',
+  'worker',
+  'webhook',
+  'rate-limit',
+  'concurrency',
+  'stats',
+  'metrics',
+  'health',
+];
+
+const firstArg = process.argv[2];
+const isClientCommand = firstArg && clientCommands.includes(firstArg);
+const isStartCommand = firstArg === 'start';
+const hasHelpOrVersion = process.argv.includes('--help') || process.argv.includes('--version');
+
+// Route to CLI for client commands, help, or version
+if (isClientCommand || hasHelpOrVersion || isStartCommand) {
+  void import('./cli/index').then(({ main }) => main());
+} else {
+  // Direct server mode (no args or only server flags like --tcp-port)
+  startServer();
+}
 
 import { QueueManager } from './application/queueManager';
 import { createTcpServer } from './infrastructure/server/tcp';
@@ -54,8 +86,8 @@ function printBanner(config: ServerConfig): void {
   `);
 }
 
-/** Main function */
-function main(): void {
+/** Start the server (direct mode) */
+function startServer(): void {
   const config = loadConfig();
   printBanner(config);
 
@@ -130,12 +162,4 @@ function main(): void {
 // Enable JSON logging if requested
 if (process.env.LOG_FORMAT === 'json') {
   Logger.enableJsonMode();
-}
-
-// Run
-try {
-  main();
-} catch (err: unknown) {
-  serverLog.error('Fatal error', { error: String(err) });
-  process.exit(1);
 }

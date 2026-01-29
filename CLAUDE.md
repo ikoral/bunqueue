@@ -31,6 +31,12 @@ High-performance job queue server for Bun. SQLite persistence, cron jobs, priori
 
 ```
 src/
+├── cli/             # Command-line interface
+│   ├── index.ts     # Entry point, mode detection
+│   ├── client.ts    # TCP client for server communication
+│   ├── output.ts    # Output formatting (table/json)
+│   ├── help.ts      # Help text generator
+│   └── commands/    # Command builders (core, job, queue, etc.)
 ├── domain/          # Pure business logic, zero dependencies
 │   ├── types/       # Job, Queue, Command types
 │   └── errors/      # Domain errors
@@ -363,6 +369,71 @@ S3_ACCESS_KEY=
 S3_SECRET_KEY=
 ```
 
+## CLI Commands
+
+The CLI supports two modes: **server** (starts bunqueue) and **client** (executes commands against a running server).
+
+### Server Mode
+
+```bash
+bunqueue                                          # Start with defaults
+bunqueue start --tcp-port 6789 --http-port 6790   # Custom ports
+bunqueue start --data-path ./data/queue.db        # Persistent storage
+```
+
+### Client Mode
+
+```bash
+# Core operations
+bunqueue push <queue> <json> [--priority N] [--delay ms]
+bunqueue pull <queue> [--timeout ms]
+bunqueue ack <id> [--result json]
+bunqueue fail <id> [--error message]
+
+# Job management
+bunqueue job get|state|result|cancel|promote|discard <id>
+bunqueue job progress <id> <0-100> [--message msg]
+bunqueue job priority <id> <priority>
+bunqueue job delay <id> <ms>
+bunqueue job logs <id>
+bunqueue job log <id> <message> [--level info|warn|error]
+
+# Queue control
+bunqueue queue list|pause|resume|drain|obliterate <queue>
+bunqueue queue clean <queue> --grace <ms> [--state S]
+bunqueue queue jobs <queue> [--state S] [--limit N]
+
+# Rate limiting
+bunqueue rate-limit set|clear <queue> [limit]
+bunqueue concurrency set|clear <queue> [limit]
+
+# DLQ
+bunqueue dlq list|retry|purge <queue>
+
+# Cron
+bunqueue cron list
+bunqueue cron add <name> -q <queue> -d <json> [-s "cron"] [-e ms]
+bunqueue cron delete <name>
+
+# Workers & Webhooks
+bunqueue worker list|register|unregister
+bunqueue webhook list|add|remove
+
+# Monitoring
+bunqueue stats|metrics|health
+```
+
+### Global Options
+
+| Option | Description |
+|--------|-------------|
+| `-H, --host` | Server host (default: localhost) |
+| `-p, --port` | TCP port (default: 6789) |
+| `-t, --token` | Auth token |
+| `--json` | Output as JSON |
+| `--help` | Show help |
+| `--version` | Show version |
+
 ## Testing Commands
 
 ```bash
@@ -370,7 +441,7 @@ S3_SECRET_KEY=
 bun test
 
 # Run specific test file
-bun test src/domain/queue/priorityQueue.test.ts
+bun test test/cli.test.ts
 
 # Run with coverage
 bun test --coverage

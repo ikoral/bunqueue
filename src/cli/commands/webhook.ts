@@ -1,0 +1,90 @@
+/**
+ * Webhook Command Builders
+ * Webhook management operations
+ */
+
+import { parseArgs } from 'node:util';
+import { CommandError, requireArg } from './types';
+
+/** Valid webhook events */
+const VALID_EVENTS = [
+  'job.completed',
+  'job.failed',
+  'job.progress',
+  'job.active',
+  'job.waiting',
+  'job.delayed',
+];
+
+/** Build a webhook subcommand */
+export function buildWebhookCommand(args: string[]): Record<string, unknown> {
+  const subcommand = args[0];
+  const subArgs = args.slice(1);
+
+  switch (subcommand) {
+    case 'list':
+      return { cmd: 'ListWebhooks' };
+    case 'add':
+      return buildAddWebhook(subArgs);
+    case 'remove':
+      return buildRemoveWebhook(subArgs);
+    default:
+      throw new CommandError(`Unknown webhook subcommand: ${subcommand}. Use: list, add, remove`);
+  }
+}
+
+function buildAddWebhook(args: string[]): Record<string, unknown> {
+  const { values, positionals } = parseArgs({
+    args,
+    options: {
+      events: { type: 'string', short: 'e' },
+      queue: { type: 'string', short: 'q' },
+      secret: { type: 'string', short: 's' },
+    },
+    allowPositionals: true,
+    strict: false,
+  });
+
+  const url = requireArg(positionals, 0, 'url');
+
+  if (!values.events) {
+    throw new CommandError(
+      `--events (-e) is required (comma-separated). Valid events: ${VALID_EVENTS.join(', ')}`
+    );
+  }
+
+  const events = (values.events as string).split(',').filter(Boolean);
+  if (events.length === 0) {
+    throw new CommandError('At least one event must be specified');
+  }
+
+  // Validate events
+  for (const event of events) {
+    if (!VALID_EVENTS.includes(event)) {
+      throw new CommandError(`Invalid event: ${event}. Valid events: ${VALID_EVENTS.join(', ')}`);
+    }
+  }
+
+  // Validate URL
+  try {
+    new URL(url);
+  } catch {
+    throw new CommandError(`Invalid URL: ${url}`);
+  }
+
+  const cmd: Record<string, unknown> = {
+    cmd: 'AddWebhook',
+    url,
+    events,
+  };
+
+  if (values.queue) cmd.queue = values.queue;
+  if (values.secret) cmd.secret = values.secret;
+
+  return cmd;
+}
+
+function buildRemoveWebhook(args: string[]): Record<string, unknown> {
+  const webhookId = requireArg(args, 0, 'webhookId');
+  return { cmd: 'RemoveWebhook', webhookId };
+}

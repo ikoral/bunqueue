@@ -87,6 +87,71 @@ const worker = new Worker('emails', async (job) => {
 - **Prometheus Metrics** — Built-in metrics endpoint for monitoring
 - **Authentication** — Token-based auth for secure access
 - **Dual Protocol** — TCP (high performance) and HTTP/REST (compatibility)
+- **Full-Featured CLI** — Manage queues, jobs, cron, and more from the command line
+
+## CLI
+
+bunqueue includes a powerful CLI for managing the server and executing commands.
+
+### Server Mode
+
+```bash
+# Start server with defaults
+bunqueue
+
+# Start with options
+bunqueue start --tcp-port 6789 --http-port 6790 --data-path ./data/queue.db
+```
+
+### Client Commands
+
+```bash
+# Push a job
+bunqueue push emails '{"to":"user@test.com","subject":"Hello"}'
+bunqueue push tasks '{"action":"sync"}' --priority 10 --delay 5000
+
+# Pull and process jobs
+bunqueue pull emails --timeout 5000
+bunqueue ack 12345 --result '{"sent":true}'
+bunqueue fail 12345 --error "SMTP timeout"
+
+# Job management
+bunqueue job get 12345
+bunqueue job progress 12345 50 --message "Processing..."
+bunqueue job cancel 12345
+
+# Queue control
+bunqueue queue list
+bunqueue queue pause emails
+bunqueue queue resume emails
+bunqueue queue drain emails
+
+# Cron jobs
+bunqueue cron list
+bunqueue cron add hourly-cleanup -q maintenance -d '{"task":"cleanup"}' -s "0 * * * *"
+bunqueue cron delete hourly-cleanup
+
+# DLQ management
+bunqueue dlq list emails
+bunqueue dlq retry emails
+bunqueue dlq purge emails
+
+# Monitoring
+bunqueue stats
+bunqueue metrics
+bunqueue health
+```
+
+### Global Options
+
+```bash
+-H, --host <host>    # Server host (default: localhost)
+-p, --port <port>    # TCP port (default: 6789)
+-t, --token <token>  # Authentication token
+--json               # Output as JSON
+--help               # Show help
+--version            # Show version
+```
 
 ## SDK (flashq)
 
