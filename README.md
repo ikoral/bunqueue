@@ -495,6 +495,35 @@ Supported providers: AWS S3, Cloudflare R2, MinIO, DigitalOcean Spaces.
 | Multiple languages | **Server** (HTTP API) |
 | Horizontal scaling | **Server** |
 
+### Server Mode SDK
+
+For communicating with bunqueue server from **separate processes**, use the [flashq](https://www.npmjs.com/package/flashq) SDK:
+
+```bash
+bun add flashq
+```
+
+```typescript
+import { FlashQ } from 'flashq';
+
+const client = new FlashQ({ host: 'localhost', port: 6789 });
+
+// Push job
+await client.push('emails', { to: 'user@test.com' });
+
+// Pull and process
+const job = await client.pull('emails');
+if (job) {
+  console.log('Processing:', job.data);
+  await client.ack(job.id);
+}
+```
+
+| Package | Use Case |
+|---------|----------|
+| `bunqueue/client` | Same process (embedded) |
+| `flashq` | Different process (TCP client) |
+
 ---
 
 ## Architecture
