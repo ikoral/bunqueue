@@ -74,9 +74,10 @@ describe('processingShardIndex', () => {
 });
 
 describe('uuid', () => {
-  test('should generate valid UUID v4 format', () => {
+  test('should generate valid UUID v7 format', () => {
     const id = uuid();
-    const pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    // UUID v7 format: version 7 at position 14, variant 8/9/a/b at position 19
+    const pattern = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
     expect(id).toMatch(pattern);
   });
 
@@ -86,6 +87,13 @@ describe('uuid', () => {
       ids.add(uuid());
     }
     expect(ids.size).toBe(1000);
+  });
+
+  test('should generate time-ordered UUIDs', () => {
+    const id1 = uuid();
+    const id2 = uuid();
+    // UUID v7 is lexicographically sortable by time
+    expect(id1 < id2).toBe(true);
   });
 });
 
