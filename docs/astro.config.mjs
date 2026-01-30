@@ -23,42 +23,38 @@ export default defineConfig({
         {
           label: 'Getting Started',
           items: [
-            { label: 'Introduction', slug: 'guide/introduction' },
-            { label: 'Installation', slug: 'guide/installation' },
-            { label: 'Quick Start', slug: 'guide/quickstart' },
+            { label: 'Introduction', link: '/guide/introduction/' },
+            { label: 'Installation', link: '/guide/installation/' },
+            { label: 'Quick Start', link: '/guide/quickstart/' },
           ],
         },
         {
           label: 'Client SDK',
           items: [
-            { label: 'Queue', slug: 'guide/queue' },
-            { label: 'Worker', slug: 'guide/worker' },
-            { label: 'Stall Detection', slug: 'guide/stall-detection' },
-            { label: 'Dead Letter Queue', slug: 'guide/dlq' },
-            { label: 'Flow Producer', slug: 'guide/flow' },
+            { label: 'Queue', link: '/guide/queue/' },
+            { label: 'Worker', link: '/guide/worker/' },
+            { label: 'Stall Detection', link: '/guide/stall-detection/' },
+            { label: 'Dead Letter Queue', link: '/guide/dlq/' },
+            { label: 'Flow Producer', link: '/guide/flow/' },
           ],
         },
         {
           label: 'Server Mode',
           items: [
-            { label: 'Running the Server', slug: 'guide/server' },
-            { label: 'CLI Commands', slug: 'guide/cli' },
-            { label: 'HTTP API', slug: 'api/http' },
-            { label: 'TCP Protocol', slug: 'api/tcp' },
+            { label: 'Running the Server', link: '/guide/server/' },
+            { label: 'CLI Commands', link: '/guide/cli/' },
+            { label: 'HTTP API', link: '/api/http/' },
+            { label: 'TCP Protocol', link: '/api/tcp/' },
           ],
         },
         {
           label: 'Advanced',
           items: [
-            { label: 'Cron Jobs', slug: 'guide/cron' },
-            { label: 'S3 Backup', slug: 'guide/backup' },
-            { label: 'Rate Limiting', slug: 'guide/rate-limiting' },
-            { label: 'Webhooks', slug: 'guide/webhooks' },
+            { label: 'Cron Jobs', link: '/guide/cron/' },
+            { label: 'S3 Backup', link: '/guide/backup/' },
+            { label: 'Rate Limiting', link: '/guide/rate-limiting/' },
+            { label: 'Webhooks', link: '/guide/webhooks/' },
           ],
-        },
-        {
-          label: 'API Reference',
-          autogenerate: { directory: 'api' },
         },
       ],
       head: [
