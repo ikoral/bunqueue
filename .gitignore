@@ -36,3 +36,4 @@ coverage/
 
 # Bun
 bun.lockb
+bun.lock
