@@ -340,6 +340,47 @@ hr {
   h1 {
     font-size: 2rem;
   }
+
+  /* Mobile table scroll */
+  .sl-markdown-content > table,
+  .sl-markdown-content > div:has(table) {
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 500px !important;
+    table-layout: auto !important;
+  }
+
+  th, td {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem;
+  }
+
+  /* Mobile code blocks */
+  pre {
+    font-size: 0.8rem !important;
+  }
+
+  pre code {
+    font-size: 0.8rem !important;
+  }
+
+  /* Mobile content padding */
+  .content-panel {
+    padding: 1rem;
+  }
+
+  /* Smaller headings on mobile */
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+  }
 }
 
 /* Print styles */
