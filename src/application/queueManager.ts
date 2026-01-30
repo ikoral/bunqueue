@@ -795,10 +795,15 @@ export class QueueManager {
     if (!this.storage) return;
 
     // Load pending jobs
+    const now = Date.now();
     for (const job of this.storage.loadPendingJobs()) {
       const idx = shardIndex(job.queue);
-      this.shards[idx].getQueue(job.queue).push(job);
+      const shard = this.shards[idx];
+      shard.getQueue(job.queue).push(job);
       this.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+      // Update running counters for O(1) stats
+      const isDelayed = job.runAt > now;
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
       // Register queue name in cache
       this.registerQueueName(job.queue);
     }
