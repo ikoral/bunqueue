@@ -46,19 +46,15 @@ async function runBenchmark() {
 
   await Promise.all(
     queues.map(async (queue, qIdx) => {
-      const queueJobs = qIdx === queues.length - 1
-        ? TOTAL_JOBS - jobsPerQueue * (QUEUE_COUNT - 1)
-        : jobsPerQueue;
+      const queueJobs =
+        qIdx === queues.length - 1 ? TOTAL_JOBS - jobsPerQueue * (QUEUE_COUNT - 1) : jobsPerQueue;
 
       for (let i = 0; i < queueJobs; i += BATCH_SIZE) {
-        const batch = Array.from(
-          { length: Math.min(BATCH_SIZE, queueJobs - i) },
-          (_, j) => ({
-            name: 'task',
-            data: { index: qIdx * jobsPerQueue + i + j },
-            opts: { removeOnComplete: true },
-          })
-        );
+        const batch = Array.from({ length: Math.min(BATCH_SIZE, queueJobs - i) }, (_, j) => ({
+          name: 'task',
+          data: { index: qIdx * jobsPerQueue + i + j },
+          opts: { removeOnComplete: true },
+        }));
         await queue.addBulk(batch);
       }
     })
@@ -66,7 +62,9 @@ async function runBenchmark() {
 
   const pushTime = Date.now() - pushStart;
   const pushRate = Math.round(TOTAL_JOBS / (pushTime / 1000));
-  console.log(`✅ Push complete: ${TOTAL_JOBS.toLocaleString()} jobs in ${pushTime}ms (${pushRate.toLocaleString()} jobs/sec)\n`);
+  console.log(
+    `✅ Push complete: ${TOTAL_JOBS.toLocaleString()} jobs in ${pushTime}ms (${pushRate.toLocaleString()} jobs/sec)\n`
+  );
 
   // Phase 2: Create workers and process
   console.log('👷 Phase 2: Workers processing jobs via TCP...');
@@ -96,7 +94,9 @@ async function runBenchmark() {
   const progressInterval = setInterval(() => {
     const elapsed = (Date.now() - processStart) / 1000;
     const rate = Math.round(completed / elapsed);
-    console.log(`  Progress: ${completed.toLocaleString()} completed (${rate.toLocaleString()} jobs/sec)`);
+    console.log(
+      `  Progress: ${completed.toLocaleString()} completed (${rate.toLocaleString()} jobs/sec)`
+    );
   }, 2000);
 
   // Wait for all jobs to complete
@@ -111,7 +111,9 @@ async function runBenchmark() {
   const processTime = Date.now() - processStart;
   const processRate = Math.round(completed / (processTime / 1000));
 
-  console.log(`✅ Process complete: ${completed.toLocaleString()} jobs in ${processTime}ms (${processRate.toLocaleString()} jobs/sec)\n`);
+  console.log(
+    `✅ Process complete: ${completed.toLocaleString()} jobs in ${processTime}ms (${processRate.toLocaleString()} jobs/sec)\n`
+  );
 
   // Summary
   const totalTime = Date.now() - startTime;
