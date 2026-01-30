@@ -18,6 +18,13 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/egeominotti/bunqueue/edit/main/docs/',
       },
+      expressiveCode: {
+        themes: ['github-light', 'github-dark'],
+        styleOverrides: {
+          borderRadius: '8px',
+          borderColor: '#e4e4e7',
+        },
+      },
       customCss: [
         '@fontsource/inter/400.css',
         '@fontsource/inter/500.css',

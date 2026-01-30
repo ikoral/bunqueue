@@ -110,8 +110,12 @@ pre {
 }
 
 :root[data-theme='light'] pre {
-  background: #1e1e1e !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  background: #f8f8f8 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme='light'] pre code {
+  color: #1a1a1a;
 }
 
 :root[data-theme='dark'] pre {
