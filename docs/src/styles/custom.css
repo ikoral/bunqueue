@@ -184,21 +184,34 @@ pre code {
   border-color: var(--sl-color-accent);
 }
 
-/* Tables */
-table {
+/* Tables - Full width everywhere */
+table,
+.sl-markdown-content table,
+article table,
+main table,
+[data-pagefind-body] table {
   width: 100% !important;
   max-width: 100% !important;
+  min-width: 100% !important;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--sl-color-hairline);
   border-collapse: collapse;
   display: table !important;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
-.sl-markdown-content table {
+/* Ensure table container doesn't restrict width */
+.sl-markdown-content > table,
+.sl-markdown-content > div > table {
   width: 100% !important;
-  max-width: 100% !important;
+}
+
+th, td {
+  padding: 0.75rem 1rem !important;
+  text-align: left;
+  vertical-align: top;
+  word-wrap: break-word;
 }
 
 th {
@@ -208,14 +221,22 @@ th {
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   color: var(--sl-color-gray-4);
+  white-space: nowrap;
 }
 
 td {
   border-color: var(--sl-color-hairline) !important;
+  border-top: 1px solid var(--sl-color-hairline);
 }
 
 tr:hover {
   background: var(--sl-color-bg-sidebar);
+}
+
+/* Override any inline styles on tables */
+table[style] {
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 /* Sidebar */
