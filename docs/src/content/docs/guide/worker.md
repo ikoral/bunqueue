@@ -129,3 +129,62 @@ worker.on('failed', (job, error) => {
   }
 });
 ```
+
+## SandboxedWorker
+
+For CPU-intensive tasks or jobs that might crash, use `SandboxedWorker` to run processors in **isolated Bun Worker processes**.
+
+```typescript
+import { SandboxedWorker } from 'bunqueue/client';
+
+const worker = new SandboxedWorker('cpu-intensive', {
+  processor: './processor.ts',  // Path to processor file
+  concurrency: 4,               // 4 parallel worker processes
+  timeout: 60000,               // 60s timeout per job
+  maxMemory: 256,               // MB per worker
+  maxRestarts: 10,              // Auto-restart crashed workers
+});
+
+worker.start();
+```
+
+**Processor file** (`processor.ts`):
+
+```typescript
+export default async (job: {
+  id: string;
+  data: any;
+  queue: string;
+  attempts: number;
+  progress: (value: number) => void;
+}) => {
+  job.progress(50);
+  const result = await heavyComputation(job.data);
+  job.progress(100);
+  return result;
+};
+```
+
+### When to Use SandboxedWorker
+
+| Use Case | Worker | SandboxedWorker |
+|----------|--------|-----------------|
+| Fast I/O tasks | ✅ | ❌ |
+| CPU-intensive | ❌ | ✅ |
+| Untrusted code | ❌ | ✅ |
+| Memory leak protection | ❌ | ✅ |
+| Crash isolation | ❌ | ✅ |
+
+### SandboxedWorker API
+
+```typescript
+// Start the worker pool
+worker.start();
+
+// Get stats
+const stats = worker.getStats();
+// { total: 4, busy: 2, idle: 2, restarts: 0 }
+
+// Graceful shutdown
+await worker.stop();
+```

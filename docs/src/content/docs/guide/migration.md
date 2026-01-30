@@ -169,14 +169,18 @@ queue.setRateLimit(100);
 ### Sandboxed Processors
 
 ```typescript
-// BullMQ supports sandboxed processors
+// BullMQ sandboxed processors
 new Worker('queue', './processor.js', { connection });
 
-// bunqueue does not support sandboxed processors
-// Use regular async functions instead
-new Worker('queue', async (job) => {
-  // Process here
+// bunqueue SandboxedWorker (isolated Bun Worker processes)
+import { SandboxedWorker } from 'bunqueue/client';
+
+const worker = new SandboxedWorker('queue', {
+  processor: './processor.ts',
+  concurrency: 4,
+  timeout: 30000,
 });
+worker.start();
 ```
 
 ### Repeatable Jobs
@@ -197,11 +201,11 @@ await queue.add('task', data, {
 });
 ```
 
-## Features Not Supported
+## Features Comparison
 
-| Feature | BullMQ | bunqueue | Alternative |
-|---------|--------|----------|-------------|
-| Sandboxed processors | ✅ | ❌ | Use async functions |
+| Feature | BullMQ | bunqueue | Notes |
+|---------|--------|----------|-------|
+| Sandboxed processors | ✅ | ✅ | Use `SandboxedWorker` |
 | Redis Cluster | ✅ | ❌ | Single instance |
 | Redis Streams | ✅ | ❌ | SQLite storage |
 | Rate limit per worker | ✅ | ❌ | Queue-level rate limit |
@@ -214,7 +218,7 @@ await queue.add('task', data, {
 - [ ] Remove all Redis connection configuration
 - [ ] Update backoff configuration (simplified)
 - [ ] Move rate limiting from worker to queue
-- [ ] Replace sandboxed processors with async functions
+- [ ] Update sandboxed processors to use `SandboxedWorker`
 - [ ] Update repeat config (`cron` → `pattern`)
 - [ ] Test all job processing
 - [ ] Remove Redis server from infrastructure

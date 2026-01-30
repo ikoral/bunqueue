@@ -79,7 +79,7 @@ Best for:
 | Parent-child flows | ✅ | ✅ |
 | Advanced DLQ | ✅ | Basic |
 | S3 backups | ✅ | ❌ |
-| Sandboxed workers | ❌ | ✅ |
+| Sandboxed workers | ✅ | ✅ |
 
 ## Next Steps
 

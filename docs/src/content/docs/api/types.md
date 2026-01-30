@@ -296,7 +296,7 @@ interface WorkerOptions {
   /** Lock renewal interval (ms) */
   lockRenewTime?: number;
 
-  /** Use sandboxed processor (not supported) */
+  /** Use sandboxed processor (use SandboxedWorker instead) */
   useWorkerThreads?: boolean;
 
   /** Auto-run on creation */
