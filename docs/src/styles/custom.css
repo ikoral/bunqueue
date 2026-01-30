@@ -186,11 +186,19 @@ pre code {
 
 /* Tables */
 table {
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--sl-color-hairline);
   border-collapse: collapse;
+  display: table !important;
+  table-layout: auto;
+}
+
+.sl-markdown-content table {
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
 th {
@@ -331,6 +339,18 @@ hr {
 ::selection {
   background: var(--sl-color-accent);
   color: #ffffff;
+}
+
+/* Chart/SVG centering */
+.sl-markdown-content > div[style*="display: flex"] {
+  display: flex !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+.sl-markdown-content svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Scrollbar */
