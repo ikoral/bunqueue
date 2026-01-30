@@ -21,6 +21,7 @@
 
 export { Queue } from './queue';
 export { Worker } from './worker';
+export { SandboxedWorker } from './sandboxedWorker';
 export { QueueEvents } from './events';
 export { QueueGroup } from './queueGroup';
 export { FlowProducer } from './flow';
@@ -39,3 +40,4 @@ export type {
   FailureReason,
 } from './types';
 export type { FlowStep, FlowResult } from './flow';
+export type { SandboxedWorkerOptions } from './sandboxedWorker';

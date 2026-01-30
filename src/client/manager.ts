@@ -4,6 +4,9 @@
 
 import { QueueManager } from '../application/queueManager';
 
+/** Shared manager type export */
+export type SharedManager = QueueManager;
+
 let instance: QueueManager | null = null;
 
 /** Get shared QueueManager instance */
