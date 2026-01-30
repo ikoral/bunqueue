@@ -8,118 +8,55 @@ head:
       content: https://egeominotti.github.io/bunqueue/og/api-reference.png
 ---
 
-
 bunqueue is written in TypeScript and provides comprehensive type definitions.
 
 ## Job Types
 
 ### Job
 
-The main job interface.
+The main job interface returned by Queue methods.
 
 ```typescript
-interface Job<T = any> {
+interface Job<T = unknown> {
   /** Unique job identifier */
-  readonly id: string;
-
-  /** Queue name */
-  readonly queue: string;
+  id: string;
 
   /** Job name/type */
-  readonly name: string;
+  name: string;
 
   /** Job payload data */
-  readonly data: T;
+  data: T;
 
-  /** Current job state */
-  state: JobState;
+  /** Queue name */
+  queueName: string;
 
   /** Number of attempts made */
   attemptsMade: number;
 
-  /** Job options */
-  readonly opts: JobOptions;
-
   /** Creation timestamp */
-  readonly timestamp: number;
-
-  /** When job started processing */
-  processedOn?: number;
-
-  /** When job completed/failed */
-  finishedOn?: number;
+  timestamp: number;
 
   /** Current progress (0-100) */
   progress: number;
 
-  /** Progress message */
-  progressMessage?: string;
-
   /** Return value after completion */
-  returnvalue?: any;
+  returnvalue?: unknown;
 
-  /** Error if failed */
+  /** Error message if failed */
   failedReason?: string;
-
-  /** Stack trace if failed */
-  stacktrace?: string[];
-
-  /** Parent job ID (for flows) */
-  parentId?: string;
 
   /** Update job progress */
   updateProgress(progress: number, message?: string): Promise<void>;
 
   /** Add log entry */
   log(message: string): Promise<void>;
-
-  /** Get job logs */
-  getLogs(): Promise<JobLog[]>;
-
-  /** Get parent job data */
-  getParent(): Promise<Job | null>;
-
-  /** Get children values */
-  getChildrenValues(): Promise<Record<string, any>>;
-
-  /** Check if job is active */
-  isActive(): boolean;
-
-  /** Check if job is completed */
-  isCompleted(): boolean;
-
-  /** Check if job is failed */
-  isFailed(): boolean;
-
-  /** Retry this job */
-  retry(): Promise<void>;
-
-  /** Remove this job */
-  remove(): Promise<void>;
-
-  /** Convert to JSON */
-  toJSON(): JobJSON;
 }
-```
-
-### JobState
-
-```typescript
-type JobState =
-  | 'waiting'
-  | 'delayed'
-  | 'active'
-  | 'completed'
-  | 'failed';
 ```
 
 ### JobOptions
 
 ```typescript
 interface JobOptions {
-  /** Custom job ID (must be unique) */
-  jobId?: string;
-
   /** Job priority (higher = processed first) */
   priority?: number;
 
@@ -132,88 +69,30 @@ interface JobOptions {
   /** Backoff delay between retries (ms) */
   backoff?: number;
 
-  /** Remove job after completion */
-  removeOnComplete?: boolean | number;
-
-  /** Remove job after failure */
-  removeOnFail?: boolean | number;
-
   /** Job timeout (ms) */
   timeout?: number;
 
-  /** Time-to-live (ms) */
-  ttl?: number;
+  /** Custom job ID (must be unique) */
+  jobId?: string;
 
-  /** Unique key for deduplication */
-  uniqueKey?: string;
+  /** Remove job after completion */
+  removeOnComplete?: boolean;
 
-  /** Use LIFO instead of FIFO */
-  lifo?: boolean;
+  /** Remove job after failure */
+  removeOnFail?: boolean;
 
-  /** Job tags for filtering */
-  tags?: string[];
+  /** Stall timeout in ms */
+  stallTimeout?: number;
 
   /** Repeat configuration */
-  repeat?: RepeatOptions;
-
-  /** Parent job ID */
-  parentId?: string;
-
-  /** Dependent job IDs */
-  dependsOn?: string[];
-}
-```
-
-### RepeatOptions
-
-```typescript
-interface RepeatOptions {
-  /** Cron pattern (e.g., "0 * * * *") */
-  pattern?: string;
-
-  /** Interval in milliseconds */
-  every?: number;
-
-  /** Maximum number of executions */
-  limit?: number;
-
-  /** Start date */
-  startDate?: Date | number;
-
-  /** End date */
-  endDate?: Date | number;
-
-  /** Timezone */
-  tz?: string;
-}
-```
-
-### JobJSON
-
-```typescript
-interface JobJSON {
-  id: string;
-  name: string;
-  data: any;
-  opts: JobOptions;
-  progress: number;
-  attemptsMade: number;
-  failedReason?: string;
-  stacktrace?: string[];
-  returnvalue?: any;
-  timestamp: number;
-  processedOn?: number;
-  finishedOn?: number;
-}
-```
-
-### JobLog
-
-```typescript
-interface JobLog {
-  timestamp: number;
-  message: string;
-  level: 'info' | 'warn' | 'error';
+  repeat?: {
+    /** Repeat every N milliseconds */
+    every?: number;
+    /** Maximum repetitions */
+    limit?: number;
+    /** Cron pattern (alternative to every) */
+    pattern?: string;
+  };
 }
 ```
 
@@ -223,29 +102,8 @@ interface JobLog {
 
 ```typescript
 interface QueueOptions {
-  /** Connection settings for server mode */
-  connection?: ConnectionOptions;
-
-  /** Default job options */
+  /** Default job options for all jobs in this queue */
   defaultJobOptions?: JobOptions;
-
-  /** Queue prefix */
-  prefix?: string;
-}
-```
-
-### ConnectionOptions
-
-```typescript
-interface ConnectionOptions {
-  /** Server host */
-  host?: string;
-
-  /** TCP port */
-  port?: number;
-
-  /** Auth token */
-  token?: string;
 }
 ```
 
@@ -254,29 +112,9 @@ interface ConnectionOptions {
 ```typescript
 interface JobCounts {
   waiting: number;
-  delayed: number;
   active: number;
   completed: number;
   failed: number;
-  paused: number;
-}
-```
-
-### QueueStats
-
-```typescript
-interface QueueStats {
-  name: string;
-  counts: JobCounts;
-  throughput: {
-    completed: number;
-    failed: number;
-  };
-  latency: {
-    avg: number;
-    p50: number;
-    p99: number;
-  };
 }
 ```
 
@@ -286,48 +124,73 @@ interface QueueStats {
 
 ```typescript
 interface WorkerOptions {
-  /** Connection settings for server mode */
-  connection?: ConnectionOptions;
-
-  /** Number of concurrent jobs */
+  /** Number of concurrent jobs (default: 1) */
   concurrency?: number;
 
-  /** Rate limit (jobs per second) */
-  rateLimit?: number;
-
-  /** Lock duration for jobs (ms) */
-  lockDuration?: number;
-
-  /** Lock renewal interval (ms) */
-  lockRenewTime?: number;
-
-  /** Use sandboxed processor (use SandboxedWorker instead) */
-  useWorkerThreads?: boolean;
-
-  /** Auto-run on creation */
+  /** Auto-run on creation (default: true) */
   autorun?: boolean;
+
+  /** Heartbeat interval in ms (default: 10000) */
+  heartbeatInterval?: number;
 }
 ```
 
 ### Processor
 
 ```typescript
-type Processor<T = any, R = any> = (job: Job<T>) => Promise<R>;
+type Processor<T = unknown, R = unknown> = (job: Job<T>) => Promise<R> | R;
 ```
 
-### WorkerListener
+### Worker Events
 
 ```typescript
-interface WorkerListener {
-  completed: (job: Job, result: any) => void;
-  failed: (job: Job, error: Error) => void;
-  progress: (job: Job, progress: number) => void;
-  error: (error: Error) => void;
-  ready: () => void;
-  paused: () => void;
-  resumed: () => void;
-  closed: () => void;
-  stalled: (jobId: string) => void;
+// Worker emits these events
+worker.on('ready', () => void);
+worker.on('active', (job: Job) => void);
+worker.on('completed', (job: Job, result: any) => void);
+worker.on('failed', (job: Job, error: Error) => void);
+worker.on('progress', (job: Job, progress: number) => void);
+worker.on('error', (error: Error) => void);
+worker.on('closed', () => void);
+```
+
+## SandboxedWorker Types
+
+### SandboxedWorkerOptions
+
+```typescript
+interface SandboxedWorkerOptions {
+  /** Path to processor file */
+  processor: string;
+
+  /** Number of worker processes (default: 1) */
+  concurrency?: number;
+
+  /** Job timeout in ms (default: 30000) */
+  timeout?: number;
+
+  /** Max memory per worker in MB (default: 512) */
+  maxMemory?: number;
+
+  /** Max restarts before giving up (default: 10) */
+  maxRestarts?: number;
+
+  /** Auto-restart crashed workers (default: true) */
+  autoRestart?: boolean;
+
+  /** Poll interval in ms (default: 10) */
+  pollInterval?: number;
+}
+```
+
+### SandboxedWorker Stats
+
+```typescript
+interface SandboxedWorkerStats {
+  total: number;    // Total worker processes
+  busy: number;     // Currently processing
+  idle: number;     // Available for work
+  restarts: number; // Total restarts across all workers
 }
 ```
 
@@ -337,14 +200,17 @@ interface WorkerListener {
 
 ```typescript
 interface StallConfig {
-  /** Enable stall detection */
-  enabled: boolean;
+  /** Enable stall detection (default: true) */
+  enabled?: boolean;
 
-  /** Heartbeat interval (ms) */
+  /** Stall timeout in ms (default: 30000) */
   stallInterval?: number;
 
-  /** Max stalls before sending to DLQ */
+  /** Max stalls before moving to DLQ (default: 3) */
   maxStalls?: number;
+
+  /** Grace period after job start in ms (default: 5000) */
+  gracePeriod?: number;
 }
 ```
 
@@ -354,33 +220,73 @@ interface StallConfig {
 
 ```typescript
 interface DlqConfig {
-  /** Enable DLQ */
-  enabled: boolean;
+  /** Enable auto-retry from DLQ */
+  autoRetry?: boolean;
 
-  /** Max entries to keep */
-  maxSize?: number;
+  /** Auto-retry interval in ms (default: 3600000 = 1 hour) */
+  autoRetryInterval?: number;
 
-  /** Auto-retry after delay (ms) */
-  autoRetryDelay?: number;
-
-  /** Max auto-retries */
+  /** Max auto-retries (default: 3) */
   maxAutoRetries?: number;
+
+  /** Max age before auto-purge in ms (default: 7 days) */
+  maxAge?: number | null;
+
+  /** Max entries per queue (default: 10000) */
+  maxEntries?: number;
 }
+```
+
+### FailureReason
+
+```typescript
+type FailureReason =
+  | 'explicit_fail'        // Job explicitly failed
+  | 'max_attempts_exceeded' // Exceeded retry attempts
+  | 'timeout'              // Job timed out
+  | 'stalled'              // Job stalled (no heartbeat)
+  | 'ttl_expired'          // Time-to-live expired
+  | 'worker_lost'          // Worker disconnected
+  | 'unknown';             // Unknown reason
 ```
 
 ### DlqEntry
 
 ```typescript
-interface DlqEntry {
-  id: string;
-  jobId: string;
-  queue: string;
-  data: any;
-  error: string;
-  failedAt: number;
-  attempts: number;
-  failureReason: FailureReason;
-  metadata?: Record<string, any>;
+interface DlqEntry<T = unknown> {
+  /** The failed job */
+  job: Job<T>;
+
+  /** When job entered DLQ */
+  enteredAt: number;
+
+  /** Failure reason */
+  reason: FailureReason;
+
+  /** Error message */
+  error: string | null;
+
+  /** Attempt history */
+  attempts: Array<{
+    attempt: number;
+    startedAt: number;
+    failedAt: number;
+    reason: FailureReason;
+    error: string | null;
+    duration: number;
+  }>;
+
+  /** Number of retry attempts from DLQ */
+  retryCount: number;
+
+  /** Last retry timestamp */
+  lastRetryAt: number | null;
+
+  /** Next scheduled retry */
+  nextRetryAt: number | null;
+
+  /** When entry expires */
+  expiresAt: number | null;
 }
 ```
 
@@ -388,11 +294,13 @@ interface DlqEntry {
 
 ```typescript
 interface DlqFilter {
-  queue?: string;
   reason?: FailureReason;
-  since?: number;
-  until?: number;
+  olderThan?: number;
+  newerThan?: number;
+  retriable?: boolean;
+  expired?: boolean;
   limit?: number;
+  offset?: number;
 }
 ```
 
@@ -402,198 +310,30 @@ interface DlqFilter {
 interface DlqStats {
   total: number;
   byReason: Record<FailureReason, number>;
-  byQueue: Record<string, number>;
-  oldestEntry?: number;
-  newestEntry?: number;
+  pendingRetry: number;
+  expired: number;
+  oldestEntry: number | null;
+  newestEntry: number | null;
 }
 ```
 
-### FailureReason
+## QueueEvents Types
+
+### QueueEvents
 
 ```typescript
-type FailureReason =
-  | 'max_attempts'
-  | 'max_stalls'
-  | 'timeout'
-  | 'unrecoverable'
-  | 'manual';
-```
-
-## Flow Types
-
-### FlowJob
-
-```typescript
-interface FlowJob {
-  /** Job name */
-  name: string;
-
-  /** Queue name */
-  queueName: string;
-
-  /** Job data */
-  data: any;
-
-  /** Job options */
-  opts?: JobOptions;
-
-  /** Child jobs */
-  children?: FlowJob[];
+class QueueEvents extends EventEmitter {
+  constructor(queueName: string);
+  close(): void;
 }
-```
 
-### FlowOpts
-
-```typescript
-interface FlowOpts {
-  /** Prefix for all queues */
-  prefix?: string;
-
-  /** Connection settings */
-  connection?: ConnectionOptions;
-}
-```
-
-### FlowResult
-
-```typescript
-interface FlowResult {
-  /** Root job */
-  job: Job;
-
-  /** All child jobs */
-  children: Job[];
-}
-```
-
-## Event Types
-
-### QueueEventsOptions
-
-```typescript
-interface QueueEventsOptions {
-  /** Connection settings */
-  connection?: ConnectionOptions;
-}
-```
-
-### QueueEventListener
-
-```typescript
-interface QueueEventListener {
-  added: (args: { jobId: string; name: string }) => void;
-  active: (args: { jobId: string; prev?: string }) => void;
-  completed: (args: { jobId: string; result: any }) => void;
-  failed: (args: { jobId: string; error: string }) => void;
-  progress: (args: { jobId: string; progress: number }) => void;
-  delayed: (args: { jobId: string; delay: number }) => void;
-  removed: (args: { jobId: string }) => void;
-  waiting: (args: { jobId: string }) => void;
-  stalled: (args: { jobId: string }) => void;
-  drained: () => void;
-  paused: () => void;
-  resumed: () => void;
-}
-```
-
-## Server Types
-
-### ServerOptions
-
-```typescript
-interface ServerOptions {
-  /** TCP port */
-  tcpPort?: number;
-
-  /** HTTP port */
-  httpPort?: number;
-
-  /** Database path */
-  dataPath?: string;
-
-  /** Auth tokens */
-  authTokens?: string[];
-
-  /** Enable S3 backup */
-  s3Backup?: S3BackupOptions;
-}
-```
-
-### S3BackupOptions
-
-```typescript
-interface S3BackupOptions {
-  enabled: boolean;
-  accessKeyId: string;
-  secretAccessKey: string;
-  bucket: string;
-  region?: string;
-  endpoint?: string;
-  interval?: number;
-  retention?: number;
-  prefix?: string;
-}
-```
-
-## Utility Types
-
-### BulkJobOptions
-
-```typescript
-interface BulkJobOptions<T = any> {
-  name: string;
-  data: T;
-  opts?: JobOptions;
-}
-```
-
-### CleanOptions
-
-```typescript
-interface CleanOptions {
-  /** Grace period (ms) */
-  grace: number;
-
-  /** Job states to clean */
-  state?: JobState | JobState[];
-
-  /** Maximum jobs to clean */
-  limit?: number;
-}
-```
-
-### MetricsOptions
-
-```typescript
-interface MetricsOptions {
-  /** Time range (ms) */
-  start?: number;
-  end?: number;
-
-  /** Aggregation interval */
-  interval?: 'minute' | 'hour' | 'day';
-}
-```
-
-### HealthStatus
-
-```typescript
-interface HealthStatus {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  uptime: number;
-  version: string;
-  queues: number;
-  jobs: {
-    active: number;
-    waiting: number;
-    completed: number;
-    failed: number;
-  };
-  database: {
-    size: number;
-    wal_size: number;
-  };
-}
+// Events emitted
+events.on('waiting', ({ jobId }) => void);
+events.on('active', ({ jobId }) => void);
+events.on('completed', ({ jobId, returnvalue }) => void);
+events.on('failed', ({ jobId, failedReason }) => void);
+events.on('progress', ({ jobId, data }) => void);
+events.on('stalled', ({ jobId }) => void);
 ```
 
 ## Generic Type Helpers

@@ -70,7 +70,7 @@ app.get('/api/queues/:name/stats', async (c) => {
   const queueName = c.req.param('name');
   const queue = new Queue(queueName);
 
-  const counts = await queue.getJobCounts();
+  const counts = queue.getJobCounts(); // Synchronous
   return c.json(counts);
 });
 ```
@@ -456,16 +456,11 @@ const app = new Elysia()
     }),
   })
 
-  // Queue stats
+  // Queue stats (getJobCounts is synchronous)
   .get('/api/stats', async () => {
-    const [emailCounts, reportCounts] = await Promise.all([
-      emailQueue.getJobCounts(),
-      reportQueue.getJobCounts(),
-    ]);
-
     return {
-      emails: emailCounts,
-      reports: reportCounts,
+      emails: emailQueue.getJobCounts(),
+      reports: reportQueue.getJobCounts(),
       timestamp: Date.now(),
     };
   })

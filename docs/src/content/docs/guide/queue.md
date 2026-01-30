@@ -151,18 +151,26 @@ queue.setDlqConfig({
   maxAge: 604800000,           // 7 days
 });
 
+// Get current DLQ config
+const dlqConfig = queue.getDlqConfig();
+
 // Get DLQ entries
 const entries = queue.getDlq();
 
 // Filter entries
 const stalledJobs = queue.getDlq({ reason: 'stalled' });
+const recentFails = queue.getDlq({ newerThan: Date.now() - 3600000 });
 
 // Get stats
 const stats = queue.getDlqStats();
+// { total, byReason, pendingRetry, expired, oldestEntry, newestEntry }
 
 // Retry from DLQ
 queue.retryDlq();           // Retry all
 queue.retryDlq('job-id');   // Retry specific
+
+// Retry by filter
+queue.retryDlqByFilter({ reason: 'timeout', limit: 10 });
 
 // Purge DLQ
 queue.purgeDlq();
