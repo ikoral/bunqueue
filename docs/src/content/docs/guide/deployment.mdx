@@ -124,22 +124,28 @@ bun run worker.ts &
 - Two processes to manage
 - Still single SQLite file (no true distribution)
 
-### Option 3: Server Mode (TCP/HTTP)
+### Option 3: Server Mode (CLI)
 
-Run bunqueue as a standalone server. Useful for multi-language environments.
+Run bunqueue as a standalone server. Interact via CLI or HTTP API.
 
 ```bash
 # Start server
 bunqueue start --tcp-port 6789 --http-port 6790
 ```
 
-```typescript
-// Client connects via TCP
-import { createClient } from 'bunqueue/client';
+```bash
+# Add jobs via CLI
+bunqueue push emails '{"to": "user@example.com", "subject": "Hello"}'
 
-const client = createClient({ host: 'localhost', port: 6789 });
-await client.push('emails', { to: 'user@example.com' });
+# Or via HTTP API
+curl -X POST http://localhost:6790/queues/emails/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"to": "user@example.com"}}'
 ```
+
+<Aside type="note">
+There is no programmatic SDK client for server mode. Use the CLI, HTTP API, or embedded mode.
+</Aside>
 
 ## Docker Deployment
 
@@ -317,16 +323,26 @@ S3_REGION=us-east-1
 bunqueue exposes health endpoints:
 
 ```bash
-# HTTP health check
+# HTTP health check (detailed)
 curl http://localhost:6790/health
-# {"status":"ok","uptime":3600,"version":"1.6.3"}
+# {"ok":true,"status":"healthy","uptime":3600,"version":"1.0.4",
+#  "queues":{"waiting":5,"active":2},"connections":{"ws":0,"sse":0},
+#  "memory":{"heapUsed":45,"heapTotal":64,"rss":128}}
 
-# Detailed stats
+# Simple liveness probe
+curl http://localhost:6790/healthz
+# OK
+
+# Readiness probe
+curl http://localhost:6790/ready
+# {"ok":true,"ready":true}
+
+# Queue stats
 curl http://localhost:6790/stats
-# {"waiting":5,"active":2,"completed":1000,"dlq":0}
+# {"ok":true,"stats":{"waiting":5,"active":2,"completed":1000,"dlq":0}}
 
-# Prometheus metrics
-curl http://localhost:6790/metrics
+# Prometheus metrics (text format)
+curl http://localhost:6790/prometheus
 ```
 
 ### Kubernetes Probes
@@ -334,14 +350,14 @@ curl http://localhost:6790/metrics
 ```yaml
 livenessProbe:
   httpGet:
-    path: /health
+    path: /healthz
     port: 6790
   initialDelaySeconds: 5
   periodSeconds: 10
 
 readinessProbe:
   httpGet:
-    path: /health
+    path: /ready
     port: 6790
   initialDelaySeconds: 5
   periodSeconds: 5
@@ -408,7 +424,10 @@ bunqueue is I/O bound, not CPU bound. A single core handles most workloads.
 6. **Test backup restoration**
 
    ```bash
-   bunqueue backup restore latest --force
+   # List backups first
+   bunqueue backup list
+   # Then restore by key
+   bunqueue backup restore backups/bunq-2026-01-30T12:00:00.db --force
    ```
 
 7. **Set up alerts**
@@ -541,17 +560,17 @@ scrape_configs:
   - job_name: 'bunqueue'
     static_configs:
       - targets: ['localhost:6790']
-    metrics_path: /metrics
+    metrics_path: /prometheus
 ```
 
 ### Key Metrics
 
 | Metric | Alert Threshold |
 |--------|-----------------|
-| `bunqueue_waiting_jobs` | &gt; 1000 for 5 min |
-| `bunqueue_dlq_jobs` | &gt; 10 |
-| `bunqueue_active_jobs` | 0 for 5 min (workers dead?) |
-| `bunqueue_job_duration_seconds` | p99 &gt; 30s |
+| `bunqueue_jobs_waiting` | &gt; 1000 for 5 min |
+| `bunqueue_jobs_dlq` | &gt; 10 |
+| `bunqueue_jobs_active` | 0 for 5 min (workers dead?) |
+| `bunqueue_jobs_failed_total` | increasing rapidly |
 
 ## Example: Full Production Setup
 
