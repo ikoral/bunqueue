@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
+docs/.astro/
+docs/dist/
 
 # Data files
 data/
