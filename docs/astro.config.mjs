@@ -43,6 +43,7 @@ export default defineConfig({
           items: [
             { label: 'Running the Server', link: '/guide/server/' },
             { label: 'CLI Commands', link: '/guide/cli/' },
+            { label: 'Environment Variables', link: '/guide/env-vars/' },
             { label: 'HTTP API', link: '/api/http/' },
             { label: 'TCP Protocol', link: '/api/tcp/' },
           ],
@@ -58,8 +59,18 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Reference',
+          items: [
+            { label: 'TypeScript Types', link: '/api/types/' },
+            { label: 'Examples', link: '/examples/' },
+            { label: 'Migration from BullMQ', link: '/guide/migration/' },
+          ],
+        },
+        {
           label: 'Resources',
           items: [
+            { label: 'FAQ', link: '/faq/' },
+            { label: 'Troubleshooting', link: '/troubleshooting/' },
             { label: 'Changelog', link: '/changelog/' },
             { label: 'Security', link: '/security/' },
             { label: 'Contributing', link: '/contributing/' },
