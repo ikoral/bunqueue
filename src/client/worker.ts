@@ -188,10 +188,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         }
       }
 
-      // Reset error count on successful pull
-      this.consecutiveErrors = 0;
-
       if (job) {
+        // Reset error count only when we successfully got a job
+        this.consecutiveErrors = 0;
         this.activeJobs++;
         void this.processJob(job).finally(() => {
           this.activeJobs--;
