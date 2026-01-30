@@ -31,6 +31,8 @@ export interface JobOptions {
   jobId?: string;
   removeOnComplete?: boolean;
   removeOnFail?: boolean;
+  /** Stall timeout in ms - job is stalled if no heartbeat after this time */
+  stallTimeout?: number;
   /** Repeat configuration for recurring jobs */
   repeat?: {
     /** Repeat every N milliseconds */
@@ -51,6 +53,85 @@ export interface QueueOptions {
 export interface WorkerOptions {
   concurrency?: number;
   autorun?: boolean;
+  /** Heartbeat interval in ms (default: 10000) */
+  heartbeatInterval?: number;
+}
+
+/** Stall configuration for a queue */
+export interface StallConfig {
+  /** Enable stall detection (default: true) */
+  enabled?: boolean;
+  /** Stall timeout in ms (default: 30000) */
+  stallInterval?: number;
+  /** Max stalls before moving to DLQ (default: 3) */
+  maxStalls?: number;
+  /** Grace period after job start (default: 5000) */
+  gracePeriod?: number;
+}
+
+/** DLQ configuration for a queue */
+export interface DlqConfig {
+  /** Enable auto-retry from DLQ */
+  autoRetry?: boolean;
+  /** Auto-retry interval in ms (default: 3600000 = 1 hour) */
+  autoRetryInterval?: number;
+  /** Max auto-retries (default: 3) */
+  maxAutoRetries?: number;
+  /** Max age before auto-purge in ms (default: 604800000 = 7 days) */
+  maxAge?: number | null;
+  /** Max entries per queue (default: 10000) */
+  maxEntries?: number;
+}
+
+/** Failure reason for DLQ entries */
+export type FailureReason =
+  | 'explicit_fail'
+  | 'max_attempts_exceeded'
+  | 'timeout'
+  | 'stalled'
+  | 'ttl_expired'
+  | 'worker_lost'
+  | 'unknown';
+
+/** DLQ entry with metadata */
+export interface DlqEntry<T = unknown> {
+  job: Job<T>;
+  enteredAt: number;
+  reason: FailureReason;
+  error: string | null;
+  attempts: Array<{
+    attempt: number;
+    startedAt: number;
+    failedAt: number;
+    reason: FailureReason;
+    error: string | null;
+    duration: number;
+  }>;
+  retryCount: number;
+  lastRetryAt: number | null;
+  nextRetryAt: number | null;
+  expiresAt: number | null;
+}
+
+/** DLQ statistics */
+export interface DlqStats {
+  total: number;
+  byReason: Record<FailureReason, number>;
+  pendingRetry: number;
+  expired: number;
+  oldestEntry: number | null;
+  newestEntry: number | null;
+}
+
+/** DLQ filter options */
+export interface DlqFilter {
+  reason?: FailureReason;
+  olderThan?: number;
+  newerThan?: number;
+  retriable?: boolean;
+  expired?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 /** Job processor function */
@@ -109,5 +190,30 @@ export function toPublicJob<T>(job: InternalJob, name: string): Job<T> {
     progress: job.progress,
     updateProgress: async () => {},
     log: async () => {},
+  };
+}
+
+import type { DlqEntry as InternalDlqEntry } from '../domain/types/dlq';
+
+/** Convert internal DLQ entry to public DLQ entry */
+export function toDlqEntry<T>(entry: InternalDlqEntry): DlqEntry<T> {
+  const jobData = entry.job.data as { name?: string } | null;
+  return {
+    job: toPublicJob<T>(entry.job, jobData?.name ?? 'default'),
+    enteredAt: entry.enteredAt,
+    reason: entry.reason as FailureReason,
+    error: entry.error,
+    attempts: entry.attempts.map((a) => ({
+      attempt: a.attempt,
+      startedAt: a.startedAt,
+      failedAt: a.failedAt,
+      reason: a.reason as FailureReason,
+      error: a.error,
+      duration: a.duration,
+    })),
+    retryCount: entry.retryCount,
+    lastRetryAt: entry.lastRetryAt,
+    nextRetryAt: entry.nextRetryAt,
+    expiresAt: entry.expiresAt,
   };
 }

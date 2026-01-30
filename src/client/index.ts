@@ -25,5 +25,17 @@ export { QueueEvents } from './events';
 export { QueueGroup } from './queueGroup';
 export { FlowProducer } from './flow';
 export { shutdownManager } from './manager';
-export type { Job, JobOptions, QueueOptions, WorkerOptions, Processor } from './types';
+export type {
+  Job,
+  JobOptions,
+  QueueOptions,
+  WorkerOptions,
+  Processor,
+  StallConfig,
+  DlqConfig,
+  DlqEntry,
+  DlqStats,
+  DlqFilter,
+  FailureReason,
+} from './types';
 export type { FlowStep, FlowResult } from './flow';

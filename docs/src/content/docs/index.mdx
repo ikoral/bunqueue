@@ -1,0 +1,79 @@
+---
+title: bunqueue
+description: High-performance job queue for Bun. SQLite persistence, DLQ, cron jobs, S3 backups.
+template: splash
+hero:
+  tagline: High-performance job queue written in TypeScript for Bun runtime. SQLite persistence, stall detection, advanced DLQ, cron jobs, and S3 backups.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get Started
+      link: /bunqueue/guide/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/egeominotti/bunqueue
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+  <Card title="Blazing Fast" icon="rocket">
+    Built for Bun runtime with SQLite WAL mode. Handles millions of jobs with minimal latency.
+  </Card>
+  <Card title="BullMQ Compatible" icon="puzzle">
+    Familiar API if you're coming from BullMQ. Easy migration path.
+  </Card>
+  <Card title="Stall Detection" icon="warning">
+    Automatic recovery of stalled jobs with configurable retry policies.
+  </Card>
+  <Card title="Advanced DLQ" icon="list-format">
+    Dead Letter Queue with metadata, auto-retry, filtering, and lifecycle management.
+  </Card>
+  <Card title="Cron Jobs" icon="seti:clock">
+    Built-in cron scheduling with cron expressions or interval-based repetition.
+  </Card>
+  <Card title="S3 Backup" icon="cloud">
+    Automated backups to S3-compatible storage (AWS, Cloudflare R2, MinIO).
+  </Card>
+</CardGrid>
+
+## Quick Example
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+// Create a queue
+const queue = new Queue('emails');
+
+// Add jobs
+await queue.add('send-welcome', {
+  to: 'user@example.com',
+  template: 'welcome'
+});
+
+// Process jobs
+const worker = new Worker('emails', async (job) => {
+  await sendEmail(job.data.to, job.data.template);
+  return { sent: true };
+});
+
+worker.on('completed', (job, result) => {
+  console.log(`Email sent: ${job.id}`);
+});
+```
+
+## Two Modes
+
+**Embedded Mode** - Use as a library, no server needed:
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+```
+
+**Server Mode** - Run as a standalone server with HTTP/TCP API:
+```bash
+bunqueue start --data-path ./data/queue.db
+```

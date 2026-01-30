@@ -37,11 +37,21 @@ src/
 │   ├── output.ts    # Output formatting (table/json)
 │   ├── help.ts      # Help text generator
 │   └── commands/    # Command builders (core, job, queue, etc.)
+├── client/          # Embedded client SDK (BullMQ-compatible API)
+│   ├── queue.ts     # Queue class (add, addBulk, DLQ, stall config)
+│   ├── worker.ts    # Worker class (processing, heartbeats)
+│   ├── events.ts    # QueueEvents for subscriptions
+│   ├── flow.ts      # FlowProducer for parent-child jobs
+│   ├── queueGroup.ts # QueueGroup for bulk operations
+│   ├── manager.ts   # Shared QueueManager singleton
+│   ├── types.ts     # Public types (Job, DlqEntry, StallConfig)
+│   └── index.ts     # Public exports
 ├── domain/          # Pure business logic, zero dependencies
-│   ├── types/       # Job, Queue, Command types
+│   ├── types/       # Job, Queue, DLQ, Stall types
 │   └── errors/      # Domain errors
 ├── application/     # Use cases, orchestration
 │   ├── commands/    # Push, Pull, Ack, Fail handlers
+│   ├── dlqManager.ts # Advanced DLQ operations
 │   └── queries/     # GetJob, GetStats, etc.
 ├── infrastructure/  # External concerns
 │   ├── persistence/ # SQLite implementation
@@ -452,6 +462,169 @@ bunqueue backup status                 # Show backup configuration
 | `--json` | Output as JSON |
 | `--help` | Show help |
 | `--version` | Show version |
+
+## Client SDK (Embedded Mode)
+
+The client SDK provides a BullMQ-compatible API for embedded usage (no server required).
+
+### Queue
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue<{ email: string }>('emails');
+
+// Add jobs
+await queue.add('send', { email: 'user@test.com' });
+await queue.addBulk([
+  { name: 'send', data: { email: 'a@test.com' } },
+  { name: 'send', data: { email: 'b@test.com' } },
+]);
+
+// Query
+const job = await queue.getJob('123');
+const counts = queue.getJobCounts();
+
+// Control
+queue.pause();
+queue.resume();
+queue.drain();
+queue.obliterate();
+```
+
+### Worker
+
+```typescript
+const worker = new Worker('emails', async (job) => {
+  await job.updateProgress(50, 'Sending...');
+  await job.log('Processing email');
+  return { sent: true };
+}, {
+  concurrency: 5,
+  heartbeatInterval: 10000, // Heartbeat every 10s for stall detection
+});
+
+worker.on('completed', (job, result) => console.log('Done:', result));
+worker.on('failed', (job, err) => console.error('Failed:', err));
+worker.on('progress', (job, progress) => console.log('Progress:', progress));
+```
+
+### Stall Detection
+
+Configure stall detection to recover jobs that become unresponsive:
+
+```typescript
+// Configure stall detection
+queue.setStallConfig({
+  enabled: true,         // Enable stall detection (default: true)
+  stallInterval: 30000,  // Job is stalled after 30s without heartbeat
+  maxStalls: 3,          // Move to DLQ after 3 stalls
+  gracePeriod: 5000,     // Grace period after job starts
+});
+
+// Get current config
+const config = queue.getStallConfig();
+
+// Workers automatically send heartbeats when processing jobs
+// Jobs without heartbeats are retried or moved to DLQ
+```
+
+### Advanced DLQ
+
+Enhanced Dead Letter Queue with metadata, auto-retry, and lifecycle management:
+
+```typescript
+// Configure DLQ
+queue.setDlqConfig({
+  autoRetry: true,              // Enable auto-retry from DLQ
+  autoRetryInterval: 3600000,   // Retry every hour
+  maxAutoRetries: 3,            // Max 3 auto-retries
+  maxAge: 604800000,            // Purge after 7 days
+  maxEntries: 10000,            // Max entries per queue
+});
+
+// Get DLQ entries with full metadata
+const entries = queue.getDlq();
+entries.forEach(entry => {
+  console.log('Job:', entry.job.id);
+  console.log('Reason:', entry.reason); // 'explicit_fail' | 'max_attempts_exceeded' | 'timeout' | 'stalled' | 'ttl_expired' | 'worker_lost' | 'unknown'
+  console.log('Error:', entry.error);
+  console.log('Attempts:', entry.attempts);
+  console.log('Retry count:', entry.retryCount);
+  console.log('Next retry:', entry.nextRetryAt);
+  console.log('Expires:', entry.expiresAt);
+});
+
+// Filter DLQ entries
+const stalledJobs = queue.getDlq({ reason: 'stalled' });
+const oldJobs = queue.getDlq({ olderThan: Date.now() - 86400000 });
+
+// Get DLQ statistics
+const stats = queue.getDlqStats();
+console.log('Total:', stats.total);
+console.log('By reason:', stats.byReason);
+console.log('Pending retry:', stats.pendingRetry);
+console.log('Expired:', stats.expired);
+
+// Retry operations
+queue.retryDlq();           // Retry all
+queue.retryDlq('job-123');  // Retry specific job
+queue.retryDlqByFilter({ reason: 'timeout' });
+
+// Purge
+queue.purgeDlq();
+```
+
+### Flow Producer (Parent-Child Jobs)
+
+```typescript
+import { FlowProducer } from 'bunqueue/client';
+
+const flow = new FlowProducer();
+
+const result = await flow.add({
+  name: 'parent-job',
+  queueName: 'main',
+  data: { parentData: true },
+  children: [
+    { name: 'child-1', queueName: 'sub', data: { child: 1 } },
+    { name: 'child-2', queueName: 'sub', data: { child: 2 } },
+  ],
+});
+```
+
+### Queue Groups
+
+```typescript
+import { QueueGroup } from 'bunqueue/client';
+
+const group = new QueueGroup(['queue-1', 'queue-2', 'queue-3']);
+
+// Bulk operations across all queues
+group.pauseAll();
+group.resumeAll();
+group.drainAll();
+
+// Stats for all queues
+const stats = group.getStats();
+```
+
+### Types
+
+```typescript
+import type {
+  Job,
+  JobOptions,
+  QueueOptions,
+  WorkerOptions,
+  StallConfig,
+  DlqConfig,
+  DlqEntry,
+  DlqStats,
+  DlqFilter,
+  FailureReason,
+} from 'bunqueue/client';
+```
 
 ## Testing Commands
 

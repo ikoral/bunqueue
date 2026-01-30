@@ -9,16 +9,22 @@ import { createPublicJob } from './types';
 import type { Job as InternalJob } from '../domain/types/job';
 import { jobId } from '../domain/types/job';
 
+/** Extended options with heartbeat support */
+interface ExtendedWorkerOptions extends Required<WorkerOptions> {
+  heartbeatInterval: number;
+}
+
 /**
  * Worker class for processing jobs
  */
 export class Worker<T = unknown, R = unknown> extends EventEmitter {
   readonly name: string;
-  private readonly opts: Required<WorkerOptions>;
+  private readonly opts: ExtendedWorkerOptions;
   private readonly processor: Processor<T, R>;
   private running = false;
   private activeJobs = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly heartbeatTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
 
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
@@ -27,6 +33,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.opts = {
       concurrency: opts.concurrency ?? 1,
       autorun: opts.autorun ?? true,
+      heartbeatInterval: opts.heartbeatInterval ?? 10000,
     };
 
     if (this.opts.autorun) {
@@ -63,6 +70,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
+
+    // Stop all heartbeat timers
+    for (const timer of this.heartbeatTimers.values()) {
+      clearInterval(timer);
+    }
+    this.heartbeatTimers.clear();
 
     if (!force) {
       while (this.activeJobs > 0) {
@@ -122,6 +135,10 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     const manager = getSharedManager();
     const jobData = internalJob.data as { name?: string } | null;
     const name = jobData?.name ?? 'default';
+    const jobIdStr = String(internalJob.id);
+
+    // Start heartbeat timer for this job
+    this.startHeartbeat(jobIdStr, internalJob);
 
     // Create job with progress and log methods
     const job = createPublicJob<T>(
@@ -141,14 +158,37 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
     try {
       const result = await this.processor(job);
+      this.stopHeartbeat(jobIdStr);
       await manager.ack(internalJob.id, result);
       (job as { returnvalue?: unknown }).returnvalue = result;
       this.emit('completed', job, result);
     } catch (error) {
+      this.stopHeartbeat(jobIdStr);
       const err = error instanceof Error ? error : new Error(String(error));
       await manager.fail(internalJob.id, err.message);
       (job as { failedReason?: string }).failedReason = err.message;
       this.emit('failed', job, err);
+    }
+  }
+
+  /** Start heartbeat timer for a job */
+  private startHeartbeat(jobIdStr: string, internalJob: InternalJob): void {
+    if (this.opts.heartbeatInterval <= 0) return;
+
+    const timer = setInterval(() => {
+      // Update lastHeartbeat on the internal job
+      internalJob.lastHeartbeat = Date.now();
+    }, this.opts.heartbeatInterval);
+
+    this.heartbeatTimers.set(jobIdStr, timer);
+  }
+
+  /** Stop heartbeat timer for a job */
+  private stopHeartbeat(jobIdStr: string): void {
+    const timer = this.heartbeatTimers.get(jobIdStr);
+    if (timer) {
+      clearInterval(timer);
+      this.heartbeatTimers.delete(jobIdStr);
     }
   }
 }
