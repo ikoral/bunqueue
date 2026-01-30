@@ -49,23 +49,29 @@
   <text x="320" y="380" font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="32" font-weight="500" fill="#52525b">High-performance job queue for Bun</text>
 
   <!-- Features -->
-  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="24" fill="#71717a">
-    <text x="320" y="460">SQLite Persistence</text>
-    <text x="320" y="500">Zero Dependencies</text>
-    <text x="600" y="460">Cron Jobs</text>
-    <text x="600" y="500">DLQ &amp; Retries</text>
-    <text x="850" y="460">S3 Backups</text>
-    <text x="850" y="500">BullMQ Compatible</text>
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont, sans-serif" font-size="22" fill="#71717a">
+    <text x="320" y="455">SQLite Persistence</text>
+    <text x="320" y="490">Zero Dependencies</text>
+    <text x="320" y="525">Sandboxed Workers</text>
+    <text x="620" y="455">Cron Jobs</text>
+    <text x="620" y="490">DLQ &amp; Retries</text>
+    <text x="620" y="525">S3 Backups</text>
+    <text x="900" y="455">BullMQ Compatible</text>
+    <text x="900" y="490">500K+ ops/sec</text>
+    <text x="900" y="525">32x Faster</text>
   </g>
 
   <!-- Dots/bullets -->
   <g fill="#ec4899">
-    <circle cx="305" cy="454" r="4"/>
-    <circle cx="305" cy="494" r="4"/>
-    <circle cx="585" cy="454" r="4"/>
-    <circle cx="585" cy="494" r="4"/>
-    <circle cx="835" cy="454" r="4"/>
-    <circle cx="835" cy="494" r="4"/>
+    <circle cx="305" cy="449" r="4"/>
+    <circle cx="305" cy="484" r="4"/>
+    <circle cx="305" cy="519" r="4"/>
+    <circle cx="605" cy="449" r="4"/>
+    <circle cx="605" cy="484" r="4"/>
+    <circle cx="605" cy="519" r="4"/>
+    <circle cx="885" cy="449" r="4"/>
+    <circle cx="885" cy="484" r="4"/>
+    <circle cx="885" cy="519" r="4"/>
   </g>
 
   <!-- URL -->
