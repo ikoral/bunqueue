@@ -226,8 +226,8 @@ After=network.target
 Type=simple
 User=bunqueue
 Group=bunqueue
-WorkingDirectory=/opt/bunqueue
-ExecStart=/usr/local/bin/bun run start
+WorkingDirectory=/var/lib/bunqueue
+ExecStart=/usr/local/bin/bunqueue start
 Restart=always
 RestartSec=5
 
@@ -261,6 +261,55 @@ sudo systemctl status bunqueue
 sudo journalctl -u bunqueue -f
 ```
 
+## Building from Source
+
+Compile bunqueue into a standalone executable for production deployment.
+
+### Build Command
+
+```bash
+# Clone the repository
+git clone https://github.com/egeominotti/bunqueue.git
+cd bunqueue
+
+# Install dependencies
+bun install
+
+# Build standalone binary
+bun run build
+```
+
+This creates `dist/bunqueue` (~56 MB), a self-contained executable with no runtime dependencies.
+
+### Verify Build
+
+```bash
+# Check version
+./dist/bunqueue --version
+
+# Show help
+./dist/bunqueue --help
+
+# Start server
+./dist/bunqueue start
+```
+
+### Install Globally
+
+```bash
+# Copy to system path
+sudo cp dist/bunqueue /usr/local/bin/
+
+# Verify installation
+bunqueue --version
+```
+
+<Aside type="tip">
+The compiled binary includes the Bun runtime. No need to install Bun on the target server.
+</Aside>
+
+---
+
 ## PM2 Process Manager
 
 For cross-platform process management with PM2:
@@ -270,7 +319,7 @@ For cross-platform process management with PM2:
 First, build the standalone executable:
 
 ```bash
-bun build --compile --minify src/main.ts --outfile bunqueue
+bun run build
 ```
 
 Then configure PM2:
@@ -280,7 +329,7 @@ Then configure PM2:
 module.exports = {
   apps: [{
     name: 'bunqueue',
-    script: '/opt/bunqueue/bunqueue',  // Compiled binary
+    script: '/usr/local/bin/bunqueue',  // Compiled binary
     args: 'start',
     instances: 1,  // Single instance only - no cluster mode
     exec_mode: 'fork',
