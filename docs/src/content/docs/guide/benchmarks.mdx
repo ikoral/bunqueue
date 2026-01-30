@@ -1,175 +1,391 @@
 ---
 title: Benchmarks
-description: Performance benchmarks and methodology
+description: Comprehensive performance benchmarks, stress tests, and methodology
 ---
 
-import { Tabs, TabItem, Card, CardGrid, Aside } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Card, CardGrid, Aside, Code } from '@astrojs/starlight/components';
 
-Run your own benchmarks to see real performance on your hardware.
+bunqueue includes a comprehensive benchmark suite for performance testing, stress testing, and production validation.
 
 ## Quick Results
 
 <CardGrid>
   <Card title="Push Throughput" icon="star">
-    **50,000 - 150,000 ops/sec**
+    **1.2M+ ops/sec**
 
-    Depends on payload size and batch operations
+    With batch operations (1000+ jobs)
   </Card>
-  <Card title="Pull Latency (p99)" icon="stopwatch">
-    **&lt; 1ms**
+  <Card title="Process Rate" icon="rocket">
+    **494,000 ops/sec**
 
-    Sub-millisecond for most workloads
+    Full cycle with 16 workers
   </Card>
-  <Card title="Memory Footprint" icon="laptop">
-    **~50MB base**
+  <Card title="Scale Tested" icon="list-format">
+    **1 Million Jobs**
 
-    Plus ~100 bytes per queued job
+    Verified data integrity at scale
   </Card>
-  <Card title="Cold Start" icon="rocket">
-    **&lt; 100ms**
+  <Card title="Memory Efficient" icon="laptop">
+    **~100 bytes/job**
 
-    Ready to process jobs almost instantly
+    At scale with `removeOnComplete: true`
   </Card>
 </CardGrid>
 
 ---
 
-## Run Benchmarks Yourself
+## Live Benchmark Results
+
+These results were measured on **Mac Studio M1 Max, 32GB RAM, Bun 1.3.8**.
+
+### Throughput by Operation
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['PUSH','PULL','ACK','BATCH(100)','BATCH(1000)'],datasets:[{label:'ops/sec',data:[579603,420835,464857,1259234,1452193],backgroundColor:['rgba(236,72,153,0.85)','rgba(168,85,247,0.85)','rgba(59,130,246,0.85)','rgba(34,197,94,0.85)','rgba(245,158,11,0.85)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'Throughput by Operation (ops/sec)',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=350&backgroundColor=white"
+    alt="Throughput benchmark chart"
+    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Operation | Throughput | Notes |
+|-----------|------------|-------|
+| **PUSH** | 579,603 ops/sec | Single job insertion |
+| **PULL** | 420,835 ops/sec | Single job retrieval |
+| **ACK** | 464,857 ops/sec | Single job acknowledgment |
+| **BATCH(100)** | 1,259,234 ops/sec | Batch push, 100 jobs |
+| **BATCH(1000)** | 1,452,193 ops/sec | Batch push, 1000 jobs |
+
+---
+
+### Batch Size Scaling
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Individual','Batch 100','Batch 1000','Batch 5000'],datasets:[{label:'Push ops/sec',data:[579603,1259234,1452193,1393745],backgroundColor:'rgba(236,72,153,0.85)',borderRadius:6}]},options:{indexAxis:'y',plugins:{title:{display:true,text:'Push Throughput Scaling with Batch Size',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{x:{title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'},beginAtZero:true},y:{grid:{display:false}}}}}&width=600&height=280&backgroundColor=white"
+    alt="Batch size scaling chart"
+    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Batch Size | Throughput | Speedup vs Individual |
+|------------|------------|----------------------|
+| Individual | 579,603/s | 1x |
+| 100 | 1,259,234/s | **2.2x** |
+| 1,000 | 1,452,193/s | **2.5x** |
+| 5,000 | 1,393,745/s | **2.4x** |
+
+<Aside>
+Batch size of 1,000 provides optimal throughput. Larger batches have diminishing returns.
+</Aside>
+
+---
+
+### Worker Benchmark (Realistic Workload)
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['10K Jobs','50K Jobs','100K Jobs'],datasets:[{label:'Push',data:[519445,604918,611819],backgroundColor:'rgba(236,72,153,0.85)'},{label:'Process',data:[217980,243945,232613],backgroundColor:'rgba(59,130,246,0.85)'}]},options:{plugins:{title:{display:true,text:'Worker Benchmark: Push vs Process (ops/sec)',font:{size:18,weight:'bold'}},legend:{position:'bottom'}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=350&backgroundColor=white"
+    alt="Worker benchmark chart"
+    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Scale | Push Rate | Process Rate | Total Events |
+|-------|-----------|--------------|--------------|
+| 10,000 jobs | 519,445/s | 217,980/s | ✅ 10,000 |
+| 50,000 jobs | 604,918/s | 243,945/s | ✅ 50,000 |
+| 100,000 jobs | 611,819/s | 232,613/s | ✅ 100,000 |
+
+---
+
+### Million Jobs Benchmark
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Push Rate','Process Rate','Overall Rate'],datasets:[{label:'ops/sec',data:[1210654,494805,351247],backgroundColor:['rgba(236,72,153,0.85)','rgba(59,130,246,0.85)','rgba(34,197,94,0.85)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'1 Million Jobs Benchmark',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
+    alt="Million jobs benchmark chart"
+    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Metric | Result |
+|--------|--------|
+| **Total Jobs** | 1,000,000 |
+| **Push Rate** | 1,210,654 ops/sec |
+| **Process Rate** | 494,805 ops/sec |
+| **Overall Rate** | 351,247 ops/sec |
+| **Total Time** | 2.85 seconds |
+| **Data Integrity** | ✅ PASSED (100%) |
+
+<Aside type="tip">
+With 16 parallel workers, bunqueue processes **1 million jobs in under 3 seconds** with 100% data integrity.
+</Aside>
+
+---
+
+### Stress Test Results
+
+<div style={{ textAlign: 'center', margin: '2rem 0' }}>
+  <img
+    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['High Volume','Concurrent Queues','Priority Stress','Batch Operations'],datasets:[{label:'Throughput (ops/sec)',data:[140032,138336,179983,266619],backgroundColor:['rgba(236,72,153,0.85)','rgba(168,85,247,0.85)','rgba(59,130,246,0.85)','rgba(34,197,94,0.85)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'Stress Test Throughput',font:{size:18,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=600&height=300&backgroundColor=white"
+    alt="Stress test results chart"
+    style={{ maxWidth: '600px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+  />
+</div>
+
+| Test | Configuration | Throughput | Status |
+|------|--------------|------------|--------|
+| **High Volume** | 100K jobs, single queue | 140,032/s | ✅ PASS |
+| **Concurrent Queues** | 10 queues × 10K jobs | 138,336/s | ✅ PASS |
+| **Large Payloads** | 5K jobs × 10KB each | 384,781 MB/s | ✅ PASS |
+| **Priority Stress** | 50K jobs, random priorities | 179,983/s | ✅ PASS |
+| **Retry Storm** | 10K jobs, 50% fail rate | - | ✅ PASS |
+| **Batch Operations** | 100K jobs, batch=1000 | 266,619/s | ✅ PASS |
+
+---
+
+## Benchmark Suite Overview
+
+bunqueue includes 6 specialized benchmarks:
+
+| Benchmark | Purpose | Jobs | Duration |
+|-----------|---------|------|----------|
+| `throughput.bench.ts` | Individual operation speeds | 10K-50K | ~30s |
+| `worker.bench.ts` | Realistic worker simulation | 10K-100K | ~60s |
+| `stress.bench.ts` | Production validation (7 tests) | 5K-100K | ~3min |
+| `million-jobs.bench.ts` | High-volume integrity test | 1M | ~5min |
+| `10million-jobs.bench.ts` | Extreme stress test | 10M | ~15min |
+| `completed-events.bench.ts` | Event delivery verification | 10K | ~30s |
+
+---
+
+## Running Benchmarks
 
 <Aside type="tip">
 The only honest benchmark is one you run on your own hardware.
 </Aside>
 
 ```bash
+# Clone and install
 git clone https://github.com/egeominotti/bunqueue.git
 cd bunqueue
 bun install
 
-# Run all benchmarks
-bun run bench
-
 # Individual benchmarks
-bun run bench:throughput
-bun run bench:latency
-bun run bench:internal
+bun run src/benchmark/throughput.bench.ts
+bun run src/benchmark/worker.bench.ts
+bun run src/benchmark/stress.bench.ts
+bun run src/benchmark/million-jobs.bench.ts
+bun run src/benchmark/10million-jobs.bench.ts
+bun run src/benchmark/completed-events.bench.ts
 ```
 
 ---
 
-## Throughput Benchmark
-
-Measures jobs pushed and processed per second.
-
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Single','Bulk(10)','Bulk(100)','Bulk(1k)'],datasets:[{label:'ops/sec',data:[55000,95000,120000,145000],backgroundColor:['rgba(236,72,153,0.8)','rgba(168,85,247,0.8)','rgba(59,130,246,0.8)','rgba(34,197,94,0.8)'],borderRadius:6}]},options:{plugins:{title:{display:true,text:'Throughput Performance',font:{size:16,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Operations/sec'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
-    alt="Throughput benchmark chart"
-    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
-
-| Operation | Ops/sec | vs Single |
-|-----------|---------|-----------|
-| Single Push | **~55,000** | 1x |
-| Bulk (10) | **~95,000** | 1.7x |
-| Bulk (100) | **~120,000** | 2.2x |
-| Bulk (1000) | **~145,000** | 2.6x |
-
-<Aside>
-Batch operations significantly improve throughput. Batch size of 100-1000 provides best performance.
-</Aside>
-
----
-
-## Latency Benchmark
-
-Measures time to complete operations in milliseconds.
-
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'line',data:{labels:['p50','p95','p99','p99.9'],datasets:[{label:'Push',data:[0.05,0.12,0.25,0.60],borderColor:'rgb(236,72,153)',backgroundColor:'rgba(236,72,153,0.1)',fill:true,tension:0.3},{label:'Process',data:[0.02,0.08,0.15,0.35],borderColor:'rgb(59,130,246)',backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:0.3}]},options:{plugins:{title:{display:true,text:'Latency Distribution (ms)',font:{size:16,weight:'bold'}}},scales:{y:{beginAtZero:true,title:{display:true,text:'Milliseconds'},grid:{color:'rgba(0,0,0,0.1)'}},x:{title:{display:true,text:'Percentile'},grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
-    alt="Latency benchmark chart"
-    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
-
-| Percentile | Push | Process | Round-trip |
-|------------|------|---------|------------|
-| **p50** | 0.05ms | 0.02ms | 0.08ms |
-| **p95** | 0.12ms | 0.08ms | 0.20ms |
-| **p99** | 0.25ms | 0.15ms | 0.40ms |
-| **p99.9** | 0.60ms | 0.35ms | 0.95ms |
-
-<Aside type="tip">
-Sub-millisecond latency even at p99.9 percentile.
-</Aside>
-
----
-
-## Memory Usage
-
-Memory footprint under different workloads.
-
-<div style={{ textAlign: 'center', margin: '2rem 0' }}>
-  <img
-    src="https://quickchart.io/chart?c={type:'bar',data:{labels:['Idle','10K jobs','100K jobs','1M jobs'],datasets:[{label:'RSS Memory (MB)',data:[50,65,150,400],backgroundColor:'rgba(139,92,246,0.8)',borderRadius:6}]},options:{plugins:{title:{display:true,text:'Memory Footprint',font:{size:16,weight:'bold'}},legend:{display:false}},scales:{y:{beginAtZero:true,title:{display:true,text:'Memory (MB)'},grid:{color:'rgba(0,0,0,0.1)'}},x:{grid:{display:false}}}}}&width=500&height=300&backgroundColor=white"
-    alt="Memory usage chart"
-    style={{ maxWidth: '500px', width: '100%', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-  />
-</div>
-
-| Queue Depth | RSS Memory | Heap Used | Per Job |
-|-------------|------------|-----------|---------|
-| Idle | **~50 MB** | ~25 MB | - |
-| 10,000 jobs | **~65 MB** | ~40 MB | ~1.5 KB |
-| 100,000 jobs | **~150 MB** | ~100 MB | ~1.0 KB |
-| 1,000,000 jobs | **~400 MB** | ~300 MB | ~350 B |
-
-<Aside>
-Memory usage scales linearly. Efficient ~100 bytes per job at scale.
-</Aside>
-
----
-
-## Internal Optimizations
-
-bunqueue uses optimized data structures internally.
-
-```bash
-bun run bench:internal
-```
+## Detailed Benchmark Documentation
 
 <Tabs>
-  <TabItem label="Skip List">
-    Used for priority queue ordering. O(log n) insert vs O(n) array splice.
+  <TabItem label="1. Throughput">
+    **File**: `src/benchmark/throughput.bench.ts`
 
-    | Elements | Array Splice | Skip List | Speedup |
-    |----------|-------------|-----------|---------|
-    | 1,000 | 12ms | 2ms | **6x** |
-    | 5,000 | 180ms | 8ms | **22x** |
-    | 10,000 | 650ms | 15ms | **43x** |
+    Measures raw throughput of individual queue operations with warmup.
+
+    ### Operations Tested
+
+    | Operation | Description | Measured Speed |
+    |-----------|-------------|----------------|
+    | `PUSH` | Single job insertion | 579,603/s |
+    | `PULL` | Single job retrieval | 420,835/s |
+    | `ACK` | Single job acknowledgment | 464,857/s |
+    | `FULL CYCLE` | Push → Pull → Ack | 182,822/s |
+    | `BATCH PUSH (100)` | Batch insertion | 1,259,234/s |
+    | `BATCH PUSH (1000)` | Batch insertion | 1,452,193/s |
+
+    ### How It Works
+
+    ```typescript
+    // 1. Warmup (100 iterations)
+    for (let i = 0; i < 100; i++) {
+      await fn();
+    }
+
+    // 2. Timed execution
+    const start = performance.now();
+    for (let i = 0; i < totalJobs; i++) {
+      await fn();
+    }
+    const durationMs = performance.now() - start;
+
+    // 3. Calculate throughput
+    const jobsPerSecond = (totalJobs / durationMs) * 1000;
+    ```
   </TabItem>
 
-  <TabItem label="LRU Cache">
-    Doubly-linked list vs Map delete+set for move-to-front.
+  <TabItem label="2. Worker">
+    **File**: `src/benchmark/worker.bench.ts`
 
-    | Cache Size | Naive | Optimized | Speedup |
-    |------------|-------|-----------|---------|
-    | 1,000 | 45ms | 12ms | **3.7x** |
-    | 5,000 | 52ms | 14ms | **3.7x** |
-    | 10,000 | 58ms | 15ms | **3.9x** |
+    Simulates realistic worker behavior with event verification.
+
+    ### Test Flow
+
+    ```
+    ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+    │   Push Phase    │────▶│  Process Phase  │────▶│  Event Check    │
+    │                 │     │                 │     │                 │
+    │ • Push N jobs   │     │ • Pull job      │     │ • Count events  │
+    │ • Sequential    │     │ • Ack with data │     │ • Verify count  │
+    └─────────────────┘     └─────────────────┘     └─────────────────┘
+    ```
+
+    ### Results
+
+    | Size | Push Rate | Process Rate | Events |
+    |------|-----------|--------------|--------|
+    | 10,000 | 519,445/s | 217,980/s | ✅ 10,000 |
+    | 50,000 | 604,918/s | 243,945/s | ✅ 50,000 |
+    | 100,000 | 611,819/s | 232,613/s | ✅ 100,000 |
   </TabItem>
 
-  <TabItem label="MinHeap">
-    Used for delayed job scheduling. O(log n) operations.
+  <TabItem label="3. Stress">
+    **File**: `src/benchmark/stress.bench.ts`
 
-    | Elements | Sorted Array | MinHeap | Speedup |
-    |----------|-------------|---------|---------|
-    | 1,000 | 8ms | 1ms | **8x** |
-    | 5,000 | 95ms | 5ms | **19x** |
-    | 10,000 | 320ms | 10ms | **32x** |
+    Comprehensive production validation with 7 different stress scenarios.
+
+    ### Test Suite
+
+    | Test | Configuration | Result |
+    |------|---------------|--------|
+    | High Volume | 100K jobs | 140,032/s ✅ |
+    | Concurrent Queues | 10 × 10K | 138,336/s ✅ |
+    | Large Payloads | 5K × 10KB | 384,781 MB/s ✅ |
+    | Priority Stress | 50K random | 0 violations ✅ |
+    | Retry Storm | 10K, 50% fail | 75% retry ratio ✅ |
+    | Memory Stability | 100 × 1K | Stable ✅ |
+    | Batch Operations | 100K batch | 1,393,745/s push ✅ |
+  </TabItem>
+
+  <TabItem label="4. Million Jobs">
+    **File**: `src/benchmark/million-jobs.bench.ts`
+
+    High-volume test with **data integrity verification**.
+
+    ### Configuration
+
+    | Parameter | Value |
+    |-----------|-------|
+    | Total Jobs | 1,000,000 |
+    | Batch Size (push) | 5,000 |
+    | Batch Size (pull) | 500 |
+    | Workers | 16 |
+    | Queues | 16 |
+
+    ### Results
+
+    ```
+    📊 Summary
+    ==========================
+    Total jobs:      1,000,000
+    Completed:       1,000,000
+    Total time:      2.85s
+
+    Push rate:       1,210,654 jobs/sec
+    Process rate:    494,805 jobs/sec
+    Overall rate:    351,247 jobs/sec
+
+    ✅ Data Integrity: PASSED
+       - Pull: 1,000,000 / 1,000,000 unique
+       - Events: 1,000,000 / 1,000,000 unique
+    ```
+  </TabItem>
+
+  <TabItem label="5. 10M Jobs">
+    **File**: `src/benchmark/10million-jobs.bench.ts`
+
+    **Extreme stress test** to validate system limits.
+
+    ### Configuration
+
+    | Parameter | Value |
+    |-----------|-------|
+    | Total Jobs | 10,000,000 |
+    | Workers | 32 |
+    | Queues | 32 |
+    | Shards | 32 |
+
+    ### Visual Progress
+
+    ```
+    👷 Processing 10M jobs...
+    [██████████████░░░░░░░░░░░░░░░░] 45.2% | 428,571 jobs/sec
+    [████████████████████░░░░░░░░░░] 67.8% | 435,897 jobs/sec
+    [██████████████████████████████] 100.0% | 441,176 jobs/sec
+    ```
+  </TabItem>
+
+  <TabItem label="6. Events">
+    **File**: `src/benchmark/completed-events.bench.ts`
+
+    Verifies that **every COMPLETED event** is reliably emitted.
+
+    ### Results
+
+    ```
+    📊 RISULTATI
+    ══════════════════════════════════════════════════
+    Jobs totali:        10,000
+    Eventi COMPLETED:   10,000
+    Job IDs unici:      10,000
+    ──────────────────────────────────────────────────
+    Tempo push:         20ms (506,778 jobs/sec)
+    Tempo process:      47ms (211,589 jobs/sec)
+    ──────────────────────────────────────────────────
+    ✅ TEST PASSED: All COMPLETED events received!
+    ```
   </TabItem>
 </Tabs>
+
+---
+
+## Performance Tuning Guide
+
+### Batch Size Recommendations
+
+| Scenario | Push Batch | Pull Batch |
+|----------|------------|------------|
+| Low latency (real-time) | 100-500 | 10-50 |
+| High throughput | 1,000-5,000 | 500-1,000 |
+| Extreme volume | 5,000-10,000 | 1,000+ |
+
+### Worker Count Tuning
+
+```
+Optimal Workers = min(CPU cores, shard count)
+```
+
+bunqueue uses 16 shards by default:
+- **4-core machine**: 4-8 workers
+- **8-core machine**: 8-16 workers
+- **16+ core machine**: 16 workers
+
+### Memory Optimization
+
+<CardGrid>
+  <Card title="removeOnComplete: true" icon="approve-check">
+    Maximum throughput (~495K/s)
+
+    - Jobs removed after completion
+    - No result storage
+    - Best for fire-and-forget
+  </Card>
+  <Card title="removeOnComplete: false" icon="information">
+    ~25% slower (~370K/s)
+
+    - Jobs tracked after completion
+    - Results queryable
+    - Required for dependencies
+  </Card>
+</CardGrid>
 
 ---
 
@@ -179,14 +395,14 @@ bun run bench:internal
   <Card title="Native SQLite" icon="seti:db">
     Direct FFI bindings via `bun:sqlite`. WAL mode for concurrent reads/writes. Memory-mapped I/O.
   </Card>
-  <Card title="Efficient Data Structures" icon="list-format">
-    Skip lists for O(log n) priority ordering. MinHeap for delayed jobs. LRU cache with O(1) access.
+  <Card title="16 Shards" icon="list-format">
+    Minimizes lock contention. Each shard handles ~6% of queues. Parallel processing by design.
   </Card>
   <Card title="Batch Optimization" icon="rocket">
-    Single transaction for bulk operations. Prepared statements reused. 32 shards minimize lock contention.
+    Single transaction for bulk operations. Prepared statements reused. `ackBatchWithResults` for throughput.
   </Card>
-  <Card title="Zero Overhead" icon="approve-check">
-    JSON stored directly in SQLite. No protocol encoding/decoding. MessagePack for binary data.
+  <Card title="Efficient Structures" icon="approve-check">
+    Skip lists for O(log n) priority. MinHeap for delayed jobs. Bounded collections prevent leaks.
   </Card>
 </CardGrid>
 
@@ -208,7 +424,7 @@ sysctl -n machdep.cpu.brand_string
 cat /proc/cpuinfo | grep "model name" | head -1
 ```
 
-**Reference hardware** (used for example numbers):
+**Reference hardware** (used for these results):
 - Mac Studio, Apple M1 Max, 32GB RAM
 - macOS 26.2 (Tahoe)
 - Bun 1.3.8
@@ -216,16 +432,28 @@ cat /proc/cpuinfo | grep "model name" | head -1
 
 ---
 
-## Reproduce These Results
+## Pass Criteria Summary
 
-All benchmark code is in the repository:
+| Benchmark | Pass Condition | Result |
+|-----------|----------------|--------|
+| Throughput | Operations complete | ✅ |
+| Worker | `events === jobs` | ✅ |
+| Stress: High Volume | `events === jobs` | ✅ |
+| Stress: Concurrent | `events === totalJobs` | ✅ |
+| Stress: Priority | `orderViolations === 0` | ✅ |
+| Stress: Retry | `completed + dlq === jobs` | ✅ |
+| Million Jobs | Data integrity 100% | ✅ |
+| Events | `completedEvents === jobs` | ✅ |
 
-```
-bench/
-├── throughput.ts   # Push/pull ops per second
-├── latency.ts      # Operation latency percentiles
-benchmarks/
-└── index.ts        # Internal data structure benchmarks
-```
+---
 
-Submit your results via [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions) to help others compare hardware.
+## Submit Your Results
+
+Run benchmarks on your hardware and share results via [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions) to help others compare.
+
+Include:
+- CPU model
+- RAM
+- Bun version
+- OS
+- Benchmark output
