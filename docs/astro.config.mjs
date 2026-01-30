@@ -101,6 +101,7 @@ export default defineConfig({
           label: 'Integrations',
           items: [
             { label: 'Hono & Elysia', link: '/guide/integrations/' },
+            { label: 'MCP Server (AI)', link: '/guide/mcp/' },
           ],
         },
         {

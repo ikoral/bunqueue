@@ -6,7 +6,8 @@
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "bin": {
-    "bunqueue": "./dist/cli/index.js"
+    "bunqueue": "./dist/cli/index.js",
+    "bunqueue-mcp": "./dist/mcp/index.js"
   },
   "exports": {
     ".": {
@@ -20,6 +21,10 @@
     "./queue": {
       "types": "./dist/application/queueManager.d.ts",
       "import": "./dist/application/queueManager.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
     }
   },
   "files": [
