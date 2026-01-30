@@ -95,7 +95,7 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
       shard.getQueue(queue).push(job);
       // Update running counters for O(1) stats and temporal index for cleanQueue
       const isDelayed = job.runAt > Date.now();
-      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
       shard.notify();
     }
 
@@ -142,7 +142,7 @@ export async function pushJobBatch(
       ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
       // Update running counters for O(1) stats and temporal index for cleanQueue
       const isDelayed = job.runAt > now;
-      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
     }
 
     shard.notify();

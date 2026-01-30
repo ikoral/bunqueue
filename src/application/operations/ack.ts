@@ -141,7 +141,7 @@ export async function failJob(
       job.runAt = now + calculateBackoff(job);
       shard.getQueue(job.queue).push(job);
       // Update running counters for O(1) stats (retry jobs are always delayed)
-      shard.incrementQueued(jobId, true, job.createdAt, job.queue);
+      shard.incrementQueued(jobId, true, job.createdAt, job.queue, job.runAt);
       ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
       ctx.storage?.updateForRetry(job);
     } else if (job.removeOnFail) {

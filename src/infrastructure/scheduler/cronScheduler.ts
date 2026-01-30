@@ -27,17 +27,26 @@ const DEFAULT_CONFIG: Required<CronSchedulerConfig> = {
 /** Push job callback type */
 export type PushJobCallback = (queue: string, input: JobInput) => Promise<void>;
 
+/** Heap entry with generation for lazy deletion */
+interface CronHeapEntry {
+  cron: CronJob;
+  generation: number;
+}
+
 /**
  * Cron Scheduler
  * Periodically checks and executes due cron jobs
  * Optimized with min-heap for O(k log n) tick where k = due crons
+ * Uses lazy deletion with generation numbers for O(1) remove
  */
 export class CronScheduler {
   private readonly config: Required<CronSchedulerConfig>;
-  /** Map for O(1) lookup by name */
-  private readonly cronJobs = new Map<string, CronJob>();
+  /** Map for O(1) lookup by name with generation tracking */
+  private readonly cronJobs = new Map<string, { cron: CronJob; generation: number }>();
   /** Min-heap ordered by nextRun for O(k log n) tick */
-  private readonly cronHeap = new MinHeap<CronJob>((a, b) => a.nextRun - b.nextRun);
+  private readonly cronHeap = new MinHeap<CronHeapEntry>((a, b) => a.cron.nextRun - b.cron.nextRun);
+  /** Current generation counter */
+  private generation = 0;
   private checkInterval: ReturnType<typeof setInterval> | null = null;
   private pushJob: PushJobCallback | null = null;
 
@@ -104,10 +113,11 @@ export class CronScheduler {
       nextRun = getNextIntervalRun(input.repeatEvery!, now);
     }
 
-    // Create cron job
+    // Create cron job with generation tracking
     const cron = createCronJob(input, nextRun);
-    this.cronJobs.set(cron.name, cron);
-    this.cronHeap.push(cron);
+    const gen = this.generation++;
+    this.cronJobs.set(cron.name, { cron, generation: gen });
+    this.cronHeap.push({ cron, generation: gen });
 
     cronLog.info('Added job', { name: cron.name, nextRun: new Date(nextRun).toISOString() });
 
@@ -115,15 +125,15 @@ export class CronScheduler {
   }
 
   /**
-   * Remove a cron job
+   * Remove a cron job - O(1) with lazy deletion
+   * The heap entry becomes stale and will be skipped in tick()
    */
   remove(name: string): boolean {
-    const cron = this.cronJobs.get(name);
-    if (!cron) return false;
+    const entry = this.cronJobs.get(name);
+    if (!entry) return false;
 
+    // Just remove from map - heap entry becomes stale (lazy deletion)
     this.cronJobs.delete(name);
-    // Remove from heap - O(n) but rare operation
-    this.cronHeap.removeWhere((c) => c.name === name);
     cronLog.info('Removed job', { name });
     return true;
   }
@@ -132,46 +142,59 @@ export class CronScheduler {
    * Get a cron job by name
    */
   get(name: string): CronJob | undefined {
-    return this.cronJobs.get(name);
+    return this.cronJobs.get(name)?.cron;
   }
 
   /**
    * List all cron jobs
    */
   list(): CronJob[] {
-    return Array.from(this.cronJobs.values());
+    return Array.from(this.cronJobs.values()).map((e) => e.cron);
   }
 
   /**
    * Load cron jobs from storage
    */
   load(crons: CronJob[]): void {
+    const entries: CronHeapEntry[] = [];
     for (const cron of crons) {
-      this.cronJobs.set(cron.name, cron);
+      const gen = this.generation++;
+      this.cronJobs.set(cron.name, { cron, generation: gen });
+      entries.push({ cron, generation: gen });
     }
     // Rebuild heap from loaded crons - O(n)
-    this.cronHeap.buildFrom(crons);
+    this.cronHeap.buildFrom(entries);
     cronLog.info('Loaded jobs', { count: crons.length });
   }
 
   /**
    * Check and execute due cron jobs
    * O(k log n) where k = number of due crons, instead of O(n) full scan
+   * Skips stale entries (lazy deletion) automatically
    */
   private async tick(): Promise<void> {
     if (!this.pushJob) return;
 
     const now = Date.now();
-    const toReinsert: CronJob[] = [];
+    const toReinsert: CronHeapEntry[] = [];
     const toRemove: string[] = [];
 
     // Process only due crons from heap - O(k log n)
     while (!this.cronHeap.isEmpty) {
-      const cron = this.cronHeap.peek();
-      if (!cron || cron.nextRun > now) break;
+      const entry = this.cronHeap.peek();
+      if (!entry || entry.cron.nextRun > now) break;
 
       // Remove from heap
       this.cronHeap.pop();
+
+      // Check if stale (cron was removed or updated)
+      const current = this.cronJobs.get(entry.cron.name);
+      if (current?.generation !== entry.generation) {
+        // Stale entry, skip
+        continue;
+      }
+
+      const cron = entry.cron;
 
       // Check if at limit
       if (isAtLimit(cron)) {
@@ -198,8 +221,8 @@ export class CronScheduler {
           cron.nextRun = getNextIntervalRun(cron.repeatEvery, now);
         }
 
-        // Re-insert with new nextRun
-        toReinsert.push(cron);
+        // Re-insert with same generation (not stale)
+        toReinsert.push(entry);
 
         cronLog.info('Executed job', {
           name: cron.name,
@@ -209,13 +232,13 @@ export class CronScheduler {
       } catch (err) {
         cronLog.error('Failed to execute job', { name: cron.name, error: String(err) });
         // Re-insert even on failure to retry next tick
-        toReinsert.push(cron);
+        toReinsert.push(entry);
       }
     }
 
     // Re-insert processed crons with updated nextRun
-    for (const cron of toReinsert) {
-      this.cronHeap.push(cron);
+    for (const entry of toReinsert) {
+      this.cronHeap.push(entry);
     }
 
     // Remove limit-reached crons from map
@@ -226,16 +249,25 @@ export class CronScheduler {
 
   /**
    * Get scheduler stats
-   * O(1) for nextRun using min-heap peek
+   * O(1) for nextRun using min-heap peek (skips stale entries)
    */
   getStats(): { total: number; pending: number; nextRun: number | null } {
-    // Use heap peek for O(1) nextRun instead of O(n) scan
-    const nextCron = this.cronHeap.peek();
-    const nextRun = nextCron && !isAtLimit(nextCron) ? nextCron.nextRun : null;
+    // Find first non-stale entry for nextRun
+    let nextRun: number | null = null;
+
+    // Peek and skip stale entries to find valid nextRun
+    // This is typically O(1) as stale entries are cleaned during tick()
+    const entry = this.cronHeap.peek();
+    if (entry) {
+      const current = this.cronJobs.get(entry.cron.name);
+      if (current?.generation === entry.generation && !isAtLimit(entry.cron)) {
+        nextRun = entry.cron.nextRun;
+      }
+    }
 
     // Count pending (crons not at limit) - still O(n) but called rarely
     let pending = 0;
-    for (const cron of this.cronJobs.values()) {
+    for (const { cron } of this.cronJobs.values()) {
       if (!isAtLimit(cron)) {
         pending++;
       }

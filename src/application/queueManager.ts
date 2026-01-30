@@ -589,7 +589,7 @@ export class QueueManager {
                 shard.getQueue(job.queue).push(job);
                 // Update running counters for O(1) stats and temporal index
                 const isDelayed = job.runAt > now;
-                shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue);
+                shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
                 this.jobIndex.set(job.id, { type: 'queue', shardIdx: i, queueName: job.queue });
               }
             }

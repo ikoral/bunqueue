@@ -36,7 +36,7 @@ export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): num
       shard.getQueue(queue).push(job);
       // Update running counters for O(1) stats and temporal index
       const isDelayed = job.runAt > now;
-      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
       ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
       return 1;
     }
@@ -54,7 +54,7 @@ export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): num
     shard.getQueue(queue).push(job);
     // Update running counters for O(1) stats and temporal index
     const isDelayed = job.runAt > now;
-    shard.incrementQueued(job.id, isDelayed, job.createdAt, queue);
+    shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
   }
 

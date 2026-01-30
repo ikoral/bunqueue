@@ -173,7 +173,7 @@ export async function moveJobToDelayed(
     shard.getQueue(job.queue).push(job);
     // Update running counters for O(1) stats and temporal index (job is delayed since delay > 0)
     const isDelayed = job.runAt > now;
-    shard.incrementQueued(jobId, isDelayed, job.createdAt, job.queue);
+    shard.incrementQueued(jobId, isDelayed, job.createdAt, job.queue, job.runAt);
     ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
   });
 

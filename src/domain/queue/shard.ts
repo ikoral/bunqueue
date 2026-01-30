@@ -6,6 +6,8 @@
 import type { Job, JobId } from '../types/job';
 import { type QueueState, createQueueState, RateLimiter, ConcurrencyLimiter } from '../types/queue';
 import { IndexedPriorityQueue } from './priorityQueue';
+import { SkipList } from '../../shared/skipList';
+import { MinHeap } from '../../shared/minHeap';
 
 /** Shard statistics counters for O(1) stats retrieval */
 export interface ShardStats {
@@ -43,10 +45,23 @@ export class Shard {
   private readonly delayedJobIds = new Set<JobId>();
 
   /**
-   * Temporal index: sorted array of (createdAt, jobId) for efficient cleanQueue
-   * Kept sorted by createdAt for O(log n) binary search + O(k) cleanup
+   * Min-heap of delayed jobs ordered by runAt for O(k) refresh
+   * Instead of O(n × queues) iteration
    */
-  private readonly temporalIndex: Array<{ createdAt: number; jobId: JobId; queue: string }> = [];
+  private readonly delayedHeap = new MinHeap<{ jobId: JobId; runAt: number }>(
+    (a, b) => a.runAt - b.runAt
+  );
+
+  /** Map from jobId to current runAt for stale detection in delayedHeap */
+  private readonly delayedRunAt = new Map<JobId, number>();
+
+  /**
+   * Temporal index: Skip List for O(log n) insert/delete instead of O(n) splice
+   * Ordered by createdAt for efficient cleanQueue range queries
+   */
+  private readonly temporalIndex = new SkipList<{ createdAt: number; jobId: JobId; queue: string }>(
+    (a, b) => a.createdAt - b.createdAt
+  );
 
   /** Unique keys per queue for deduplication */
   readonly uniqueKeys = new Map<string, Set<string>>();
@@ -370,11 +385,23 @@ export class Shard {
   }
 
   /** Increment queued jobs counter and add to temporal index */
-  incrementQueued(jobId: JobId, isDelayed: boolean, createdAt?: number, queue?: string): void {
+  incrementQueued(
+    jobId: JobId,
+    isDelayed: boolean,
+    createdAt?: number,
+    queue?: string,
+    runAt?: number
+  ): void {
     this.stats.queuedJobs++;
     if (isDelayed) {
       this.stats.delayedJobs++;
       this.delayedJobIds.add(jobId);
+      // Add to min-heap for O(k) refresh instead of O(n × queues)
+      // Only if runAt is provided (for full optimization)
+      if (runAt !== undefined) {
+        this.delayedHeap.push({ jobId, runAt });
+        this.delayedRunAt.set(jobId, runAt);
+      }
     }
     // Add to temporal index for efficient cleanQueue
     if (createdAt !== undefined && queue !== undefined) {
@@ -388,6 +415,8 @@ export class Shard {
     if (this.delayedJobIds.has(jobId)) {
       this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs - 1);
       this.delayedJobIds.delete(jobId);
+      // Mark as stale in heap (lazy removal)
+      this.delayedRunAt.delete(jobId);
     }
     // Remove from temporal index (lazy removal - will be cleaned on next cleanQueue)
   }
@@ -402,21 +431,33 @@ export class Shard {
     this.stats.dlqJobs = Math.max(0, this.stats.dlqJobs - count);
   }
 
-  /** Update delayed jobs that have become ready (call periodically) */
+  /**
+   * Update delayed jobs that have become ready (call periodically)
+   * O(k) where k = jobs that became ready, instead of O(n × queues)
+   */
   refreshDelayedCount(now: number): void {
-    const toRemove: JobId[] = [];
-    for (const jobId of this.delayedJobIds) {
-      // Find job in queues to check runAt
-      for (const q of this.queues.values()) {
-        const job = q.find(jobId);
-        if (job && job.runAt <= now) {
-          toRemove.push(jobId);
-          break;
-        }
+    // Process heap from top - jobs ordered by runAt ascending
+    while (!this.delayedHeap.isEmpty) {
+      const top = this.delayedHeap.peek();
+      if (!top || top.runAt > now) break;
+
+      // Pop from heap
+      this.delayedHeap.pop();
+
+      // Check if stale (job was removed or runAt changed)
+      const currentRunAt = this.delayedRunAt.get(top.jobId);
+      if (currentRunAt === undefined) {
+        // Job was removed, skip
+        continue;
       }
-    }
-    for (const jobId of toRemove) {
-      this.delayedJobIds.delete(jobId);
+      if (currentRunAt !== top.runAt) {
+        // runAt changed, this entry is stale, skip
+        continue;
+      }
+
+      // Job is ready - remove from delayed tracking
+      this.delayedJobIds.delete(top.jobId);
+      this.delayedRunAt.delete(top.jobId);
       this.stats.delayedJobs = Math.max(0, this.stats.delayedJobs - 1);
     }
   }
@@ -426,6 +467,8 @@ export class Shard {
     this.stats.queuedJobs = 0;
     this.stats.delayedJobs = 0;
     this.delayedJobIds.clear();
+    this.delayedHeap.clear();
+    this.delayedRunAt.clear();
   }
 
   /** Reset DLQ counter */
@@ -435,20 +478,12 @@ export class Shard {
 
   // ============ Temporal Index (for efficient cleanQueue) ============
 
-  /** Add job to temporal index - maintains sorted order by createdAt */
+  /**
+   * Add job to temporal index - O(log n) with Skip List
+   * Previously O(n) with array splice
+   */
   private addToTemporalIndex(createdAt: number, jobId: JobId, queue: string): void {
-    // Binary search to find insertion point
-    let lo = 0;
-    let hi = this.temporalIndex.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (this.temporalIndex[mid].createdAt < createdAt) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    this.temporalIndex.splice(lo, 0, { createdAt, jobId, queue });
+    this.temporalIndex.insert({ createdAt, jobId, queue });
   }
 
   /**
@@ -464,9 +499,9 @@ export class Shard {
     const threshold = now - thresholdMs;
     const result: Array<{ jobId: JobId; createdAt: number }> = [];
 
-    // Temporal index is sorted by createdAt ascending (oldest first)
-    // Iterate from start until we find jobs newer than threshold
-    for (const entry of this.temporalIndex) {
+    // Use Skip List takeWhile for O(k) iteration from start
+    // Stops when createdAt > threshold
+    for (const entry of this.temporalIndex.values()) {
       if (entry.createdAt > threshold) break;
       if (entry.queue === queue) {
         result.push({ jobId: entry.jobId, createdAt: entry.createdAt });
@@ -477,22 +512,18 @@ export class Shard {
     return result;
   }
 
-  /** Remove job from temporal index (called after job is cleaned) */
+  /**
+   * Remove job from temporal index (called after job is cleaned)
+   * O(n) in worst case but typically fast with deleteWhere
+   */
   removeFromTemporalIndex(jobId: JobId): void {
-    const idx = this.temporalIndex.findIndex((e) => e.jobId === jobId);
-    if (idx !== -1) {
-      this.temporalIndex.splice(idx, 1);
-    }
+    this.temporalIndex.deleteWhere((e) => e.jobId === jobId);
   }
 
   /** Clear temporal index for a queue */
   clearTemporalIndexForQueue(queue: string): void {
-    // Filter out entries for this queue
-    for (let i = this.temporalIndex.length - 1; i >= 0; i--) {
-      if (this.temporalIndex[i].queue === queue) {
-        this.temporalIndex.splice(i, 1);
-      }
-    }
+    // Remove all entries for this queue
+    this.temporalIndex.removeAll((e) => e.queue === queue);
   }
 
   /** Drain all waiting jobs from queue */

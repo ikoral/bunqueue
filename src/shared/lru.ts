@@ -3,6 +3,8 @@
  * Bounded collections with automatic eviction
  */
 
+import { MinHeap } from './minHeap';
+
 /** Map-like interface for LRU compatibility */
 export interface MapLike<K, V> {
   get(key: K): V | undefined;
@@ -22,45 +24,97 @@ export interface SetLike<T> {
   readonly size: number;
 }
 
+/** Node in the doubly-linked list for LRU tracking */
+interface LRUNode<K, V> {
+  key: K;
+  value: V;
+  prev: LRUNode<K, V> | null;
+  next: LRUNode<K, V> | null;
+}
+
 /**
  * LRU Map - automatically evicts least recently used entries
+ * Optimized with doubly-linked list for O(1) move-to-front
+ * without delete+re-insert overhead
  */
 export class LRUMap<K, V> implements MapLike<K, V> {
-  private readonly cache = new Map<K, V>();
+  private readonly cache = new Map<K, LRUNode<K, V>>();
   private readonly maxSize: number;
   private readonly onEvict?: (key: K, value: V) => void;
+
+  // Doubly-linked list head (most recent) and tail (least recent)
+  private head: LRUNode<K, V> | null = null;
+  private tail: LRUNode<K, V> | null = null;
 
   constructor(maxSize: number, onEvict?: (key: K, value: V) => void) {
     this.maxSize = maxSize;
     this.onEvict = onEvict;
   }
 
+  /** Move node to front (most recently used) - O(1) */
+  private moveToFront(node: LRUNode<K, V>): void {
+    if (node === this.head) return; // Already at front
+
+    // Detach from current position
+    if (node.prev) node.prev.next = node.next;
+    if (node.next) node.next.prev = node.prev;
+    if (node === this.tail) this.tail = node.prev;
+
+    // Move to front
+    node.prev = null;
+    node.next = this.head;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    this.tail ??= node;
+  }
+
+  /** Remove node from list - O(1) */
+  private removeNode(node: LRUNode<K, V>): void {
+    if (node.prev) node.prev.next = node.next;
+    if (node.next) node.next.prev = node.prev;
+    if (node === this.head) this.head = node.next;
+    if (node === this.tail) this.tail = node.prev;
+  }
+
+  /** Add node to front - O(1) */
+  private addToFront(node: LRUNode<K, V>): void {
+    node.prev = null;
+    node.next = this.head;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    this.tail ??= node;
+  }
+
   get(key: K): V | undefined {
-    const value = this.cache.get(key);
-    if (value !== undefined) {
-      // Move to end (most recently used)
-      this.cache.delete(key);
-      this.cache.set(key, value);
-    }
-    return value;
+    const node = this.cache.get(key);
+    if (!node) return undefined;
+
+    // Move to front - O(1) without delete+re-insert
+    this.moveToFront(node);
+    return node.value;
   }
 
   set(key: K, value: V): void {
-    // If key exists, delete and re-add to update position
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.maxSize) {
-      // Evict oldest entry
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) {
-        const evictedValue = this.cache.get(firstKey);
-        this.cache.delete(firstKey);
-        if (evictedValue !== undefined) {
-          this.onEvict?.(firstKey, evictedValue);
-        }
+    const existing = this.cache.get(key);
+
+    if (existing) {
+      // Update value and move to front
+      existing.value = value;
+      this.moveToFront(existing);
+    } else {
+      // Evict if at capacity
+      if (this.cache.size >= this.maxSize && this.tail) {
+        const evicted = this.tail;
+        this.cache.delete(evicted.key);
+        this.removeNode(evicted);
+        this.onEvict?.(evicted.key, evicted.value);
       }
+
+      // Add new node
+      const node: LRUNode<K, V> = { key, value, prev: null, next: null };
+      this.cache.set(key, node);
+      this.addToFront(node);
     }
-    this.cache.set(key, value);
   }
 
   has(key: K): boolean {
@@ -68,64 +122,141 @@ export class LRUMap<K, V> implements MapLike<K, V> {
   }
 
   delete(key: K): boolean {
+    const node = this.cache.get(key);
+    if (!node) return false;
+
+    this.removeNode(node);
     return this.cache.delete(key);
   }
 
   clear(): void {
     this.cache.clear();
+    this.head = null;
+    this.tail = null;
   }
 
   get size(): number {
     return this.cache.size;
   }
 
-  keys(): IterableIterator<K> {
-    return this.cache.keys();
+  *keys(): IterableIterator<K> {
+    // Iterate from tail (oldest) to head (newest) to match original Map behavior
+    let current = this.tail;
+    while (current) {
+      yield current.key;
+      current = current.prev;
+    }
   }
 
-  values(): IterableIterator<V> {
-    return this.cache.values();
+  *values(): IterableIterator<V> {
+    // Iterate from tail (oldest) to head (newest) to match original Map behavior
+    let current = this.tail;
+    while (current) {
+      yield current.value;
+      current = current.prev;
+    }
   }
 
-  entries(): IterableIterator<[K, V]> {
-    return this.cache.entries();
+  *entries(): IterableIterator<[K, V]> {
+    // Iterate from tail (oldest) to head (newest) to match original Map behavior
+    let current = this.tail;
+    while (current) {
+      yield [current.key, current.value];
+      current = current.prev;
+    }
   }
 
   forEach(callback: (value: V, key: K) => void): void {
-    this.cache.forEach(callback);
+    // Iterate from tail (oldest) to head (newest) to match original Map behavior
+    let current = this.tail;
+    while (current) {
+      callback(current.value, current.key);
+      current = current.prev;
+    }
   }
 
   [Symbol.iterator](): IterableIterator<[K, V]> {
-    return this.cache[Symbol.iterator]();
+    return this.entries();
   }
+}
+
+/** Node in the doubly-linked list for LRUSet */
+interface LRUSetNode<T> {
+  value: T;
+  prev: LRUSetNode<T> | null;
+  next: LRUSetNode<T> | null;
 }
 
 /**
  * LRU Set - automatically evicts least recently used entries
+ * Optimized with doubly-linked list for O(1) move-to-front
  */
 export class LRUSet<T> implements SetLike<T> {
-  private readonly cache = new Set<T>();
+  private readonly cache = new Map<T, LRUSetNode<T>>();
   private readonly maxSize: number;
   private readonly onEvict?: (value: T) => void;
+
+  // Doubly-linked list head (most recent) and tail (least recent)
+  private head: LRUSetNode<T> | null = null;
+  private tail: LRUSetNode<T> | null = null;
 
   constructor(maxSize: number, onEvict?: (value: T) => void) {
     this.maxSize = maxSize;
     this.onEvict = onEvict;
   }
 
+  /** Move node to front - O(1) */
+  private moveToFront(node: LRUSetNode<T>): void {
+    if (node === this.head) return;
+
+    if (node.prev) node.prev.next = node.next;
+    if (node.next) node.next.prev = node.prev;
+    if (node === this.tail) this.tail = node.prev;
+
+    node.prev = null;
+    node.next = this.head;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    this.tail ??= node;
+  }
+
+  /** Remove node from list - O(1) */
+  private removeNode(node: LRUSetNode<T>): void {
+    if (node.prev) node.prev.next = node.next;
+    if (node.next) node.next.prev = node.prev;
+    if (node === this.head) this.head = node.next;
+    if (node === this.tail) this.tail = node.prev;
+  }
+
+  /** Add node to front - O(1) */
+  private addToFront(node: LRUSetNode<T>): void {
+    node.prev = null;
+    node.next = this.head;
+    if (this.head) this.head.prev = node;
+    this.head = node;
+    this.tail ??= node;
+  }
+
   add(value: T): void {
-    // If value exists, delete and re-add to update position
-    if (this.cache.has(value)) {
-      this.cache.delete(value);
-    } else if (this.cache.size >= this.maxSize) {
-      // Evict oldest entry
-      const firstValue = this.cache.values().next().value;
-      if (firstValue !== undefined) {
-        this.cache.delete(firstValue);
-        this.onEvict?.(firstValue);
+    const existing = this.cache.get(value);
+
+    if (existing) {
+      // Move to front
+      this.moveToFront(existing);
+    } else {
+      // Evict if at capacity
+      if (this.cache.size >= this.maxSize && this.tail) {
+        const evicted = this.tail;
+        this.cache.delete(evicted.value);
+        this.removeNode(evicted);
+        this.onEvict?.(evicted.value);
       }
+
+      // Add new node
+      const node: LRUSetNode<T> = { value, prev: null, next: null };
+      this.cache.set(value, node);
+      this.addToFront(node);
     }
-    this.cache.add(value);
   }
 
   has(value: T): boolean {
@@ -133,23 +264,34 @@ export class LRUSet<T> implements SetLike<T> {
   }
 
   delete(value: T): boolean {
+    const node = this.cache.get(value);
+    if (!node) return false;
+
+    this.removeNode(node);
     return this.cache.delete(value);
   }
 
   clear(): void {
     this.cache.clear();
+    this.head = null;
+    this.tail = null;
   }
 
   get size(): number {
     return this.cache.size;
   }
 
-  values(): IterableIterator<T> {
-    return this.cache.values();
+  *values(): IterableIterator<T> {
+    // Iterate from tail (oldest) to head (newest) to match original Set behavior
+    let current = this.tail;
+    while (current) {
+      yield current.value;
+      current = current.prev;
+    }
   }
 
   [Symbol.iterator](): IterableIterator<T> {
-    return this.cache[Symbol.iterator]();
+    return this.values();
   }
 }
 
@@ -312,7 +454,7 @@ export class BoundedMap<K, V> implements MapLike<K, V> {
 
 /**
  * TTL Map - entries expire after timeout
- * Optimized with expiry heap for O(k) cleanup instead of O(n)
+ * Optimized with MinHeap for O(log n) insert and O(k) cleanup
  */
 export class TTLMap<K, V> {
   private readonly cache = new Map<K, { value: V; expiresAt: number }>();
@@ -320,10 +462,12 @@ export class TTLMap<K, V> {
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
-   * Expiry heap: sorted array of (expiresAt, key) for efficient cleanup
-   * Oldest expiry at index 0
+   * Expiry heap: MinHeap of (expiresAt, key) for efficient cleanup
+   * O(log n) insert instead of O(n) with array splice
    */
-  private readonly expiryHeap: Array<{ expiresAt: number; key: K }> = [];
+  private readonly expiryHeap = new MinHeap<{ expiresAt: number; key: K }>(
+    (a, b) => a.expiresAt - b.expiresAt
+  );
 
   constructor(ttlMs: number, cleanupIntervalMs: number = 60_000) {
     this.ttlMs = ttlMs;
@@ -336,15 +480,17 @@ export class TTLMap<K, V> {
     }, intervalMs);
   }
 
-  /** O(k) cleanup where k = expired entries, instead of O(n) full scan */
+  /** O(k log n) cleanup where k = expired entries */
   private cleanup(): void {
     const now = Date.now();
 
-    // Remove expired entries from heap head - O(k)
-    while (this.expiryHeap.length > 0 && this.expiryHeap[0].expiresAt <= now) {
-      const item = this.expiryHeap.shift();
-      if (!item) break;
-      const { key, expiresAt } = item;
+    // Remove expired entries from heap - O(k log n)
+    while (!this.expiryHeap.isEmpty) {
+      const top = this.expiryHeap.peek();
+      if (!top || top.expiresAt > now) break;
+
+      this.expiryHeap.pop();
+      const { key, expiresAt } = top;
 
       // Verify entry still exists and has same expiry (might have been updated)
       const entry = this.cache.get(key);
@@ -364,22 +510,13 @@ export class TTLMap<K, V> {
     return entry.value;
   }
 
+  /** O(log n) insert with MinHeap instead of O(n) with array splice */
   set(key: K, value: V, ttlMs?: number): void {
     const expiresAt = Date.now() + (ttlMs ?? this.ttlMs);
     this.cache.set(key, { value, expiresAt });
 
-    // Add to expiry heap - binary search for insertion point
-    let lo = 0;
-    let hi = this.expiryHeap.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      if (this.expiryHeap[mid].expiresAt < expiresAt) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    this.expiryHeap.splice(lo, 0, { expiresAt, key });
+    // Add to expiry heap - O(log n) with MinHeap
+    this.expiryHeap.push({ expiresAt, key });
   }
 
   has(key: K): boolean {
@@ -393,7 +530,7 @@ export class TTLMap<K, V> {
 
   clear(): void {
     this.cache.clear();
-    this.expiryHeap.length = 0;
+    this.expiryHeap.clear();
   }
 
   stop(): void {
