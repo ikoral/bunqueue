@@ -66,15 +66,13 @@ CREATE TABLE IF NOT EXISTS job_results (
     completed_at INTEGER NOT NULL
 );
 
--- Dead letter queue (BLOB for MessagePack)
+-- Dead letter queue (BLOB for MessagePack - stores full DlqEntry)
 CREATE TABLE IF NOT EXISTS dlq (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id TEXT NOT NULL,
     queue TEXT NOT NULL,
-    data BLOB NOT NULL,
-    error TEXT,
-    failed_at INTEGER NOT NULL,
-    attempts INTEGER NOT NULL
+    entry BLOB NOT NULL,
+    entered_at INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_dlq_queue ON dlq(queue);
@@ -111,7 +109,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {

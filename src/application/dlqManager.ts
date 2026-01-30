@@ -10,11 +10,13 @@ import type { DlqEntry, DlqConfig, DlqFilter, DlqStats } from '../domain/types/d
 import { FailureReason, scheduleNextRetry } from '../domain/types/dlq';
 import { shardIndex } from '../shared/hash';
 import { queueLog } from '../shared/logger';
+import type { SqliteStorage } from '../infrastructure/persistence/sqlite';
 
 /** Context for DLQ operations */
 export interface DlqContext {
   shards: Shard[];
   jobIndex: Map<JobId, JobLocation>;
+  storage?: SqliteStorage | null;
 }
 
 /** Get jobs from DLQ (backward compatible) */
@@ -90,6 +92,9 @@ export function retryDlqJob(queue: string, jobId: JobId, ctx: DlqContext): Job |
   const entry = shard.removeFromDlq(queue, jobId);
   if (!entry) return null;
 
+  // Delete from SQLite
+  ctx.storage?.deleteDlqEntry(jobId);
+
   const job = entry.job;
   job.attempts = 0;
   job.runAt = now;
@@ -116,8 +121,10 @@ export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): num
   const entries = shard.getDlqEntries(queue);
   const count = entries.length;
 
-  // Clear all entries
+  // Clear all entries from memory
   shard.clearDlq(queue);
+  // Clear from SQLite
+  ctx.storage?.clearDlqQueue(queue);
 
   const now = Date.now();
   for (const entry of entries) {
@@ -149,6 +156,9 @@ export function retryDlqByFilter(queue: string, ctx: DlqContext, filter: DlqFilt
   for (const entry of entries) {
     const removed = shard.removeFromDlq(queue, entry.job.id);
     if (!removed) continue;
+
+    // Delete from SQLite
+    ctx.storage?.deleteDlqEntry(entry.job.id);
 
     const job = entry.job;
     job.attempts = 0;
@@ -213,7 +223,18 @@ export function processAutoRetry(queue: string, ctx: DlqContext): number {
 /** Purge expired entries from DLQ */
 export function purgeExpiredDlq(queue: string, ctx: DlqContext): number {
   const idx = shardIndex(queue);
-  const count = ctx.shards[idx].purgeExpired(queue);
+  const shard = ctx.shards[idx];
+
+  // Get expired entries before purging (to delete from SQLite)
+  const expiredEntries = shard.getExpiredEntries(queue);
+  const count = shard.purgeExpired(queue);
+
+  // Delete from SQLite
+  if (ctx.storage && expiredEntries.length > 0) {
+    for (const entry of expiredEntries) {
+      ctx.storage.deleteDlqEntry(entry.job.id);
+    }
+  }
 
   if (count > 0) {
     queueLog.info('Purged expired DLQ entries', { queue, count });
@@ -224,7 +245,10 @@ export function purgeExpiredDlq(queue: string, ctx: DlqContext): number {
 /** Purge all jobs from DLQ */
 export function purgeDlqJobs(queue: string, ctx: DlqContext): number {
   const idx = shardIndex(queue);
-  return ctx.shards[idx].clearDlq(queue);
+  const count = ctx.shards[idx].clearDlq(queue);
+  // Clear from SQLite
+  ctx.storage?.clearDlqQueue(queue);
+  return count;
 }
 
 /** Configure DLQ for a queue */

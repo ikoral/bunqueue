@@ -209,11 +209,13 @@ export async function discardJob(jobId: JobId, ctx: JobManagementContext): Promi
   if (job) {
     const validJob = job; // Local reference for closure
     const idx = shardIndex(validJob.queue);
-    await withWriteLock(ctx.shardLocks[idx], () => {
-      // addToDlq already updates dlq counter
-      ctx.shards[idx].addToDlq(validJob);
+    const entry = await withWriteLock(ctx.shardLocks[idx], () => {
+      // addToDlq already updates dlq counter and returns entry
+      const dlqEntry = ctx.shards[idx].addToDlq(validJob);
       ctx.jobIndex.set(jobId, { type: 'dlq', queueName: validJob.queue });
+      return dlqEntry;
     });
+    ctx.storage?.saveDlqEntry(entry);
     return true;
   }
   return false;

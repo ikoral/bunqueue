@@ -15,6 +15,9 @@ export type StatementName =
   | 'insertResult'
   | 'getResult'
   | 'insertDlq'
+  | 'loadDlq'
+  | 'deleteDlqEntry'
+  | 'clearDlqQueue'
   | 'insertCron';
 
 /** SQL statements */
@@ -46,8 +49,13 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
 
   getResult: 'SELECT result FROM job_results WHERE job_id = ?',
 
-  insertDlq:
-    'INSERT INTO dlq (job_id, queue, data, error, failed_at, attempts) VALUES (?, ?, ?, ?, ?, ?)',
+  insertDlq: 'INSERT INTO dlq (job_id, queue, entry, entered_at) VALUES (?, ?, ?, ?)',
+
+  loadDlq: 'SELECT * FROM dlq ORDER BY entered_at',
+
+  deleteDlqEntry: 'DELETE FROM dlq WHERE job_id = ?',
+
+  clearDlqQueue: 'DELETE FROM dlq WHERE queue = ?',
 
   insertCron: `
     INSERT OR REPLACE INTO cron_jobs

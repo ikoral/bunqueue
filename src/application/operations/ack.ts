@@ -151,9 +151,9 @@ export async function failJob(
       ctx.totalFailed.value++;
     } else {
       // Move to DLQ (addToDlq already updates dlq counter)
-      shard.addToDlq(job);
+      const entry = shard.addToDlq(job);
       ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
-      ctx.storage?.markFailed(job, error ?? null);
+      ctx.storage?.saveDlqEntry(entry);
       ctx.totalFailed.value++;
     }
   });

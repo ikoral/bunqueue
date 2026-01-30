@@ -8,6 +8,7 @@ import { Database } from 'bun:sqlite';
 import { encode, decode } from '@msgpack/msgpack';
 import { type Job, type JobId, jobId } from '../../domain/types/job';
 import type { CronJob } from '../../domain/types/cron';
+import type { DlqEntry } from '../../domain/types/dlq';
 import { PRAGMA_SETTINGS, SCHEMA, MIGRATION_TABLE, SCHEMA_VERSION } from './schema';
 import { prepareStatements, type StatementName, type DbJob, type DbCron } from './statements';
 import { storageLog } from '../../shared/logger';
@@ -146,9 +147,64 @@ export class SqliteStorage {
   }
 
   markFailed(job: Job, error: string | null): void {
+    // Legacy method - use saveDlqEntry for full metadata
+    this.statements.get('insertDlq')!.run(job.id, job.queue, pack({ job, error }), Date.now());
+  }
+
+  /** Save DLQ entry with full metadata */
+  saveDlqEntry(entry: DlqEntry): void {
     this.statements
       .get('insertDlq')!
-      .run(job.id, job.queue, pack(job.data), error, Date.now(), job.attempts);
+      .run(entry.job.id, entry.job.queue, pack(entry), entry.enteredAt);
+  }
+
+  /** Delete DLQ entry by job ID */
+  deleteDlqEntry(jobId: JobId): void {
+    this.statements.get('deleteDlqEntry')!.run(jobId);
+  }
+
+  /** Clear all DLQ entries for a queue */
+  clearDlqQueue(queue: string): void {
+    this.statements.get('clearDlqQueue')!.run(queue);
+  }
+
+  /** Load all DLQ entries */
+  loadDlq(): Map<string, DlqEntry[]> {
+    interface DbDlqRow {
+      job_id: string;
+      queue: string;
+      entry: Uint8Array;
+      entered_at: number;
+    }
+    const rows = this.statements.get('loadDlq')!.all() as DbDlqRow[];
+    const result = new Map<string, DlqEntry[]>();
+
+    for (const row of rows) {
+      const entry = unpack<DlqEntry | null>(row.entry, null, `loadDlq:${row.job_id}`);
+      if (!entry?.job) continue;
+
+      // Reconstruct jobId type (MessagePack serializes it as string)
+      const reconstructedEntry: DlqEntry = {
+        ...entry,
+        job: {
+          ...entry.job,
+          id: jobId(String(entry.job.id)),
+          dependsOn: entry.job.dependsOn.map((id) => jobId(String(id))),
+          parentId: entry.job.parentId ? jobId(String(entry.job.parentId)) : null,
+          childrenIds: entry.job.childrenIds.map((id) => jobId(String(id))),
+        },
+      };
+
+      let queueEntries = result.get(row.queue);
+      if (!queueEntries) {
+        queueEntries = [];
+        result.set(row.queue, queueEntries);
+      }
+      queueEntries.push(reconstructedEntry);
+    }
+
+    storageLog.info('Loaded DLQ entries', { count: rows.length });
+    return result;
   }
 
   updateForRetry(job: Job): void {

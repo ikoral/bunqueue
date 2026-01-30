@@ -9,9 +9,17 @@ export type SharedManager = QueueManager;
 
 let instance: QueueManager | null = null;
 
+/** Get data path from environment */
+function getDataPath(): string | undefined {
+  return process.env.DATA_PATH ?? process.env.SQLITE_PATH;
+}
+
 /** Get shared QueueManager instance */
 export function getSharedManager(): QueueManager {
-  instance ??= new QueueManager();
+  if (!instance) {
+    const dataPath = getDataPath();
+    instance = new QueueManager({ dataPath });
+  }
   return instance;
 }
 

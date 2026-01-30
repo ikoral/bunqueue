@@ -261,6 +261,7 @@ export class QueueManager {
     return {
       shards: this.shards,
       jobIndex: this.jobIndex,
+      storage: this.storage,
     };
   }
 
@@ -379,15 +380,15 @@ export class QueueManager {
   // ============ DLQ Operations (delegated) ============
 
   getDlq(queue: string, count?: number): Job[] {
-    return dlqOps.getDlqJobs(queue, { shards: this.shards, jobIndex: this.jobIndex }, count);
+    return dlqOps.getDlqJobs(queue, this.getDlqContext(), count);
   }
 
   retryDlq(queue: string, jobId?: JobId): number {
-    return dlqOps.retryDlqJobs(queue, { shards: this.shards, jobIndex: this.jobIndex }, jobId);
+    return dlqOps.retryDlqJobs(queue, this.getDlqContext(), jobId);
   }
 
   purgeDlq(queue: string): number {
-    return dlqOps.purgeDlqJobs(queue, { shards: this.shards, jobIndex: this.jobIndex });
+    return dlqOps.purgeDlqJobs(queue, this.getDlqContext());
   }
 
   // ============ Rate Limiting ============
@@ -725,11 +726,15 @@ export class QueueManager {
       shard.releaseConcurrency(job.queue);
 
       // Add to DLQ with stalled reason
-      shard.addToDlq(job, FailureReason.Stalled, `Job stalled ${job.stallCount + 1} times`);
+      const entry = shard.addToDlq(
+        job,
+        FailureReason.Stalled,
+        `Job stalled ${job.stallCount + 1} times`
+      );
       this.jobIndex.set(job.id, { type: 'dlq', queueName: job.queue });
 
-      // Persist
-      this.storage?.markFailed(job, `Job stalled ${job.stallCount + 1} times`);
+      // Persist DLQ entry
+      this.storage?.saveDlqEntry(entry);
     } else {
       // Retry - increment stall count and re-queue
       incrementStallCount(job);
@@ -788,6 +793,8 @@ export class QueueManager {
 
   private recover(): void {
     if (!this.storage) return;
+
+    // Load pending jobs
     for (const job of this.storage.loadPendingJobs()) {
       const idx = shardIndex(job.queue);
       this.shards[idx].getQueue(job.queue).push(job);
@@ -795,6 +802,31 @@ export class QueueManager {
       // Register queue name in cache
       this.registerQueueName(job.queue);
     }
+
+    // Load DLQ entries
+    const dlqEntries = this.storage.loadDlq();
+    let dlqCount = 0;
+    for (const [queue, entries] of dlqEntries) {
+      const idx = shardIndex(queue);
+      const shard = this.shards[idx];
+      for (const entry of entries) {
+        // Add to shard's DLQ (directly set since we're loading)
+        let dlq = shard.dlq.get(queue);
+        if (!dlq) {
+          dlq = [];
+          shard.dlq.set(queue, dlq);
+        }
+        dlq.push(entry);
+        shard.incrementDlq();
+        dlqCount++;
+      }
+      this.registerQueueName(queue);
+    }
+    if (dlqCount > 0) {
+      queueLog.info('Loaded DLQ entries', { count: dlqCount });
+    }
+
+    // Load cron jobs
     this.cronScheduler.load(this.storage.loadCronJobs());
   }
 
