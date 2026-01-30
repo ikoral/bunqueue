@@ -353,10 +353,10 @@ readinessProbe:
 
 | Workload | Recommended RAM |
 |----------|-----------------|
-| Light (<1k jobs/day) | 128 MB |
+| Light (&lt;1k jobs/day) | 128 MB |
 | Medium (1k-10k jobs/day) | 256 MB |
 | Heavy (10k-100k jobs/day) | 512 MB |
-| Very Heavy (>100k jobs/day) | 1 GB+ |
+| Very Heavy (&gt;100k jobs/day) | 1 GB+ |
 
 ### Disk
 
@@ -437,10 +437,10 @@ bunqueue does **not** support horizontal scaling or clustering. It's a single-in
 
 | Scenario | Jobs/day | bunqueue? |
 |----------|----------|-----------|
-| Small SaaS | <10k | ✅ Perfect |
+| Small SaaS | &lt;10k | ✅ Perfect |
 | Medium app | 10k-100k | ✅ Fine |
 | Large app | 100k-1M | ⚠️ Test first |
-| Enterprise | >1M | ❌ Consider alternatives |
+| Enterprise | &gt;1M | ❌ Consider alternatives |
 
 ### When to use something else
 
@@ -548,10 +548,10 @@ scrape_configs:
 
 | Metric | Alert Threshold |
 |--------|-----------------|
-| `bunqueue_waiting_jobs` | > 1000 for 5 min |
-| `bunqueue_dlq_jobs` | > 10 |
+| `bunqueue_waiting_jobs` | &gt; 1000 for 5 min |
+| `bunqueue_dlq_jobs` | &gt; 10 |
 | `bunqueue_active_jobs` | 0 for 5 min (workers dead?) |
-| `bunqueue_job_duration_seconds` | p99 > 30s |
+| `bunqueue_job_duration_seconds` | p99 &gt; 30s |
 
 ## Example: Full Production Setup
 
