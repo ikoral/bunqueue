@@ -95,6 +95,7 @@ export default defineConfig({
             { label: 'Rate Limiting', link: '/guide/rate-limiting/' },
             { label: 'Webhooks', link: '/guide/webhooks/' },
             { label: 'Benchmarks', link: '/guide/benchmarks/' },
+            { label: 'bunqueue vs BullMQ', link: '/guide/comparison/' },
           ],
         },
         {

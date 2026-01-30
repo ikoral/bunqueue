@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-01-30T06:20:10.912Z",
+  "hardware": {
+    "cpu": "Apple M1 Max",
+    "memory": "32GB",
+    "os": "darwin 25.2.0",
+    "bunVersion": "1.3.8",
+    "nodeVersion": "v24.3.0"
+  },
+  "results": [
+    {
+      "library": "bunqueue",
+      "operation": "push",
+      "opsPerSec": 341362,
+      "avgLatencyMs": 0,
+      "p50Ms": 0,
+      "p95Ms": 0,
+      "p99Ms": 0.01,
+      "memoryMB": 12
+    },
+    {
+      "library": "bunqueue",
+      "operation": "bulk-push",
+      "opsPerSec": 1023376,
+      "avgLatencyMs": 0.09,
+      "p50Ms": 0.07,
+      "p95Ms": 0.12,
+      "p99Ms": 0.55,
+      "memoryMB": 0
+    },
+    {
+      "library": "bunqueue",
+      "operation": "process",
+      "opsPerSec": 131923,
+      "avgLatencyMs": 31.02,
+      "p50Ms": 31.88,
+      "p95Ms": 55.23,
+      "p99Ms": 56.8,
+      "memoryMB": -8
+    },
+    {
+      "library": "bullmq",
+      "operation": "push",
+      "opsPerSec": 9488,
+      "avgLatencyMs": 0.11,
+      "p50Ms": 0.07,
+      "p95Ms": 0.21,
+      "p99Ms": 0.54,
+      "memoryMB": 4
+    },
+    {
+      "library": "bullmq",
+      "operation": "bulk-push",
+      "opsPerSec": 36656,
+      "avgLatencyMs": 2.71,
+      "p50Ms": 2.43,
+      "p95Ms": 4.15,
+      "p99Ms": 6.77,
+      "memoryMB": 6
+    },
+    {
+      "library": "bullmq",
+      "operation": "process",
+      "opsPerSec": 15947,
+      "avgLatencyMs": 335.85,
+      "p50Ms": 323.27,
+      "p95Ms": 593.42,
+      "p99Ms": 614.49,
+      "memoryMB": 23
+    }
+  ]
+}
