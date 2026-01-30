@@ -18,7 +18,17 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/egeominotti/bunqueue/edit/main/docs/',
       },
-      customCss: ['./src/styles/custom.css'],
+      customCss: [
+        '@fontsource/inter/400.css',
+        '@fontsource/inter/500.css',
+        '@fontsource/inter/600.css',
+        '@fontsource/inter/700.css',
+        './src/styles/custom.css',
+      ],
+      defaultLocale: 'root',
+      locales: {
+        root: { label: 'English', lang: 'en' },
+      },
       sidebar: [
         {
           label: 'Getting Started',
