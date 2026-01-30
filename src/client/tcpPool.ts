@@ -72,7 +72,9 @@ export class TcpConnectionPool {
   }
 
   /** Send multiple commands in parallel across pool */
-  async sendParallel(commands: Array<Record<string, unknown>>): Promise<Array<Record<string, unknown>>> {
+  async sendParallel(
+    commands: Array<Record<string, unknown>>
+  ): Promise<Array<Record<string, unknown>>> {
     if (this.closed) {
       throw new Error('Connection pool is closed');
     }
@@ -116,9 +118,7 @@ let sharedPool: TcpConnectionPool | null = null;
 
 /** Get or create shared connection pool */
 export function getSharedPool(options?: PoolOptions): TcpConnectionPool {
-  if (!sharedPool) {
-    sharedPool = new TcpConnectionPool(options);
-  }
+  sharedPool ??= new TcpConnectionPool(options);
   return sharedPool;
 }
 

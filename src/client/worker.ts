@@ -179,9 +179,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
             ? await this.pullBatchEmbedded(batchSize)
             : await this.pullBatchTcp(batchSize);
 
-          if (jobs.length > 0) {
-            job = jobs.shift()!;
-            this.pendingJobs.push(...jobs); // Buffer remaining jobs
+          // Take first job, buffer the rest
+          const firstJob = jobs.shift();
+          if (firstJob) {
+            job = firstJob;
+            this.pendingJobs.push(...jobs);
           }
         }
       }
@@ -249,7 +251,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   /** Pull batch of jobs via TCP */
   private async pullBatchTcp(count: number): Promise<InternalJob[]> {
-    const response = await this.tcpClient!.send({
+    if (!this.tcpClient) return [];
+    const response = await this.tcpClient.send({
       cmd: count === 1 ? 'PULL' : 'PULLB',
       queue: this.name,
       timeout: 0,
@@ -272,24 +275,38 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   /** Parse job from TCP response */
   private parseJob(jobData: Record<string, unknown>): InternalJob {
+    const priority = jobData.priority as number | undefined;
+    const createdAt = jobData.createdAt as number | undefined;
+    const runAt = jobData.runAt as number | undefined;
+    const attempts = jobData.attempts as number | undefined;
+    const maxAttempts = jobData.maxAttempts as number | undefined;
+    const backoff = jobData.backoff as number | undefined;
+    const ttl = jobData.ttl as number | undefined;
+    const timeout = jobData.timeout as number | undefined;
+    const uniqueKey = jobData.uniqueKey as string | undefined;
+    const customId = jobData.customId as string | undefined;
+    const progress = jobData.progress as number | undefined;
+    const progressMessage = jobData.progressMessage as string | undefined;
+    const removeOnComplete = jobData.removeOnComplete as boolean | undefined;
+
     return {
       id: jobId(jobData.id as string),
       queue: this.name,
       data: jobData.data,
-      priority: (jobData.priority as number) ?? 0,
-      createdAt: (jobData.createdAt as number) ?? Date.now(),
-      runAt: (jobData.runAt as number) ?? Date.now(),
+      priority: priority ?? 0,
+      createdAt: createdAt ?? Date.now(),
+      runAt: runAt ?? Date.now(),
       startedAt: Date.now(),
       completedAt: null,
-      attempts: (jobData.attempts as number) ?? 0,
-      maxAttempts: (jobData.maxAttempts as number) ?? 3,
-      backoff: (jobData.backoff as number) ?? 1000,
-      ttl: (jobData.ttl as number) ?? null,
-      timeout: (jobData.timeout as number) ?? null,
-      uniqueKey: (jobData.uniqueKey as string) ?? null,
-      customId: (jobData.customId as string) ?? null,
-      progress: (jobData.progress as number) ?? 0,
-      progressMessage: (jobData.progressMessage as string) ?? null,
+      attempts: attempts ?? 0,
+      maxAttempts: maxAttempts ?? 3,
+      backoff: backoff ?? 1000,
+      ttl: ttl ?? null,
+      timeout: timeout ?? null,
+      uniqueKey: uniqueKey ?? null,
+      customId: customId ?? null,
+      progress: progress ?? 0,
+      progressMessage: progressMessage ?? null,
       dependsOn: [],
       parentId: null,
       childrenIds: [],
@@ -297,7 +314,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       tags: [],
       groupId: null,
       lifo: false,
-      removeOnComplete: (jobData.removeOnComplete as boolean) ?? false,
+      removeOnComplete: removeOnComplete ?? false,
       removeOnFail: false,
       stallCount: 0,
       stallTimeout: null,
@@ -312,15 +329,15 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       id,
       result,
       resolve: () => {},
-      reject: () => {}
+      reject: () => {},
     });
 
     // Flush if batch is full
     if (this.pendingAcks.length >= this.ackBatchSize) {
       void this.flushAcks();
-    } else if (!this.ackTimer) {
-      // Start timer for partial batch
-      this.ackTimer = setTimeout(() => {
+    } else {
+      // Start timer for partial batch (if not already running)
+      this.ackTimer ??= setTimeout(() => {
         this.ackTimer = null;
         void this.flushAcks();
       }, this.ackInterval);
@@ -344,16 +361,17 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         const manager = getSharedManager();
         const items = batch.map((a) => ({ id: jobId(a.id), result: a.result }));
         await manager.ackBatchWithResults(items);
-      } else {
+      } else if (this.tcpClient) {
         // TCP: use ACKB command
-        const response = await this.tcpClient!.send({
+        const response = await this.tcpClient.send({
           cmd: 'ACKB',
           ids: batch.map((a) => a.id),
           // Note: ACKB doesn't support individual results, just IDs
         });
 
         if (!response.ok) {
-          throw new Error((response.error as string) ?? 'Batch ACK failed');
+          const errMsg = response.error as string | undefined;
+          throw new Error(errMsg ?? 'Batch ACK failed');
         }
       }
 
@@ -386,8 +404,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         if (this.embedded) {
           const manager = getSharedManager();
           await manager.updateProgress(jobId(id), progress, message);
-        } else {
-          await this.tcpClient!.send({
+        } else if (this.tcpClient) {
+          await this.tcpClient.send({
             cmd: 'Progress',
             id,
             progress,
@@ -400,8 +418,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         if (this.embedded) {
           const manager = getSharedManager();
           manager.addLog(jobId(id), message);
-        } else {
-          await this.tcpClient!.send({
+        } else if (this.tcpClient) {
+          await this.tcpClient.send({
             cmd: 'AddLog',
             id,
             message,
@@ -436,16 +454,15 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         if (this.embedded) {
           const manager = getSharedManager();
           await manager.fail(internalJob.id, err.message);
-        } else {
-          await this.tcpClient!.send({
+        } else if (this.tcpClient) {
+          await this.tcpClient.send({
             cmd: 'FAIL',
             id: internalJob.id,
             error: err.message,
           });
         }
       } catch (failError) {
-        const wrappedError =
-          failError instanceof Error ? failError : new Error(String(failError));
+        const wrappedError = failError instanceof Error ? failError : new Error(String(failError));
         this.emit('error', Object.assign(wrappedError, { context: 'fail', jobId: jobIdStr }));
       }
 

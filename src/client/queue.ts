@@ -100,7 +100,11 @@ export class Queue<T = unknown> {
 
   /** Get TCP client (pool or single) */
   private get tcp(): { send: (cmd: Record<string, unknown>) => Promise<Record<string, unknown>> } {
-    return this.tcpPool ?? this.tcpClient!;
+    const client = this.tcpPool ?? this.tcpClient;
+    if (!client) {
+      throw new Error('No TCP client available');
+    }
+    return client;
   }
 
   /** Add a job to the queue */
@@ -129,7 +133,8 @@ export class Queue<T = unknown> {
     });
 
     if (!response.ok) {
-      throw new Error((response.error as string) ?? 'Failed to add job');
+      const errorMsg = response.error as string | undefined;
+      throw new Error(errorMsg ?? 'Failed to add job');
     }
 
     const jobId = response.id as string;
@@ -212,12 +217,13 @@ export class Queue<T = unknown> {
     });
 
     if (!response.ok) {
-      throw new Error((response.error as string) ?? 'Failed to add jobs');
+      const errorMsg = response.error as string | undefined;
+      throw new Error(errorMsg ?? 'Failed to add jobs');
     }
 
     const ids = response.ids as string[];
     return ids.map((id, i) => ({
-      id: String(id),
+      id,
       name: jobs[i].name,
       data: jobs[i].data,
       queueName: this.name,
@@ -282,14 +288,17 @@ export class Queue<T = unknown> {
     if (!response.ok || !response.job) return null;
     const jobData = response.job as Record<string, unknown>;
     const data = jobData.data as { name?: string } | null;
+    const attempts = jobData.attempts as number | undefined;
+    const createdAt = jobData.createdAt as number | undefined;
+    const progress = jobData.progress as number | undefined;
     return {
       id: String(jobData.id),
       name: data?.name ?? 'default',
       data: jobData.data as T,
       queueName: this.name,
-      attemptsMade: (jobData.attempts as number) ?? 0,
-      timestamp: (jobData.createdAt as number) ?? Date.now(),
-      progress: (jobData.progress as number) ?? 0,
+      attemptsMade: attempts ?? 0,
+      timestamp: createdAt ?? Date.now(),
+      progress: progress ?? 0,
       updateProgress: async () => {},
       log: async () => {},
     };
@@ -337,7 +346,7 @@ export class Queue<T = unknown> {
     if (!response.ok) {
       return { waiting: 0, active: 0, completed: 0, failed: 0 };
     }
-    const stats = response.stats as Record<string, number> | undefined;
+    const stats = response.stats as Record<string, number | undefined> | undefined;
     if (!stats) {
       return { waiting: 0, active: 0, completed: 0, failed: 0 };
     }
@@ -504,7 +513,7 @@ export class Queue<T = unknown> {
   }
 
   /** Close the queue */
-  async close(): Promise<void> {
+  close(): void {
     // Close pool if using pooled connections (not shared)
     if (this.tcpPool) {
       this.tcpPool.close();

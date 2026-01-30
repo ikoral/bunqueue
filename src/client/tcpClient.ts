@@ -102,6 +102,7 @@ export class TcpClient extends EventEmitter {
       this.processNextCommand();
     } catch (err) {
       this.connecting = false;
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- user can set to false
       if (this.options.autoReconnect && !this.closed) {
         this.scheduleReconnect();
       }
@@ -179,7 +180,7 @@ export class TcpClient extends EventEmitter {
                 }
               } catch (err) {
                 connectionResolved = true;
-                reject(err);
+                reject(err instanceof Error ? err : new Error(String(err)));
                 return;
               }
             }
@@ -272,15 +273,16 @@ export class TcpClient extends EventEmitter {
 
     this.emit('reconnecting', { attempt: this.reconnectAttempts, delay });
 
-    this.reconnectTimer = setTimeout(async () => {
+    this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      try {
-        await this.connect();
-        // Process queued commands after reconnection
-        this.processNextCommand();
-      } catch {
-        // connect() will schedule another reconnect if needed
-      }
+      this.connect()
+        .then(() => {
+          // Process queued commands after reconnection
+          this.processNextCommand();
+        })
+        .catch(() => {
+          // connect() will schedule another reconnect if needed
+        });
     }, delay);
   }
 
@@ -300,7 +302,9 @@ export class TcpClient extends EventEmitter {
       }, this.options.commandTimeout);
 
       this.currentCommand = { command, resolve, reject, timeout };
-      this.socket!.write(JSON.stringify(command) + '\n');
+      if (this.socket) {
+        this.socket.write(JSON.stringify(command) + '\n');
+      }
     });
   }
 
@@ -310,9 +314,10 @@ export class TcpClient extends EventEmitter {
       return;
     }
 
-    const next = this.pendingCommands.shift()!;
+    const next = this.pendingCommands.shift();
+    if (!next || !this.socket) return;
     this.currentCommand = next;
-    this.socket!.write(JSON.stringify(next.command) + '\n');
+    this.socket.write(JSON.stringify(next.command) + '\n');
   }
 
   /** Send command and wait for response */
@@ -393,9 +398,7 @@ let sharedClient: TcpClient | null = null;
 
 /** Get shared TCP client */
 export function getSharedTcpClient(options?: Partial<ConnectionOptions>): TcpClient {
-  if (!sharedClient) {
-    sharedClient = new TcpClient(options);
-  }
+  sharedClient ??= new TcpClient(options);
   return sharedClient;
 }
 
