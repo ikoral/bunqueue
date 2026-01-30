@@ -1,6 +1,6 @@
 {
   "name": "bunqueue",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "High-performance job queue server written in Bun. SQLite persistence, cron scheduling, priorities, retries, DLQ, webhooks. Minimal dependencies.",
   "type": "module",
   "main": "dist/main.js",
