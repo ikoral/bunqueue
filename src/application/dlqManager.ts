@@ -1,12 +1,15 @@
 /**
- * DLQ Manager
- * Dead Letter Queue operations
+ * Advanced DLQ Manager
+ * Dead Letter Queue operations with auto-retry, metadata, and lifecycle management
  */
 
 import type { Job, JobId } from '../domain/types/job';
 import type { JobLocation } from '../domain/types/queue';
 import type { Shard } from '../domain/queue/shard';
+import type { DlqEntry, DlqConfig, DlqFilter, DlqStats } from '../domain/types/dlq';
+import { FailureReason, scheduleNextRetry } from '../domain/types/dlq';
 import { shardIndex } from '../shared/hash';
+import { queueLog } from '../shared/logger';
 
 /** Context for DLQ operations */
 export interface DlqContext {
@@ -14,50 +17,207 @@ export interface DlqContext {
   jobIndex: Map<JobId, JobLocation>;
 }
 
-/** Get jobs from DLQ */
+/** Get jobs from DLQ (backward compatible) */
 export function getDlqJobs(queue: string, ctx: DlqContext, count?: number): Job[] {
   const idx = shardIndex(queue);
-  const jobs = ctx.shards[idx].getDlq(queue);
-  return count ? jobs.slice(0, count) : jobs;
+  return ctx.shards[idx].getDlq(queue, count);
 }
 
-/** Retry jobs from DLQ */
-export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): number {
+/** Get DLQ entries with full metadata */
+export function getDlqEntries(queue: string, ctx: DlqContext, filter?: DlqFilter): DlqEntry[] {
+  const idx = shardIndex(queue);
+  const shard = ctx.shards[idx];
+
+  if (filter) {
+    return shard.getDlqFiltered(queue, filter);
+  }
+  return shard.getDlqEntries(queue);
+}
+
+/** Get DLQ statistics */
+export function getDlqStats(queue: string, ctx: DlqContext): DlqStats {
+  const idx = shardIndex(queue);
+  const entries = ctx.shards[idx].getDlqEntries(queue);
+  const config = ctx.shards[idx].getDlqConfig(queue);
+  const now = Date.now();
+
+  const stats: DlqStats = {
+    total: entries.length,
+    byReason: {
+      [FailureReason.ExplicitFail]: 0,
+      [FailureReason.MaxAttemptsExceeded]: 0,
+      [FailureReason.Timeout]: 0,
+      [FailureReason.Stalled]: 0,
+      [FailureReason.TtlExpired]: 0,
+      [FailureReason.WorkerLost]: 0,
+      [FailureReason.Unknown]: 0,
+    },
+    byQueue: { [queue]: entries.length },
+    pendingRetry: 0,
+    expired: 0,
+    oldestEntry: null,
+    newestEntry: null,
+  };
+
+  for (const entry of entries) {
+    stats.byReason[entry.reason]++;
+
+    if (entry.nextRetryAt && entry.nextRetryAt <= now && entry.retryCount < config.maxAutoRetries) {
+      stats.pendingRetry++;
+    }
+
+    if (entry.expiresAt && entry.expiresAt <= now) {
+      stats.expired++;
+    }
+
+    if (stats.oldestEntry === null || entry.enteredAt < stats.oldestEntry) {
+      stats.oldestEntry = entry.enteredAt;
+    }
+    if (stats.newestEntry === null || entry.enteredAt > stats.newestEntry) {
+      stats.newestEntry = entry.enteredAt;
+    }
+  }
+
+  return stats;
+}
+
+/** Retry a single job from DLQ */
+export function retryDlqJob(queue: string, jobId: JobId, ctx: DlqContext): Job | null {
   const idx = shardIndex(queue);
   const shard = ctx.shards[idx];
   const now = Date.now();
 
+  const entry = shard.removeFromDlq(queue, jobId);
+  if (!entry) return null;
+
+  const job = entry.job;
+  job.attempts = 0;
+  job.runAt = now;
+  job.stallCount = 0;
+  job.lastHeartbeat = now;
+
+  shard.getQueue(queue).push(job);
+  const isDelayed = job.runAt > now;
+  shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
+  ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+
+  queueLog.info('Retried DLQ job', { jobId: String(jobId), queue });
+  return job;
+}
+
+/** Retry jobs from DLQ (backward compatible) */
+export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): number {
   if (jobId) {
-    // removeFromDlq already decrements dlq counter
-    const job = shard.removeFromDlq(queue, jobId);
-    if (job) {
-      job.attempts = 0;
-      job.runAt = now;
-      shard.getQueue(queue).push(job);
-      // Update running counters for O(1) stats and temporal index
-      const isDelayed = job.runAt > now;
-      shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
-      ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
-      return 1;
-    }
-    return 0;
+    return retryDlqJob(queue, jobId, ctx) ? 1 : 0;
   }
 
-  // Retry all - clearDlq already decrements dlq counter
-  const jobs = shard.getDlq(queue);
-  const count = jobs.length;
+  const idx = shardIndex(queue);
+  const shard = ctx.shards[idx];
+  const entries = shard.getDlqEntries(queue);
+  const count = entries.length;
+
+  // Clear all entries
   shard.clearDlq(queue);
 
-  for (const job of jobs) {
+  const now = Date.now();
+  for (const entry of entries) {
+    const job = entry.job;
     job.attempts = 0;
     job.runAt = now;
+    job.stallCount = 0;
+    job.lastHeartbeat = now;
+
     shard.getQueue(queue).push(job);
-    // Update running counters for O(1) stats and temporal index
     const isDelayed = job.runAt > now;
     shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
   }
 
+  queueLog.info('Retried all DLQ jobs', { queue, count });
+  return count;
+}
+
+/** Retry jobs by filter */
+export function retryDlqByFilter(queue: string, ctx: DlqContext, filter: DlqFilter): number {
+  const idx = shardIndex(queue);
+  const shard = ctx.shards[idx];
+  const entries = shard.getDlqFiltered(queue, filter);
+
+  let count = 0;
+  const now = Date.now();
+
+  for (const entry of entries) {
+    const removed = shard.removeFromDlq(queue, entry.job.id);
+    if (!removed) continue;
+
+    const job = entry.job;
+    job.attempts = 0;
+    job.runAt = now;
+    job.stallCount = 0;
+    job.lastHeartbeat = now;
+
+    shard.getQueue(queue).push(job);
+    const isDelayed = job.runAt > now;
+    shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
+    ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+    count++;
+  }
+
+  queueLog.info('Retried filtered DLQ jobs', { queue, count, filter: JSON.stringify(filter) });
+  return count;
+}
+
+/** Process auto-retry for a queue */
+export function processAutoRetry(queue: string, ctx: DlqContext): number {
+  const idx = shardIndex(queue);
+  const shard = ctx.shards[idx];
+  const config = shard.getDlqConfig(queue);
+
+  if (!config.autoRetry) return 0;
+
+  const now = Date.now();
+  const entries = shard.getAutoRetryEntries(queue, now);
+
+  let count = 0;
+  for (const entry of entries) {
+    // Update retry tracking
+    scheduleNextRetry(entry, config);
+
+    // Remove from DLQ
+    const removed = shard.removeFromDlq(queue, entry.job.id);
+    if (!removed) continue;
+
+    // Re-queue job
+    const job = entry.job;
+    job.attempts = 0;
+    job.runAt = now;
+    job.stallCount = 0;
+    job.lastHeartbeat = now;
+
+    shard.getQueue(queue).push(job);
+    const isDelayed = job.runAt > now;
+    shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
+    ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
+    count++;
+
+    queueLog.info('Auto-retried DLQ job', {
+      jobId: String(job.id),
+      queue,
+      retryCount: entry.retryCount,
+    });
+  }
+
+  return count;
+}
+
+/** Purge expired entries from DLQ */
+export function purgeExpiredDlq(queue: string, ctx: DlqContext): number {
+  const idx = shardIndex(queue);
+  const count = ctx.shards[idx].purgeExpired(queue);
+
+  if (count > 0) {
+    queueLog.info('Purged expired DLQ entries', { queue, count });
+  }
   return count;
 }
 
@@ -65,4 +225,17 @@ export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): num
 export function purgeDlqJobs(queue: string, ctx: DlqContext): number {
   const idx = shardIndex(queue);
   return ctx.shards[idx].clearDlq(queue);
+}
+
+/** Configure DLQ for a queue */
+export function configureDlq(queue: string, ctx: DlqContext, config: Partial<DlqConfig>): void {
+  const idx = shardIndex(queue);
+  ctx.shards[idx].setDlqConfig(queue, config);
+  queueLog.info('Updated DLQ config', { queue, config });
+}
+
+/** Get DLQ configuration */
+export function getDlqConfig(queue: string, ctx: DlqContext): DlqConfig {
+  const idx = shardIndex(queue);
+  return ctx.shards[idx].getDlqConfig(queue);
 }

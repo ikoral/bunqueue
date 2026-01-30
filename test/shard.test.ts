@@ -72,8 +72,9 @@ describe('Shard', () => {
     expect(dlqJobs.length).toBe(1);
     expect(dlqJobs[0].id).toBe(job.id);
 
+    // removeFromDlq now returns DlqEntry, not Job
     const removed = shard.removeFromDlq('emails', job.id);
-    expect(removed?.id).toBe(job.id);
+    expect(removed?.job.id).toBe(job.id);
     expect(shard.getDlqCount('emails')).toBe(0);
   });
 

@@ -5,6 +5,16 @@
 
 import type { Job, JobId } from '../types/job';
 import { type QueueState, createQueueState, RateLimiter, ConcurrencyLimiter } from '../types/queue';
+import type { DlqEntry, DlqConfig, DlqFilter } from '../types/dlq';
+import {
+  DEFAULT_DLQ_CONFIG,
+  FailureReason,
+  createDlqEntry,
+  isDlqEntryExpired,
+  canAutoRetry,
+} from '../types/dlq';
+import type { StallConfig } from '../types/stall';
+import { DEFAULT_STALL_CONFIG } from '../types/stall';
 import { IndexedPriorityQueue } from './priorityQueue';
 import { SkipList } from '../../shared/skipList';
 import { MinHeap } from '../../shared/minHeap';
@@ -31,8 +41,14 @@ export class Shard {
   /** Priority queues by queue name */
   readonly queues = new Map<string, IndexedPriorityQueue>();
 
-  /** Dead letter queue by queue name */
-  readonly dlq = new Map<string, Job[]>();
+  /** Dead letter queue by queue name - now with full metadata */
+  readonly dlq = new Map<string, DlqEntry[]>();
+
+  /** DLQ configuration per queue */
+  readonly dlqConfig = new Map<string, DlqConfig>();
+
+  /** Stall configuration per queue */
+  readonly stallConfig = new Map<string, StallConfig>();
 
   /** Running counters for O(1) stats - updated on every operation */
   private readonly stats: ShardStats = {
@@ -318,32 +334,132 @@ export class Shard {
 
   // ============ DLQ Operations ============
 
-  /** Add job to DLQ */
-  addToDlq(job: Job): void {
+  /** Get DLQ config for queue */
+  getDlqConfig(queue: string): DlqConfig {
+    return this.dlqConfig.get(queue) ?? DEFAULT_DLQ_CONFIG;
+  }
+
+  /** Set DLQ config for queue */
+  setDlqConfig(queue: string, config: Partial<DlqConfig>): void {
+    const current = this.getDlqConfig(queue);
+    this.dlqConfig.set(queue, { ...current, ...config });
+  }
+
+  /** Get stall config for queue */
+  getStallConfig(queue: string): StallConfig {
+    return this.stallConfig.get(queue) ?? DEFAULT_STALL_CONFIG;
+  }
+
+  /** Set stall config for queue */
+  setStallConfig(queue: string, config: Partial<StallConfig>): void {
+    const current = this.getStallConfig(queue);
+    this.stallConfig.set(queue, { ...current, ...config });
+  }
+
+  /** Add job to DLQ with full metadata */
+  addToDlq(
+    job: Job,
+    reason: FailureReason = FailureReason.Unknown,
+    error: string | null = null
+  ): DlqEntry {
     let dlq = this.dlq.get(job.queue);
     if (!dlq) {
       dlq = [];
       this.dlq.set(job.queue, dlq);
     }
-    dlq.push(job);
+
+    const config = this.getDlqConfig(job.queue);
+    const entry = createDlqEntry(job, reason, error, config);
+
+    // Enforce max entries
+    while (dlq.length >= config.maxEntries) {
+      dlq.shift(); // Remove oldest
+      this.decrementDlq();
+    }
+
+    dlq.push(entry);
     this.incrementDlq();
+    return entry;
   }
 
-  /** Get DLQ jobs */
+  /** Get DLQ entries (raw) */
+  getDlqEntries(queue: string): DlqEntry[] {
+    return this.dlq.get(queue) ?? [];
+  }
+
+  /** Get DLQ jobs (for backward compatibility) */
   getDlq(queue: string, count?: number): Job[] {
     const dlq = this.dlq.get(queue);
     if (!dlq) return [];
-    return count ? dlq.slice(0, count) : [...dlq];
+    const entries = count ? dlq.slice(0, count) : dlq;
+    return entries.map((e) => e.job);
   }
 
-  /** Remove job from DLQ */
-  removeFromDlq(queue: string, jobId: JobId): Job | null {
+  /** Get DLQ entries with filter */
+  getDlqFiltered(queue: string, filter: DlqFilter): DlqEntry[] {
+    const dlq = this.dlq.get(queue);
+    if (!dlq) return [];
+
+    const now = Date.now();
+    let result = dlq.filter((entry) => {
+      if (filter.reason && entry.reason !== filter.reason) return false;
+      if (filter.olderThan && entry.enteredAt >= filter.olderThan) return false;
+      if (filter.newerThan && entry.enteredAt <= filter.newerThan) return false;
+      if (filter.retriable && !canAutoRetry(entry, this.getDlqConfig(queue), now)) return false;
+      if (filter.expired && !isDlqEntryExpired(entry, now)) return false;
+      return true;
+    });
+
+    if (filter.offset) {
+      result = result.slice(filter.offset);
+    }
+    if (filter.limit) {
+      result = result.slice(0, filter.limit);
+    }
+
+    return result;
+  }
+
+  /** Remove entry from DLQ by job ID */
+  removeFromDlq(queue: string, jobId: JobId): DlqEntry | null {
     const dlq = this.dlq.get(queue);
     if (!dlq) return null;
-    const idx = dlq.findIndex((j) => j.id === jobId);
+    const idx = dlq.findIndex((e) => e.job.id === jobId);
     if (idx === -1) return null;
     this.decrementDlq();
     return dlq.splice(idx, 1)[0];
+  }
+
+  /** Get entries ready for auto-retry */
+  getAutoRetryEntries(queue: string, now: number = Date.now()): DlqEntry[] {
+    const dlq = this.dlq.get(queue);
+    if (!dlq) return [];
+    const config = this.getDlqConfig(queue);
+    return dlq.filter((entry) => canAutoRetry(entry, config, now));
+  }
+
+  /** Get expired entries for cleanup */
+  getExpiredEntries(queue: string, now: number = Date.now()): DlqEntry[] {
+    const dlq = this.dlq.get(queue);
+    if (!dlq) return [];
+    return dlq.filter((entry) => isDlqEntryExpired(entry, now));
+  }
+
+  /** Remove expired entries */
+  purgeExpired(queue: string, now: number = Date.now()): number {
+    const dlq = this.dlq.get(queue);
+    if (!dlq) return 0;
+
+    const before = dlq.length;
+    const remaining = dlq.filter((entry) => !isDlqEntryExpired(entry, now));
+
+    if (remaining.length < before) {
+      this.dlq.set(queue, remaining);
+      const removed = before - remaining.length;
+      this.decrementDlq(removed);
+      return removed;
+    }
+    return 0;
   }
 
   /** Clear DLQ for queue */

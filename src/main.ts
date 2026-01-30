@@ -91,7 +91,7 @@ ${cyan} / /_/ / /_/ / / / / /_/ / /_/ /  __/ /_/ /  __/  ${reset}
 ${cyan}/_____/\\__,_/_/ /_/\\___\\_\\__,_/\\___/\\__,_/\\___/   ${reset}
 ${dim}                                          v${VERSION}${reset}
 
-${bold}High-performance job queue server for Bun${reset}
+${bold}High-performance job queue server written in TypeScript${reset}
 
 ${dim}─────────────────────────────────────────────────${reset}
 

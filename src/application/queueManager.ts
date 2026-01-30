@@ -4,10 +4,15 @@
  */
 
 import type { Job, JobId, JobInput } from '../domain/types/job';
+import { calculateBackoff } from '../domain/types/job';
 import { queueLog } from '../shared/logger';
 import type { JobLocation, JobEvent } from '../domain/types/queue';
+import { EventType } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry } from '../domain/types/worker';
+import type { WebhookEvent } from '../domain/types/webhook';
+import { FailureReason } from '../domain/types/dlq';
+import { StallAction, getStallAction, incrementStallCount } from '../domain/types/stall';
 import { Shard } from '../domain/queue/shard';
 import { SqliteStorage } from '../infrastructure/persistence/sqlite';
 import { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
@@ -44,6 +49,8 @@ export interface QueueManagerConfig {
   cleanupIntervalMs?: number;
   jobTimeoutCheckMs?: number;
   dependencyCheckMs?: number;
+  stallCheckMs?: number;
+  dlqMaintenanceMs?: number;
 }
 
 const DEFAULT_CONFIG = {
@@ -55,6 +62,8 @@ const DEFAULT_CONFIG = {
   cleanupIntervalMs: 10_000,
   jobTimeoutCheckMs: 5_000,
   dependencyCheckMs: 1_000,
+  stallCheckMs: 5_000,
+  dlqMaintenanceMs: 60_000,
 };
 
 /**
@@ -104,6 +113,8 @@ export class QueueManager {
   // Background intervals
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private timeoutInterval: ReturnType<typeof setInterval> | null = null;
+  private stallCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private dlqMaintenanceInterval: ReturnType<typeof setInterval> | null = null;
 
   // Queue names cache for O(1) listQueues instead of O(32 * queues)
   private readonly queueNamesCache = new Set<string>();
@@ -243,6 +254,13 @@ export class QueueManager {
       completedJobs: this.completedJobs,
       jobResults: this.jobResults,
       customIdMap: this.customIdMap,
+    };
+  }
+
+  private getDlqContext(): dlqOps.DlqContext {
+    return {
+      shards: this.shards,
+      jobIndex: this.jobIndex,
     };
   }
 
@@ -616,6 +634,12 @@ export class QueueManager {
         queueLog.error('Dependency check failed', { error: String(err) });
       });
     }, this.config.dependencyCheckMs);
+    this.stallCheckInterval = setInterval(() => {
+      this.checkStalledJobs();
+    }, this.config.stallCheckMs);
+    this.dlqMaintenanceInterval = setInterval(() => {
+      this.performDlqMaintenance();
+    }, this.config.dlqMaintenanceMs);
     this.cronScheduler.start();
   }
 
@@ -631,6 +655,133 @@ export class QueueManager {
             });
           });
         }
+      }
+    }
+  }
+
+  /**
+   * Check for stalled jobs and handle them
+   * Stalled = active job with no heartbeat for too long
+   */
+  private checkStalledJobs(): void {
+    const now = Date.now();
+
+    for (let i = 0; i < SHARD_COUNT; i++) {
+      const procShard = this.processingShards[i];
+      const stalledJobs: Array<{ job: Job; action: StallAction }> = [];
+
+      for (const [_jobId, job] of procShard) {
+        const stallConfig = this.shards[shardIndex(job.queue)].getStallConfig(job.queue);
+        if (!stallConfig.enabled) continue;
+
+        const action = getStallAction(job, stallConfig, now);
+        if (action !== StallAction.Keep) {
+          stalledJobs.push({ job, action });
+        }
+      }
+
+      // Process stalled jobs
+      for (const { job, action } of stalledJobs) {
+        this.handleStalledJob(job, action).catch((err: unknown) => {
+          queueLog.error('Failed to handle stalled job', {
+            jobId: String(job.id),
+            error: String(err),
+          });
+        });
+      }
+    }
+  }
+
+  /**
+   * Handle a stalled job based on the action
+   */
+  private async handleStalledJob(job: Job, action: StallAction): Promise<void> {
+    const idx = shardIndex(job.queue);
+    const shard = this.shards[idx];
+    const procIdx = Number(BigInt(job.id.replace(/-/g, '').slice(0, 8)) & BigInt(SHARD_COUNT - 1));
+
+    // Emit stalled event
+    this.eventsManager.broadcast({
+      eventType: EventType.Stalled,
+      queue: job.queue,
+      jobId: job.id,
+      timestamp: Date.now(),
+      data: { stallCount: job.stallCount + 1, action },
+    });
+    void this.webhookManager.trigger('stalled' as WebhookEvent, String(job.id), job.queue, {
+      data: { stallCount: job.stallCount + 1, action },
+    });
+
+    if (action === StallAction.MoveToDlq) {
+      // Max stalls reached - move to DLQ
+      queueLog.warn('Job exceeded max stalls, moving to DLQ', {
+        jobId: String(job.id),
+        queue: job.queue,
+        stallCount: job.stallCount,
+      });
+
+      // Remove from processing
+      this.processingShards[procIdx].delete(job.id);
+      shard.releaseConcurrency(job.queue);
+
+      // Add to DLQ with stalled reason
+      shard.addToDlq(job, FailureReason.Stalled, `Job stalled ${job.stallCount + 1} times`);
+      this.jobIndex.set(job.id, { type: 'dlq', queueName: job.queue });
+
+      // Persist
+      this.storage?.markFailed(job, `Job stalled ${job.stallCount + 1} times`);
+    } else {
+      // Retry - increment stall count and re-queue
+      incrementStallCount(job);
+      job.attempts++;
+      job.startedAt = null;
+      job.runAt = Date.now() + calculateBackoff(job);
+      job.lastHeartbeat = Date.now();
+
+      queueLog.warn('Job stalled, retrying', {
+        jobId: String(job.id),
+        queue: job.queue,
+        stallCount: job.stallCount,
+        attempt: job.attempts,
+      });
+
+      // Remove from processing
+      this.processingShards[procIdx].delete(job.id);
+      shard.releaseConcurrency(job.queue);
+
+      // Re-queue
+      shard.getQueue(job.queue).push(job);
+      const isDelayed = job.runAt > Date.now();
+      shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
+      this.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+
+      // Persist
+      this.storage?.updateForRetry(job);
+    }
+  }
+
+  /**
+   * Perform DLQ maintenance: auto-retry and purge expired
+   */
+  private performDlqMaintenance(): void {
+    const ctx = this.getDlqContext();
+
+    // Process each queue
+    for (const queueName of this.queueNamesCache) {
+      try {
+        // Auto-retry eligible entries
+        const retried = dlqOps.processAutoRetry(queueName, ctx);
+        if (retried > 0) {
+          queueLog.info('DLQ auto-retry completed', { queue: queueName, retried });
+        }
+
+        // Purge expired entries
+        const purged = dlqOps.purgeExpiredDlq(queueName, ctx);
+        if (purged > 0) {
+          queueLog.info('DLQ purge completed', { queue: queueName, purged });
+        }
+      } catch (err) {
+        queueLog.error('DLQ maintenance failed', { queue: queueName, error: String(err) });
       }
     }
   }
@@ -751,6 +902,8 @@ export class QueueManager {
     if (this.cleanupInterval) clearInterval(this.cleanupInterval);
     if (this.timeoutInterval) clearInterval(this.timeoutInterval);
     if (this.depCheckInterval) clearInterval(this.depCheckInterval);
+    if (this.stallCheckInterval) clearInterval(this.stallCheckInterval);
+    if (this.dlqMaintenanceInterval) clearInterval(this.dlqMaintenanceInterval);
     this.storage?.close();
 
     // Clear in-memory collections
