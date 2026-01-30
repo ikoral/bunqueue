@@ -3,7 +3,7 @@
  * Manages multiple TCP connections for parallel operations
  */
 
-import { TcpClient, type ConnectionOptions } from './tcpClient';
+import { TcpClient, type ConnectionOptions, type ConnectionHealth } from './tcpClient';
 
 export interface PoolOptions extends Partial<ConnectionOptions> {
   /** Number of connections in pool (default: 4) */
@@ -34,6 +34,7 @@ export class TcpConnectionPool {
       commandTimeout: options.commandTimeout ?? 30000,
       autoReconnect: options.autoReconnect ?? true,
       pingInterval: options.pingInterval ?? 30000,
+      maxPingFailures: options.maxPingFailures ?? 3,
     };
 
     // Create pool of connections
@@ -49,6 +50,7 @@ export class TcpConnectionPool {
         commandTimeout: this.options.commandTimeout,
         autoReconnect: this.options.autoReconnect,
         pingInterval: this.options.pingInterval,
+        maxPingFailures: this.options.maxPingFailures,
       });
       this.clients.push(client);
     }
@@ -145,6 +147,39 @@ export class TcpConnectionPool {
   /** Check if pool is closed */
   isClosed(): boolean {
     return this.closed;
+  }
+
+  /** Get aggregated health metrics for the pool */
+  getHealth(): {
+    healthy: boolean;
+    connectedCount: number;
+    totalCount: number;
+    clients: ConnectionHealth[];
+    avgLatencyMs: number;
+    totalCommands: number;
+    totalErrors: number;
+  } {
+    const clientHealths = this.clients.map((c) => c.getHealth());
+    const connectedCount = clientHealths.filter((h) => h.state === 'connected').length;
+    const healthyCount = clientHealths.filter((h) => h.healthy).length;
+
+    const totalCommands = clientHealths.reduce((sum, h) => sum + h.totalCommands, 0);
+    const totalErrors = clientHealths.reduce((sum, h) => sum + h.totalErrors, 0);
+
+    // Average latency across connected clients
+    const latencies = clientHealths.filter((h) => h.avgLatencyMs > 0).map((h) => h.avgLatencyMs);
+    const avgLatency =
+      latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
+
+    return {
+      healthy: healthyCount > 0, // At least one healthy connection
+      connectedCount,
+      totalCount: this.clients.length,
+      clients: clientHealths,
+      avgLatencyMs: Math.round(avgLatency * 100) / 100,
+      totalCommands,
+      totalErrors,
+    };
   }
 }
 

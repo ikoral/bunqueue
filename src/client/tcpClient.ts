@@ -24,6 +24,30 @@ export interface ConnectionOptions {
   autoReconnect?: boolean;
   /** Health check ping interval in ms (default: 30000, 0 to disable) */
   pingInterval?: number;
+  /** Max consecutive ping failures before forcing reconnect (default: 3) */
+  maxPingFailures?: number;
+}
+
+/** Connection health metrics */
+export interface ConnectionHealth {
+  /** Whether connection is currently healthy */
+  healthy: boolean;
+  /** Current connection state */
+  state: 'connected' | 'connecting' | 'disconnected' | 'closed';
+  /** Timestamp of last successful command */
+  lastSuccessAt: number | null;
+  /** Timestamp of last error */
+  lastErrorAt: number | null;
+  /** Average latency of last 10 commands in ms */
+  avgLatencyMs: number;
+  /** Consecutive ping failures */
+  consecutivePingFailures: number;
+  /** Total commands sent */
+  totalCommands: number;
+  /** Total errors */
+  totalErrors: number;
+  /** Uptime since last connect in ms */
+  uptimeMs: number;
 }
 
 /** Default connection */
@@ -38,6 +62,7 @@ export const DEFAULT_CONNECTION: Required<ConnectionOptions> = {
   commandTimeout: 30000,
   autoReconnect: true,
   pingInterval: 30000, // 30s health check
+  maxPingFailures: 3, // Force reconnect after 3 failed pings
 };
 
 /** Pending command */
@@ -101,6 +126,16 @@ export class TcpClient extends EventEmitter {
   private pendingQueue: number[] = []; // FIFO queue of command IDs
   private currentCommand: PendingCommand | null = null;
   private commandIdCounter = 0;
+
+  // Health tracking
+  private consecutivePingFailures = 0;
+  private lastSuccessAt: number | null = null;
+  private lastErrorAt: number | null = null;
+  private connectedAt: number | null = null;
+  private totalCommands = 0;
+  private totalErrors = 0;
+  private readonly latencyHistory: number[] = []; // Last 10 latencies
+  private static readonly MAX_LATENCY_HISTORY = 10;
 
   constructor(options: Partial<ConnectionOptions> = {}) {
     super();
@@ -198,6 +233,8 @@ export class TcpClient extends EventEmitter {
             this.socket = socketData;
             this.connected = true;
             this.connecting = false;
+            this.connectedAt = Date.now();
+            this.consecutivePingFailures = 0;
 
             // Authenticate if token provided
             if (this.options.token) {
@@ -301,11 +338,87 @@ export class TcpClient extends EventEmitter {
   async ping(): Promise<boolean> {
     if (!this.connected) return false;
     try {
+      const start = Date.now();
       const response = await this.send({ cmd: 'Ping' });
-      return response.pong === true;
+      const success = response.pong === true;
+
+      if (success) {
+        this.consecutivePingFailures = 0;
+        this.recordLatency(Date.now() - start);
+        this.emit('health', { type: 'ping_success', latency: Date.now() - start });
+      } else {
+        this.handlePingFailure();
+      }
+
+      return success;
     } catch {
+      this.handlePingFailure();
       return false;
     }
+  }
+
+  /** Handle ping failure - force reconnect if too many failures */
+  private handlePingFailure(): void {
+    this.consecutivePingFailures++;
+    this.lastErrorAt = Date.now();
+    this.totalErrors++;
+
+    this.emit('health', {
+      type: 'ping_failed',
+      consecutiveFailures: this.consecutivePingFailures,
+    });
+
+    // Force reconnect if too many consecutive failures
+    if (this.consecutivePingFailures >= this.options.maxPingFailures) {
+      this.emit('health', { type: 'unhealthy', reason: 'max_ping_failures' });
+      this.forceReconnect();
+    }
+  }
+
+  /** Force reconnection */
+  private forceReconnect(): void {
+    if (this.closed) return;
+
+    // Close current connection
+    if (this.socket) {
+      this.socket.end();
+      this.socket = null;
+    }
+    this.connected = false;
+    this.stopPing();
+
+    // Trigger reconnect
+    if (this.options.autoReconnect) {
+      this.scheduleReconnect();
+    }
+  }
+
+  /** Record command latency for health metrics */
+  private recordLatency(latencyMs: number): void {
+    this.latencyHistory.push(latencyMs);
+    if (this.latencyHistory.length > TcpClient.MAX_LATENCY_HISTORY) {
+      this.latencyHistory.shift();
+    }
+  }
+
+  /** Get connection health metrics */
+  getHealth(): ConnectionHealth {
+    const avgLatency =
+      this.latencyHistory.length > 0
+        ? this.latencyHistory.reduce((a, b) => a + b, 0) / this.latencyHistory.length
+        : 0;
+
+    return {
+      healthy: this.connected && this.consecutivePingFailures < this.options.maxPingFailures,
+      state: this.getState(),
+      lastSuccessAt: this.lastSuccessAt,
+      lastErrorAt: this.lastErrorAt,
+      avgLatencyMs: Math.round(avgLatency * 100) / 100,
+      consecutivePingFailures: this.consecutivePingFailures,
+      totalCommands: this.totalCommands,
+      totalErrors: this.totalErrors,
+      uptimeMs: this.connectedAt ? Date.now() - this.connectedAt : 0,
+    };
   }
 
   /** Schedule reconnection with exponential backoff */
@@ -355,16 +468,39 @@ export class TcpClient extends EventEmitter {
       throw new Error('Not connected');
     }
 
+    const startTime = Date.now();
+    this.totalCommands++;
+
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         if (this.currentCommand?.command === command) {
           this.currentCommand = null;
+          this.lastErrorAt = Date.now();
+          this.totalErrors++;
           reject(new Error('Command timeout'));
           this.processNextCommand();
         }
       }, this.options.commandTimeout);
 
-      this.currentCommand = { id: 0, command, resolve, reject, timeout };
+      const wrappedResolve = (result: Record<string, unknown>) => {
+        this.lastSuccessAt = Date.now();
+        this.recordLatency(Date.now() - startTime);
+        resolve(result);
+      };
+
+      const wrappedReject = (err: Error) => {
+        this.lastErrorAt = Date.now();
+        this.totalErrors++;
+        reject(err);
+      };
+
+      this.currentCommand = {
+        id: 0,
+        command,
+        resolve: wrappedResolve,
+        reject: wrappedReject,
+        timeout,
+      };
       if (this.socket) {
         this.socket.write(JSON.stringify(command) + '\n');
       }
@@ -397,6 +533,9 @@ export class TcpClient extends EventEmitter {
     }
 
     // Otherwise queue the command
+    const startTime = Date.now();
+    this.totalCommands++;
+
     return new Promise((resolve, reject) => {
       const id = ++this.commandIdCounter;
 
@@ -409,11 +548,31 @@ export class TcpClient extends EventEmitter {
           if (queueIdx !== -1) {
             this.pendingQueue.splice(queueIdx, 1);
           }
+          this.lastErrorAt = Date.now();
+          this.totalErrors++;
           reject(new Error('Command timeout'));
         }
       }, this.options.commandTimeout);
 
-      this.pendingCommands.set(id, { id, command, resolve, reject, timeout });
+      const wrappedResolve = (result: Record<string, unknown>) => {
+        this.lastSuccessAt = Date.now();
+        this.recordLatency(Date.now() - startTime);
+        resolve(result);
+      };
+
+      const wrappedReject = (err: Error) => {
+        this.lastErrorAt = Date.now();
+        this.totalErrors++;
+        reject(err);
+      };
+
+      this.pendingCommands.set(id, {
+        id,
+        command,
+        resolve: wrappedResolve,
+        reject: wrappedReject,
+        timeout,
+      });
       this.pendingQueue.push(id);
 
       // Try to connect if not connected
