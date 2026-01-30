@@ -3,7 +3,6 @@ title: TCP Protocol
 description: Binary TCP protocol reference
 ---
 
-# TCP Protocol
 
 High-performance binary protocol on port 6789.
 

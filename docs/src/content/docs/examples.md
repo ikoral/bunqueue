@@ -3,7 +3,6 @@ title: Examples
 description: Real-world examples and patterns for bunqueue
 ---
 
-# Examples
 
 Practical examples for common use cases.
 

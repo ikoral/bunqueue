@@ -3,7 +3,6 @@ title: Quick Start
 description: Get up and running in 5 minutes
 ---
 
-# Quick Start
 
 This guide will get you up and running with bunqueue in 5 minutes.
 

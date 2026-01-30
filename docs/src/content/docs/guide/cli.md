@@ -3,7 +3,6 @@ title: CLI Commands
 description: Complete command-line interface reference with examples
 ---
 
-# CLI Commands
 
 bunqueue includes a powerful CLI for server management and job operations. The CLI works in two modes:
 

@@ -3,7 +3,6 @@ title: S3 Backup
 description: Automated backups to S3-compatible storage
 ---
 
-# S3 Backup
 
 Automated backups to any S3-compatible storage.
 

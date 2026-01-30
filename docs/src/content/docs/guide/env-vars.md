@@ -3,7 +3,6 @@ title: Environment Variables
 description: Complete reference for bunqueue environment variables
 ---
 
-# Environment Variables
 
 bunqueue can be configured through environment variables.
 

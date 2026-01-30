@@ -3,7 +3,6 @@ title: Worker
 description: Worker class API reference
 ---
 
-# Worker
 
 The `Worker` class processes jobs from a queue.
 

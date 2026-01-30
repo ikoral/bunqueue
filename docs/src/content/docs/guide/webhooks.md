@@ -3,7 +3,6 @@ title: Webhooks
 description: HTTP callbacks for job events with signature verification
 ---
 
-# Webhooks
 
 Receive HTTP callbacks when job events occur. Webhooks enable real-time notifications to external systems without polling.
 

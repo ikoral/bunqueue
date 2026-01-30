@@ -3,7 +3,6 @@ title: Benchmarks
 description: Performance benchmarks and comparisons
 ---
 
-# Benchmarks
 
 Comprehensive performance benchmarks comparing bunqueue with other job queue solutions.
 

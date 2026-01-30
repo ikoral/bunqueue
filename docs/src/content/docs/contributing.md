@@ -3,7 +3,6 @@ title: Contributing
 description: How to contribute to bunqueue
 ---
 
-# Contributing
 
 Thank you for your interest in contributing to bunqueue! This guide will help you get started.
 

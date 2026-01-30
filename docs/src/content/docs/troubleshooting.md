@@ -3,7 +3,6 @@ title: Troubleshooting
 description: Common issues and solutions
 ---
 
-# Troubleshooting
 
 Solutions to common issues when using bunqueue.
 

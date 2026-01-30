@@ -3,7 +3,6 @@ title: Queue
 description: Queue class API reference
 ---
 
-# Queue
 
 The `Queue` class is used to add and manage jobs.
 

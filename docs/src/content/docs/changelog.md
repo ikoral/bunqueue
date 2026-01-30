@@ -3,7 +3,6 @@ title: Changelog
 description: Release notes and version history
 ---
 
-# Changelog
 
 All notable changes to bunqueue are documented here.
 

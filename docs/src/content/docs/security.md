@@ -3,7 +3,6 @@ title: Security
 description: Security policy and best practices
 ---
 
-# Security
 
 bunqueue takes security seriously. This document outlines our security practices and how to report vulnerabilities.
 

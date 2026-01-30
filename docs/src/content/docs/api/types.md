@@ -3,7 +3,6 @@ title: TypeScript Types
 description: Complete TypeScript type definitions for bunqueue
 ---
 
-# TypeScript Types
 
 bunqueue is written in TypeScript and provides comprehensive type definitions.
 

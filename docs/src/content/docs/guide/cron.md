@@ -3,7 +3,6 @@ title: Cron Jobs
 description: Schedule recurring jobs
 ---
 
-# Cron Jobs
 
 Schedule jobs to run on a recurring basis using cron expressions or intervals.
 

@@ -3,7 +3,6 @@ title: Stall Detection
 description: Automatic recovery of unresponsive jobs
 ---
 
-# Stall Detection
 
 Stall detection automatically identifies and recovers jobs that become unresponsive during processing.
 

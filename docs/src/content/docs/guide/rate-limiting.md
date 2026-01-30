@@ -3,7 +3,6 @@ title: Rate Limiting
 description: Control job processing rates
 ---
 
-# Rate Limiting
 
 Control the rate at which jobs are processed.
 

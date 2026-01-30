@@ -3,7 +3,6 @@ title: HTTP API
 description: REST API reference
 ---
 
-# HTTP API
 
 The HTTP API is available on port 6790 by default.
 

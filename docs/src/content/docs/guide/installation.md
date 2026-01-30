@@ -3,7 +3,6 @@ title: Installation
 description: How to install bunqueue
 ---
 
-# Installation
 
 ## Requirements
 

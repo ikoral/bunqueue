@@ -3,7 +3,6 @@ title: Introduction
 description: What is bunqueue and why use it
 ---
 
-# Introduction
 
 **bunqueue** is a high-performance job queue written in TypeScript, designed specifically for the [Bun](https://bun.sh) runtime.
 

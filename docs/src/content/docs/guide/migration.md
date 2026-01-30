@@ -3,7 +3,6 @@ title: Migration from BullMQ
 description: Step-by-step guide to migrate from BullMQ to bunqueue
 ---
 
-# Migration from BullMQ
 
 This guide helps you migrate from BullMQ to bunqueue with minimal code changes.
 

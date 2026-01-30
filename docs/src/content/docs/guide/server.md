@@ -3,7 +3,6 @@ title: Server Mode
 description: Running bunqueue as a standalone server
 ---
 
-# Server Mode
 
 Run bunqueue as a standalone server with HTTP and TCP APIs.
 
