@@ -1,0 +1,8 @@
+# bunqueue Documentation
+# https://egeominotti.github.io/bunqueue
+
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://egeominotti.github.io/bunqueue/sitemap-index.xml
