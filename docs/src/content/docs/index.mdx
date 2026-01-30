@@ -32,16 +32,16 @@ import { Card, CardGrid, Tabs, TabItem, Badge, LinkCard } from '@astrojs/starlig
 ## Why bunqueue?
 
 <CardGrid>
-  <Card title="⚡ Blazing Fast" icon="rocket">
+  <Card title="Blazing Fast" icon="rocket">
     **10M+ jobs/hour** on a single machine. Built on Bun's native SQLite with WAL mode for maximum throughput.
   </Card>
-  <Card title="🔒 Zero Dependencies" icon="approve-check">
+  <Card title="Zero Dependencies" icon="approve-check-circle">
     No Redis, no external services. Just Bun and SQLite. Deploy anywhere in seconds.
   </Card>
-  <Card title="🛡️ Production Ready" icon="shield">
+  <Card title="Production Ready" icon="warning">
     Stall detection, dead letter queues, automatic retries, rate limiting, and S3 backups built-in.
   </Card>
-  <Card title="📦 BullMQ Compatible" icon="puzzle">
+  <Card title="BullMQ Compatible" icon="puzzle">
     Familiar API for easy migration. Drop-in replacement for most BullMQ use cases.
   </Card>
 </CardGrid>
@@ -114,13 +114,13 @@ Measured on Mac Studio M1 Max, 32GB RAM. Run `bun run bench` for your hardware.
   <Card title="50-150K ops/sec" icon="rocket">
     Push throughput with batch operations
   </Card>
-  <Card title="< 1ms p99" icon="seti:clock">
+  <Card title="&lt; 1ms p99" icon="stopwatch">
     Sub-millisecond latency
   </Card>
-  <Card title="~50MB base" icon="document">
+  <Card title="~50MB base" icon="laptop">
     Minimal memory footprint
   </Card>
-  <Card title="< 100ms" icon="star">
+  <Card title="&lt; 100ms" icon="seti:clock">
     Cold start time
   </Card>
 </CardGrid>
@@ -136,13 +136,13 @@ Measured on Mac Studio M1 Max, 32GB RAM. Run `bun run bench` for your hardware.
 ## Features
 
 <CardGrid>
-  <Card title="Priority Queues" icon="star">
+  <Card title="Priority Queues" icon="bars">
     Process high-priority jobs first with configurable priority levels.
   </Card>
-  <Card title="Delayed Jobs" icon="seti:clock">
+  <Card title="Delayed Jobs" icon="stopwatch">
     Schedule jobs to run at a specific time or after a delay.
   </Card>
-  <Card title="Retries & Backoff" icon="random">
+  <Card title="Retries & Backoff" icon="approve-check-circle">
     Automatic retries with exponential backoff on failure.
   </Card>
   <Card title="Rate Limiting" icon="setting">
@@ -151,16 +151,16 @@ Measured on Mac Studio M1 Max, 32GB RAM. Run `bun run bench` for your hardware.
   <Card title="Stall Detection" icon="warning">
     Automatic recovery of jobs that become unresponsive.
   </Card>
-  <Card title="Dead Letter Queue" icon="list-format">
+  <Card title="Dead Letter Queue" icon="error">
     Advanced DLQ with metadata, filtering, and auto-retry.
   </Card>
   <Card title="Cron Jobs" icon="seti:clock">
     Schedule recurring jobs with cron expressions or intervals.
   </Card>
-  <Card title="Parent-Child Flows" icon="seti:folder">
+  <Card title="Parent-Child Flows" icon="document">
     Create job hierarchies with dependencies.
   </Card>
-  <Card title="Progress Tracking" icon="up-caret">
+  <Card title="Progress Tracking" icon="rocket">
     Real-time progress updates and job logs.
   </Card>
   <Card title="Webhooks" icon="external">
@@ -169,7 +169,7 @@ Measured on Mac Studio M1 Max, 32GB RAM. Run `bun run bench` for your hardware.
   <Card title="S3 Backup" icon="cloud">
     Automated backups to any S3-compatible storage.
   </Card>
-  <Card title="Prometheus Metrics" icon="information">
+  <Card title="Prometheus Metrics" icon="laptop">
     Built-in metrics endpoint for monitoring.
   </Card>
 </CardGrid>
