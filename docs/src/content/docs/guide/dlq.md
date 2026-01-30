@@ -3,8 +3,6 @@ title: Dead Letter Queue
 description: Advanced DLQ with metadata, auto-retry, and lifecycle management
 ---
 
-# Dead Letter Queue (DLQ)
-
 The Dead Letter Queue stores failed jobs with full metadata for debugging and recovery.
 
 ## Why Jobs End Up in DLQ

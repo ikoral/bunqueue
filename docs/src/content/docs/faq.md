@@ -3,8 +3,6 @@ title: FAQ
 description: Frequently asked questions about bunqueue
 ---
 
-# Frequently Asked Questions
-
 ## General
 
 ### What is bunqueue?
