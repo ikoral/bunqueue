@@ -1,6 +1,6 @@
 {
   "name": "bunqueue",
-  "version": "1.6.8",
+  "version": "1.7.0",
   "description": "High-performance job queue server written in Bun. SQLite persistence, cron scheduling, priorities, retries, DLQ, webhooks. Minimal dependencies.",
   "type": "module",
   "main": "dist/main.js",
@@ -43,7 +43,7 @@
     "start": "bun run src/main.ts",
     "build": "bun build --compile --minify src/main.ts --outfile dist/bunqueue",
     "build:lib": "tsc -p tsconfig.build.json",
-    "test": "bun test",
+    "test": "BUNQUEUE_EMBEDDED=1 bun test",
     "bench": "bun run bench/throughput.ts && bun run bench/latency.ts",
     "bench:throughput": "bun run bench/throughput.ts",
     "bench:latency": "bun run bench/latency.ts",

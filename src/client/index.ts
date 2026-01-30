@@ -26,6 +26,8 @@ export { QueueEvents } from './events';
 export { QueueGroup } from './queueGroup';
 export { FlowProducer } from './flow';
 export { shutdownManager } from './manager';
+export { closeSharedTcpClient } from './tcpClient';
+export { TcpConnectionPool, getSharedPool, closeSharedPool } from './tcpPool';
 export type {
   Job,
   JobOptions,
@@ -38,6 +40,7 @@ export type {
   DlqStats,
   DlqFilter,
   FailureReason,
+  ConnectionOptions,
 } from './types';
 export type { FlowStep, FlowResult } from './flow';
 export type { SandboxedWorkerOptions } from './sandboxedWorker';

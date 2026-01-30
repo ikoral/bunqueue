@@ -12,7 +12,7 @@ export interface RateLimiterConfig {
 
 const DEFAULT_CONFIG: RateLimiterConfig = {
   windowMs: 60_000,
-  maxRequests: 1000,
+  maxRequests: Infinity,
   cleanupIntervalMs: 60_000,
 };
 

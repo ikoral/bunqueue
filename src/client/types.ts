@@ -44,9 +44,25 @@ export interface JobOptions {
   };
 }
 
+/** Connection options for TCP mode */
+export interface ConnectionOptions {
+  /** Server host (default: localhost) */
+  host?: string;
+  /** Server port (default: 6789) */
+  port?: number;
+  /** Auth token */
+  token?: string;
+  /** Connection pool size for parallel operations (default: 1, set >1 to enable pooling) */
+  poolSize?: number;
+}
+
 /** Queue options */
 export interface QueueOptions {
   defaultJobOptions?: JobOptions;
+  /** Connection options - if omitted, connects to localhost:6789 */
+  connection?: ConnectionOptions;
+  /** Use embedded mode (in-process SQLite) instead of TCP */
+  embedded?: boolean;
 }
 
 /** Worker options */
@@ -55,6 +71,12 @@ export interface WorkerOptions {
   autorun?: boolean;
   /** Heartbeat interval in ms (default: 10000) */
   heartbeatInterval?: number;
+  /** Connection options - if omitted, connects to localhost:6789 */
+  connection?: ConnectionOptions;
+  /** Use embedded mode (in-process SQLite) instead of TCP */
+  embedded?: boolean;
+  /** Batch size for pulling jobs (default: 10, max: 1000). Higher = fewer round-trips */
+  batchSize?: number;
 }
 
 /** Stall configuration for a queue */

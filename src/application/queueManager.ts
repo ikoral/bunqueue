@@ -20,7 +20,7 @@ import { WebhookManager } from './webhookManager';
 import { WorkerManager } from './workerManager';
 import { EventsManager } from './eventsManager';
 import { RWLock, withWriteLock } from '../shared/lock';
-import { shardIndex, SHARD_COUNT } from '../shared/hash';
+import { shardIndex, processingShardIndex, SHARD_COUNT } from '../shared/hash';
 import { pushJob, pushJobBatch, type PushContext } from './operations/push';
 import { pullJob, pullJobBatch, type PullContext } from './operations/pull';
 import {
@@ -699,7 +699,7 @@ export class QueueManager {
   private async handleStalledJob(job: Job, action: StallAction): Promise<void> {
     const idx = shardIndex(job.queue);
     const shard = this.shards[idx];
-    const procIdx = Number(BigInt(job.id.replace(/-/g, '').slice(0, 8)) & BigInt(SHARD_COUNT - 1));
+    const procIdx = processingShardIndex(String(job.id));
 
     // Emit stalled event
     this.eventsManager.broadcast({
