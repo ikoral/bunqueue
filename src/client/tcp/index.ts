@@ -1,0 +1,13 @@
+/**
+ * TCP Client Module
+ * Re-exports all TCP client components
+ */
+
+export type { ConnectionOptions, ConnectionHealth, PendingCommand, SocketWrapper } from './types';
+export { DEFAULT_CONNECTION } from './types';
+export { LineBuffer } from './lineBuffer';
+export { HealthTracker, type HealthConfig } from './health';
+export { ReconnectManager, type ReconnectConfig } from './reconnect';
+export { createConnection, CommandQueue } from './connection';
+export { TcpClient } from './client';
+export { getSharedTcpClient, closeSharedTcpClient } from './shared';

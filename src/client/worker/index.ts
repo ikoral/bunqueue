@@ -1,0 +1,11 @@
+/**
+ * Worker Module
+ * Re-exports all worker components
+ */
+
+export type { PendingAck, ExtendedWorkerOptions, TcpConnection } from './types';
+export { FORCE_EMBEDDED, WORKER_CONSTANTS } from './types';
+export { AckBatcher, type AckBatcherConfig } from './ackBatcher';
+export { parseJobFromResponse } from './jobParser';
+export { processJob, type ProcessorConfig } from './processor';
+export { Worker } from './worker';
