@@ -76,14 +76,20 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
     // SSE clients
     const sseMessage = `data: ${message}\n\n`;
-    for (const [, client] of sseClients) {
+    const disconnectedClients: string[] = [];
+    for (const [clientId, client] of sseClients) {
       if (!client.queueFilter || client.queueFilter === event.queue) {
         try {
           client.controller.enqueue(textEncoder.encode(sseMessage));
         } catch {
-          // Client disconnected, will be cleaned up
+          // Client disconnected, mark for removal
+          disconnectedClients.push(clientId);
         }
       }
+    }
+    // Remove disconnected clients
+    for (const clientId of disconnectedClients) {
+      sseClients.delete(clientId);
     }
   });
 

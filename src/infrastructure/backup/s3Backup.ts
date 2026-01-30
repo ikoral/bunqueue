@@ -65,6 +65,7 @@ export class S3BackupManager {
   private readonly config: S3BackupConfig;
   private readonly client: S3Client;
   private backupInterval: ReturnType<typeof setInterval> | null = null;
+  private initialBackupTimeout: ReturnType<typeof setTimeout> | null = null;
   private isBackupInProgress = false;
 
   constructor(config: Partial<S3BackupConfig> & { databasePath: string }) {
@@ -154,7 +155,8 @@ export class S3BackupManager {
     });
 
     // Run initial backup after 1 minute
-    setTimeout(() => {
+    this.initialBackupTimeout = setTimeout(() => {
+      this.initialBackupTimeout = null;
       this.backup().catch((err: unknown) => {
         backupLog.error('Initial backup failed', { error: String(err) });
       });
@@ -172,11 +174,15 @@ export class S3BackupManager {
    * Stop automated backup scheduler
    */
   stop(): void {
+    if (this.initialBackupTimeout) {
+      clearTimeout(this.initialBackupTimeout);
+      this.initialBackupTimeout = null;
+    }
     if (this.backupInterval) {
       clearInterval(this.backupInterval);
       this.backupInterval = null;
-      backupLog.info('S3 backup scheduler stopped');
     }
+    backupLog.info('S3 backup scheduler stopped');
   }
 
   /**

@@ -140,6 +140,10 @@ function startServer(): void {
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     serverLog.info(`Received ${signal}, shutting down...`);
+
+    // Stop stats interval immediately
+    clearInterval(statsInterval);
+
     tcpServer.stop();
     httpServer.stop();
 
@@ -182,11 +186,6 @@ function startServer(): void {
       workers: `${workerStats.active}/${workerStats.total}`,
     });
   }, 30_000);
-
-  // Ensure stats interval is cleaned up on shutdown
-  process.on('beforeExit', () => {
-    clearInterval(statsInterval);
-  });
 }
 
 // Enable JSON logging if requested

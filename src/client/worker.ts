@@ -25,6 +25,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private activeJobs = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly heartbeatTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
+  private consecutiveErrors = 0;
+  private static readonly MAX_BACKOFF_MS = 30_000;
+  private static readonly BASE_BACKOFF_MS = 100;
 
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
@@ -106,6 +109,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     try {
       const internalJob = await manager.pull(this.name, 0);
 
+      // Reset error count on successful pull
+      this.consecutiveErrors = 0;
+
       if (internalJob) {
         this.activeJobs++;
         void this.processJob(internalJob).finally(() => {
@@ -124,10 +130,26 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         }, 50);
       }
     } catch (err) {
-      this.emit('error', err);
+      this.consecutiveErrors++;
+
+      // Emit error with context
+      const error = err instanceof Error ? err : new Error(String(err));
+      const wrappedError = Object.assign(error, {
+        queue: this.name,
+        consecutiveErrors: this.consecutiveErrors,
+        context: 'pull',
+      });
+      this.emit('error', wrappedError);
+
+      // Exponential backoff: 100ms, 200ms, 400ms, ... up to 30s
+      const backoffMs = Math.min(
+        Worker.BASE_BACKOFF_MS * Math.pow(2, this.consecutiveErrors - 1),
+        Worker.MAX_BACKOFF_MS
+      );
+
       this.pollTimer = setTimeout(() => {
         this.poll();
-      }, 100);
+      }, backoffMs);
     }
   }
 
@@ -165,7 +187,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     } catch (error) {
       this.stopHeartbeat(jobIdStr);
       const err = error instanceof Error ? error : new Error(String(error));
-      await manager.fail(internalJob.id, err.message);
+
+      // Try to fail the job, but don't throw if that fails too
+      try {
+        await manager.fail(internalJob.id, err.message);
+      } catch (failError) {
+        // Emit error for fail operation failure
+        const wrappedError = failError instanceof Error ? failError : new Error(String(failError));
+        this.emit('error', Object.assign(wrappedError, { context: 'fail', jobId: jobIdStr }));
+      }
+
       (job as { failedReason?: string }).failedReason = err.message;
       this.emit('failed', job, err);
     }

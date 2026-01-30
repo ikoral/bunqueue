@@ -68,18 +68,33 @@ export class SqliteStorage {
 
     // Auto-flush timer
     this.writeBufferTimer = setInterval(() => {
-      this.flushWriteBuffer();
+      try {
+        this.flushWriteBuffer();
+      } catch {
+        // Error already logged in flushWriteBuffer, will retry on next interval
+      }
     }, flushInterval);
   }
 
-  /** Flush write buffer to disk */
-  flushWriteBuffer(): void {
-    if (this.writeBuffer.length === 0) return;
+  /** Flush write buffer to disk. Returns number of jobs flushed, or throws on error. */
+  flushWriteBuffer(): number {
+    if (this.writeBuffer.length === 0) return 0;
 
     const jobs = this.writeBuffer;
     this.writeBuffer = [];
 
-    this.insertJobsBatchInternal(jobs);
+    try {
+      this.insertJobsBatchInternal(jobs);
+      return jobs.length;
+    } catch (err) {
+      // Re-add jobs to buffer on failure so they're not lost
+      this.writeBuffer = jobs.concat(this.writeBuffer);
+      storageLog.error('Write buffer flush failed', {
+        jobCount: jobs.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
   }
 
   private migrate(): void {
@@ -425,7 +440,18 @@ export class SqliteStorage {
     }
 
     // Flush any remaining buffered writes
-    this.flushWriteBuffer();
+    try {
+      const flushed = this.flushWriteBuffer();
+      if (flushed > 0) {
+        storageLog.info('Flushed write buffer on close', { jobCount: flushed });
+      }
+    } catch (err) {
+      // Log error but continue with close - data may be lost
+      storageLog.error('Failed to flush write buffer on close', {
+        bufferedJobs: this.writeBuffer.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     this.db.close();
   }
