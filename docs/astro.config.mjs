@@ -98,6 +98,12 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Production',
+          items: [
+            { label: 'Deployment Guide', link: '/guide/deployment/' },
+          ],
+        },
+        {
           label: 'Integrations',
           items: [
             { label: 'Hono & Elysia', link: '/guide/integrations/' },
