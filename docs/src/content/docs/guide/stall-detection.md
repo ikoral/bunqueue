@@ -20,7 +20,9 @@ Stall detection automatically identifies and recovers jobs that become unrespons
 ## Configuration
 
 ```typescript
-const queue = new Queue('my-queue');
+import { Queue } from 'bunqueue/client';
+
+const queue = new Queue('my-queue', { embedded: true });
 
 queue.setStallConfig({
   enabled: true,         // Enable stall detection (default: true)
@@ -45,6 +47,7 @@ Workers automatically send heartbeats:
 
 ```typescript
 const worker = new Worker('queue', processor, {
+  embedded: true,
   heartbeatInterval: 10000, // Heartbeat every 10 seconds
 });
 ```
@@ -76,7 +79,7 @@ For jobs that take a long time, increase the stall interval:
 
 ```typescript
 // Queue for video processing (may take hours)
-const videoQueue = new Queue('video-processing');
+const videoQueue = new Queue('video-processing', { embedded: true });
 
 videoQueue.setStallConfig({
   stallInterval: 300000,  // 5 minutes
@@ -91,6 +94,7 @@ const worker = new Worker('video-processing', async (job) => {
     await job.updateProgress(chunk.progress); // This also acts as a heartbeat
   }
 }, {
+  embedded: true,
   heartbeatInterval: 30000, // Every 30 seconds
 });
 ```

@@ -8,11 +8,10 @@ head:
       content: https://egeominotti.github.io/bunqueue/og/queue.png
 ---
 
-
 The `Queue` class is used to add and manage jobs.
 
 :::caution[Important]
-The Queue **must** have `embedded: true` to use embedded mode.
+In embedded mode, the Queue **must** have `embedded: true`.
 Without it, the Queue defaults to TCP mode and tries to connect to a bunqueue server.
 :::
 
@@ -21,7 +20,7 @@ Without it, the Queue defaults to TCP mode and tries to connect to a bunqueue se
 ```typescript
 import { Queue } from 'bunqueue/client';
 
-// Basic queue - must have embedded: true
+// Basic queue - embedded mode
 const queue = new Queue('my-queue', { embedded: true });
 
 // Typed queue
@@ -31,13 +30,30 @@ interface TaskData {
 }
 const typedQueue = new Queue<TaskData>('tasks', { embedded: true });
 
-// With default options
+// With default job options
 const queue = new Queue('emails', {
   embedded: true,
   defaultJobOptions: {
     attempts: 3,
     backoff: 1000,
     removeOnComplete: true,
+  }
+});
+```
+
+### TCP Mode (Server)
+
+```typescript
+// Connect to bunqueue server (no embedded option)
+const queue = new Queue('tasks');
+
+// With custom connection
+const queue = new Queue('tasks', {
+  connection: {
+    host: '192.168.1.100',
+    port: 6789,
+    token: 'secret-token',
+    poolSize: 4,  // Connection pool size
   }
 });
 ```
@@ -51,14 +67,15 @@ const job = await queue.add('job-name', { key: 'value' });
 
 // With options
 const job = await queue.add('job-name', data, {
-  priority: 10,           // Higher priority = processed first
+  priority: 10,           // Higher = processed first
   delay: 5000,            // Delay in ms before processing
-  attempts: 5,            // Max retry attempts
-  backoff: 2000,          // Backoff between retries (ms)
-  timeout: 30000,         // Job timeout (ms)
-  jobId: 'custom-id',     // Custom job ID
+  attempts: 5,            // Max retry attempts (default: 3)
+  backoff: 2000,          // Backoff between retries (default: 1000ms)
+  timeout: 30000,         // Job timeout in ms
+  jobId: 'custom-id',     // Custom job ID for deduplication
   removeOnComplete: true, // Remove job data after completion
   removeOnFail: false,    // Keep failed jobs
+  stallTimeout: 60000,    // Per-job stall timeout (overrides queue config)
 });
 ```
 
@@ -91,7 +108,7 @@ await queue.add('daily-report', {}, {
   }
 });
 
-// Cron pattern (use server mode for cron)
+// Cron pattern (server mode)
 await queue.add('weekly', {}, {
   repeat: {
     pattern: '0 9 * * MON', // Every Monday at 9am
@@ -105,9 +122,22 @@ await queue.add('weekly', {}, {
 // Get job by ID
 const job = await queue.getJob('job-id');
 
-// Get job counts
+// Get job counts (sync - embedded mode only)
 const counts = queue.getJobCounts();
 // { waiting: 10, active: 2, completed: 100, failed: 3 }
+
+// Get job counts (async - works with TCP)
+const counts = await queue.getJobCountsAsync();
+
+// Get jobs with filtering (sync - embedded mode only)
+const jobs = queue.getJobs({ state: 'waiting', start: 0, end: 10 });
+
+// Get jobs with filtering (async - works with TCP)
+const jobs = await queue.getJobsAsync({ state: 'failed', start: 0, end: 50 });
+
+// Get counts grouped by priority
+const byPriority = queue.getCountsPerPriority();
+// { 0: 50, 10: 20, 100: 5 }
 ```
 
 ## Queue Control
@@ -127,17 +157,21 @@ queue.obliterate();
 
 // Remove a specific job
 queue.remove('job-id');
+
+// Close TCP connection (when done)
+queue.close();
 ```
 
 ## Stall Configuration
 
+Configure stall detection to recover unresponsive jobs.
+
 ```typescript
-// Configure stall detection
 queue.setStallConfig({
   enabled: true,
-  stallInterval: 30000,  // 30 seconds
+  stallInterval: 30000,  // 30 seconds without heartbeat = stalled
   maxStalls: 3,          // Move to DLQ after 3 stalls
-  gracePeriod: 5000,     // 5 second grace period
+  gracePeriod: 5000,     // 5 second grace period after job starts
 });
 
 // Get current config
@@ -155,6 +189,7 @@ queue.setDlqConfig({
   autoRetryInterval: 3600000,  // 1 hour
   maxAutoRetries: 3,
   maxAge: 604800000,           // 7 days
+  maxEntries: 10000,
 });
 
 // Get current DLQ config
@@ -173,7 +208,7 @@ const stats = queue.getDlqStats();
 
 // Retry from DLQ
 queue.retryDlq();           // Retry all
-queue.retryDlq('job-id');   // Retry specific
+queue.retryDlq('job-123');  // Retry specific
 
 // Retry by filter
 queue.retryDlqByFilter({ reason: 'timeout', limit: 10 });
@@ -184,9 +219,24 @@ queue.purgeDlq();
 
 See [Dead Letter Queue](/bunqueue/guide/dlq/) for more details.
 
+## Job Options Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `priority` | `number` | `0` | Higher = processed first |
+| `delay` | `number` | `0` | Delay in ms before processing |
+| `attempts` | `number` | `3` | Max retry attempts |
+| `backoff` | `number` | `1000` | Backoff base in ms (exponential) |
+| `timeout` | `number` | - | Processing timeout in ms |
+| `jobId` | `string` | - | Custom ID for deduplication |
+| `removeOnComplete` | `boolean` | `false` | Auto-delete after completion |
+| `removeOnFail` | `boolean` | `false` | Auto-delete after failure |
+| `stallTimeout` | `number` | - | Per-job stall timeout override |
+| `repeat` | `object` | - | Repeating job config |
+
 ## Closing
 
 ```typescript
-// Close the queue (no-op in embedded mode)
-await queue.close();
+// Close TCP connection (no-op in embedded mode)
+queue.close();
 ```

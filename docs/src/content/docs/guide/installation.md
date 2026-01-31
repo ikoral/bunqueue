@@ -33,15 +33,25 @@ bun run build
 ### Embedded Mode
 
 ```typescript
-import { Queue } from 'bunqueue/client';
+import { Queue, Worker } from 'bunqueue/client';
 
-const queue = new Queue('test');
-console.log('bunqueue is working!');
+// Both Queue and Worker must have embedded: true
+const queue = new Queue('test', { embedded: true });
+const worker = new Worker('test', async (job) => {
+  console.log('Processing:', job.data);
+  return { success: true };
+}, { embedded: true });
+
+await queue.add('hello', { message: 'bunqueue is working!' });
 ```
 
 ### Server Mode
 
 ```bash
+# Start server
+bunqueue start
+
+# Check version
 bunqueue --version
 ```
 

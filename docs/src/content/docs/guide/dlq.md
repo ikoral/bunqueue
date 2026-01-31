@@ -24,7 +24,9 @@ The Dead Letter Queue stores failed jobs with full metadata for debugging and re
 ## Configuration
 
 ```typescript
-const queue = new Queue('my-queue');
+import { Queue } from 'bunqueue/client';
+
+const queue = new Queue('my-queue', { embedded: true });
 
 queue.setDlqConfig({
   autoRetry: true,              // Enable automatic retry from DLQ
