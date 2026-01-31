@@ -56,7 +56,7 @@ import { Queue, Worker } from 'bunqueue/client';
 const app = new Hono();
 
 // Queue is embedded in the same process
-const emailQueue = new Queue('emails');
+const emailQueue = new Queue('emails', { embedded: true });
 
 app.post('/send-email', async (c) => {
   const { to, subject } = await c.req.json();
@@ -68,7 +68,7 @@ app.post('/send-email', async (c) => {
 new Worker('emails', async (job) => {
   await sendEmail(job.data);
   return { sent: true };
-}, { concurrency: 5 });
+}, { embedded: true, concurrency: 5 });
 
 export default app;
 ```
@@ -90,7 +90,7 @@ Run your API and workers as separate processes sharing the same database.
 // api.ts - Your web server
 import { Queue } from 'bunqueue/client';
 
-const queue = new Queue('tasks');
+const queue = new Queue('tasks', { embedded: true });
 
 app.post('/task', async (c) => {
   await queue.add('process', { data: '...' });
@@ -105,7 +105,7 @@ import { Worker } from 'bunqueue/client';
 new Worker('tasks', async (job) => {
   // Heavy processing here
   return { done: true };
-}, { concurrency: 10 });
+}, { embedded: true, concurrency: 10 });
 
 console.log('Worker started');
 ```
@@ -467,7 +467,7 @@ bunqueue exposes health endpoints:
 ```bash
 # HTTP health check (detailed)
 curl http://localhost:6790/health
-# {"ok":true,"status":"healthy","uptime":3600,"version":"1.0.4",
+# {"ok":true,"status":"healthy","uptime":3600,"version":"1.9.6",
 #  "queues":{"waiting":5,"active":2},"connections":{"ws":0,"sse":0},
 #  "memory":{"heapUsed":45,"heapTotal":64,"rss":128}}
 
@@ -551,19 +551,26 @@ bunqueue is I/O bound, not CPU bound. A single core handles most workloads.
    AUTH_TOKENS=token1,token2,token3
    ```
 
-3. **Configure resource limits**
+3. **Use `durable: true` for critical jobs**
+
+   ```typescript
+   // Payments, orders, and critical events
+   await queue.add('payment', data, { durable: true });
+   ```
+
+4. **Configure resource limits**
 
    Prevent runaway memory/CPU usage.
 
-4. **Set up monitoring**
+5. **Set up monitoring**
 
    Scrape `/prometheus` with Prometheus or similar.
 
-5. **Configure log aggregation**
+6. **Configure log aggregation**
 
    Send logs to a central system.
 
-6. **Test backup restoration**
+7. **Test backup restoration**
 
    ```bash
    # List backups first
@@ -572,7 +579,7 @@ bunqueue is I/O bound, not CPU bound. A single core handles most workloads.
    bunqueue backup restore backups/bunq-2026-01-30T12:00:00.db --force
    ```
 
-7. **Set up alerts**
+8. **Set up alerts**
 
    - DLQ count > threshold
    - Waiting jobs growing
@@ -739,6 +746,7 @@ S3_BACKUP_RETENTION=48
 import { Queue, Worker } from 'bunqueue/client';
 
 const queue = new Queue('production-tasks', {
+  embedded: true,
   defaultJobOptions: {
     attempts: 5,
     backoff: 5000,
@@ -751,6 +759,12 @@ queue.setDlqConfig({
   maxEntries: 1000,
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 });
+
+// Regular jobs (buffered writes - high throughput)
+await queue.add('send-email', { to: 'user@example.com' });
+
+// Critical jobs (immediate disk write - no data loss)
+await queue.add('process-payment', { orderId: '123' }, { durable: true });
 
 // Worker with production settings
 new Worker('production-tasks', async (job) => {
@@ -765,6 +779,7 @@ new Worker('production-tasks', async (job) => {
     throw error;
   }
 }, {
+  embedded: true,
   concurrency: 10,
   heartbeatInterval: 5000,
 });
