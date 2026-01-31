@@ -109,13 +109,19 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
       connections.delete(clientId);
       getRateLimiter().removeClient(clientId);
 
-      // Release all jobs owned by this client back to queue
-      const released = queueManager.releaseClientJobs(clientId);
-      if (released > 0) {
-        tcpLog.info('Client disconnected, released jobs', { clientId, released });
-      } else {
-        tcpLog.info('Client disconnected', { clientId });
-      }
+      // Release all jobs owned by this client back to queue (async with proper locking)
+      queueManager
+        .releaseClientJobs(clientId)
+        .then((released) => {
+          if (released > 0) {
+            tcpLog.info('Client disconnected, released jobs', { clientId, released });
+          } else {
+            tcpLog.info('Client disconnected', { clientId });
+          }
+        })
+        .catch((err: unknown) => {
+          tcpLog.error('Failed to release client jobs', { clientId, error: String(err) });
+        });
     },
 
     error(_socket: Socket<ConnectionData>, error: Error) {
