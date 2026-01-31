@@ -1106,7 +1106,7 @@ Complex workflows with dependencies using FlowProducer.
 ```typescript
 import { FlowProducer, Queue, Worker } from 'bunqueue/client';
 
-const flow = new FlowProducer({ embedded: true });
+const flow = new FlowProducer();
 
 // Order fulfillment workflow
 const orderFlow = await flow.add({

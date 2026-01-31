@@ -633,7 +633,7 @@ bunqueue stats
 bunqueue Server Statistics
 ==========================
 Uptime: 2d 5h 30m
-Version: 1.6.0
+Version: 1.9.6
 
 Queues: 5
 Total Jobs: 156,234
