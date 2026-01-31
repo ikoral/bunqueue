@@ -94,8 +94,9 @@ describe('Shard', () => {
     queue.push(makeJob(1, 'emails'));
     queue.push(makeJob(2, 'emails'));
 
-    const count = shard.drain('emails');
-    expect(count).toBe(2);
+    const result = shard.drain('emails');
+    expect(result.count).toBe(2);
+    expect(result.jobIds.length).toBe(2);
     expect(queue.isEmpty).toBe(true);
   });
 
