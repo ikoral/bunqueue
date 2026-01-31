@@ -107,6 +107,11 @@ export interface GetJobCountsCommand extends BaseCommand {
   readonly queue: string;
 }
 
+export interface GetCountsPerPriorityCommand extends BaseCommand {
+  readonly cmd: 'GetCountsPerPriority';
+  readonly queue: string;
+}
+
 export interface GetJobByCustomIdCommand extends BaseCommand {
   readonly cmd: 'GetJobByCustomId';
   readonly customId: string;
@@ -228,6 +233,12 @@ export interface PurgeDlqCommand extends BaseCommand {
   readonly queue: string;
 }
 
+export interface RetryCompletedCommand extends BaseCommand {
+  readonly cmd: 'RetryCompleted';
+  readonly queue: string;
+  readonly id?: string;
+}
+
 // ============ Rate Limiting Commands ============
 
 export interface RateLimitCommand extends BaseCommand {
@@ -263,6 +274,8 @@ export interface CronCommand extends BaseCommand {
   readonly repeatEvery?: number;
   readonly priority?: number;
   readonly maxLimit?: number;
+  /** IANA timezone for cron schedule (e.g., "Europe/Rome", "America/New_York") */
+  readonly timezone?: string;
 }
 
 export interface CronDeleteCommand extends BaseCommand {
@@ -383,6 +396,7 @@ export type Command =
   | GetResultCommand
   | GetJobsCommand
   | GetJobCountsCommand
+  | GetCountsPerPriorityCommand
   | GetJobByCustomIdCommand
   | CountCommand
   | GetProgressCommand
@@ -404,6 +418,7 @@ export type Command =
   | DlqCommand
   | RetryDlqCommand
   | PurgeDlqCommand
+  | RetryCompletedCommand
   | RateLimitCommand
   | SetConcurrencyCommand
   | RateLimitClearCommand

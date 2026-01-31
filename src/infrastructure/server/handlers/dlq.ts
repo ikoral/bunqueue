@@ -47,3 +47,18 @@ export function handlePurgeDlq(
     reqId,
   } as Response;
 }
+
+/** Handle RetryCompleted command - retry completed jobs */
+export function handleRetryCompleted(
+  cmd: Extract<Command, { cmd: 'RetryCompleted' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const jid = cmd.id ? jobId(cmd.id) : undefined;
+  const count = ctx.queueManager.retryCompleted(cmd.queue, jid);
+  return {
+    ok: true,
+    count,
+    reqId,
+  } as Response;
+}

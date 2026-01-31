@@ -96,7 +96,7 @@ export class CronScheduler {
 
     if (input.schedule) {
       const expanded = expandCronShortcut(input.schedule);
-      const error = validateCronExpression(expanded);
+      const error = validateCronExpression(expanded, input.timezone);
       if (error) {
         throw new Error(`Invalid cron expression: ${error}`);
       }
@@ -108,7 +108,7 @@ export class CronScheduler {
 
     if (input.schedule) {
       const expanded = expandCronShortcut(input.schedule);
-      nextRun = getNextCronRun(expanded, now);
+      nextRun = getNextCronRun(expanded, now, input.timezone);
     } else {
       nextRun = getNextIntervalRun(input.repeatEvery!, now);
     }
@@ -216,7 +216,7 @@ export class CronScheduler {
         // Calculate next run
         if (cron.schedule) {
           const expanded = expandCronShortcut(cron.schedule);
-          cron.nextRun = getNextCronRun(expanded, now);
+          cron.nextRun = getNextCronRun(expanded, now, cron.timezone ?? undefined);
         } else if (cron.repeatEvery) {
           cron.nextRun = getNextIntervalRun(cron.repeatEvery, now);
         }

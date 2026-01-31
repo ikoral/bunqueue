@@ -11,6 +11,11 @@ head:
 
 This guide will get you up and running with bunqueue in 5 minutes.
 
+:::caution[Important]
+Both `Queue` and `Worker` **must** have `embedded: true` to use embedded mode.
+Without it, they default to TCP mode and try to connect to a bunqueue server.
+:::
+
 ## Create a Queue
 
 ```typescript
@@ -23,7 +28,7 @@ interface EmailJob {
   body: string;
 }
 
-const emailQueue = new Queue<EmailJob>('emails');
+const emailQueue = new Queue<EmailJob>('emails', { embedded: true });
 ```
 
 ## Add Jobs
@@ -73,6 +78,7 @@ const worker = new Worker<EmailJob>('emails', async (job) => {
   // Return a result
   return { sent: true, timestamp: Date.now() };
 }, {
+  embedded: true,  // Required for embedded mode
   concurrency: 5,  // Process 5 jobs in parallel
 });
 ```
@@ -107,19 +113,19 @@ interface EmailJob {
   subject: string;
 }
 
-// Producer
-const queue = new Queue<EmailJob>('emails');
+// Producer - must have embedded: true
+const queue = new Queue<EmailJob>('emails', { embedded: true });
 
 // Add some jobs
 await queue.add('welcome', { to: 'new@user.com', subject: 'Welcome!' });
 await queue.add('newsletter', { to: 'sub@user.com', subject: 'News' });
 
-// Consumer
+// Consumer - must have embedded: true
 const worker = new Worker<EmailJob>('emails', async (job) => {
   console.log(`Sending ${job.data.subject} to ${job.data.to}`);
   await job.updateProgress(100);
   return { sent: true };
-}, { concurrency: 3 });
+}, { embedded: true, concurrency: 3 });
 
 worker.on('completed', (job) => {
   console.log(`✓ ${job.id}`);
@@ -132,6 +138,27 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 ```
+
+## With Persistence (SQLite)
+
+To persist jobs across restarts, set `DATA_PATH` before importing bunqueue:
+
+```typescript
+// Set DATA_PATH FIRST
+import { mkdirSync } from 'fs';
+mkdirSync('./data', { recursive: true });
+process.env.DATA_PATH = './data/bunqueue.db';
+
+// Then import
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue('tasks', { embedded: true });
+const worker = new Worker('tasks', processor, { embedded: true });
+```
+
+:::note
+Without `DATA_PATH`, bunqueue runs in-memory (no persistence).
+:::
 
 ## Next Steps
 

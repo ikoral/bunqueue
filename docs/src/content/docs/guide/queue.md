@@ -11,23 +11,29 @@ head:
 
 The `Queue` class is used to add and manage jobs.
 
+:::caution[Important]
+The Queue **must** have `embedded: true` to use embedded mode.
+Without it, the Queue defaults to TCP mode and tries to connect to a bunqueue server.
+:::
+
 ## Creating a Queue
 
 ```typescript
 import { Queue } from 'bunqueue/client';
 
-// Basic queue
-const queue = new Queue('my-queue');
+// Basic queue - must have embedded: true
+const queue = new Queue('my-queue', { embedded: true });
 
 // Typed queue
 interface TaskData {
   userId: number;
   action: string;
 }
-const typedQueue = new Queue<TaskData>('tasks');
+const typedQueue = new Queue<TaskData>('tasks', { embedded: true });
 
 // With default options
 const queue = new Queue('emails', {
+  embedded: true,
   defaultJobOptions: {
     attempts: 3,
     backoff: 1000,

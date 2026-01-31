@@ -11,6 +11,11 @@ head:
 
 The `Worker` class processes jobs from a queue.
 
+:::caution[Important]
+The Worker **must** have `embedded: true` to use embedded mode.
+Without it, the Worker defaults to TCP mode and tries to connect to a bunqueue server.
+:::
+
 ## Creating a Worker
 
 ```typescript
@@ -19,13 +24,14 @@ import { Worker } from 'bunqueue/client';
 const worker = new Worker('my-queue', async (job) => {
   // Process the job
   return { success: true };
-});
+}, { embedded: true });
 ```
 
 ## Options
 
 ```typescript
 const worker = new Worker('queue', processor, {
+  embedded: true,           // Required for embedded mode
   concurrency: 5,           // Process 5 jobs in parallel (default: 1)
   autorun: true,            // Start automatically (default: true)
   heartbeatInterval: 10000, // Heartbeat every 10s (default: 10000)

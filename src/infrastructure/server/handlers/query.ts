@@ -73,6 +73,16 @@ export function handleGetJobCounts(
   );
 }
 
+/** Handle GetCountsPerPriority command */
+export function handleGetCountsPerPriority(
+  cmd: Extract<Command, { cmd: 'GetCountsPerPriority' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const counts = ctx.queueManager.getCountsPerPriority(cmd.queue);
+  return { ok: true, queue: cmd.queue, counts, reqId } as Response;
+}
+
 /** Handle GetJobByCustomId command */
 export function handleGetJobByCustomId(
   cmd: Extract<Command, { cmd: 'GetJobByCustomId' }>,
@@ -83,13 +93,18 @@ export function handleGetJobByCustomId(
   return job ? resp.job(job, reqId) : resp.error('Job not found', reqId);
 }
 
-/** Handle GetJobs command - list jobs with filtering */
+/** Handle GetJobs command - list jobs with filtering and pagination */
 export function handleGetJobs(
-  _cmd: Extract<Command, { cmd: 'GetJobs' }>,
-  _ctx: HandlerContext,
+  cmd: Extract<Command, { cmd: 'GetJobs' }>,
+  ctx: HandlerContext,
   reqId?: string
 ): Response {
-  // Simplified implementation - full version would filter by state and paginate
-  // For now, return empty list - full implementation would iterate shards
-  return resp.jobs([], reqId);
+  const jobs = ctx.queueManager.getJobs(cmd.queue, {
+    state: cmd.state as 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | undefined,
+    start: cmd.offset ?? 0,
+    end: (cmd.offset ?? 0) + (cmd.limit ?? 100),
+    asc: true,
+  });
+
+  return resp.jobs(jobs, reqId);
 }

@@ -117,6 +117,15 @@ export interface JobInput {
     /** Current count (for internal use when re-queueing) */
     count?: number;
   };
+  /** Advanced deduplication options */
+  dedup?: {
+    /** TTL for unique key in milliseconds */
+    ttl?: number;
+    /** Extend TTL on duplicate instead of rejecting */
+    extend?: boolean;
+    /** Replace job data on duplicate instead of rejecting */
+    replace?: boolean;
+  };
 }
 
 /** Job creation defaults */

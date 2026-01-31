@@ -10,6 +10,8 @@ export interface CronJob {
   readonly schedule: string | null;
   readonly repeatEvery: number | null;
   readonly priority: number;
+  /** IANA timezone for cron schedule (e.g., "Europe/Rome", "America/New_York") */
+  readonly timezone: string | null;
   nextRun: number;
   executions: number;
   readonly maxLimit: number | null;
@@ -24,6 +26,8 @@ export interface CronJobInput {
   repeatEvery?: number;
   priority?: number;
   maxLimit?: number;
+  /** IANA timezone for cron schedule (e.g., "Europe/Rome", "America/New_York") */
+  timezone?: string;
 }
 
 /** Create a new cron job */
@@ -39,6 +43,7 @@ export function createCronJob(input: CronJobInput, nextRun: number): CronJob {
     schedule: input.schedule ?? null,
     repeatEvery: input.repeatEvery ?? null,
     priority: input.priority ?? 0,
+    timezone: input.timezone ?? null,
     nextRun,
     executions: 0,
     maxLimit: input.maxLimit ?? null,

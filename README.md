@@ -81,18 +81,20 @@ bunqueue works in **two modes**:
 
 No server required. BullMQ-compatible API.
 
+> **Important:** Both `Queue` and `Worker` must have `embedded: true` to use embedded mode.
+
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
 
-// Create queue
-const queue = new Queue('emails');
+// Create queue - MUST have embedded: true
+const queue = new Queue('emails', { embedded: true });
 
-// Create worker
+// Create worker - MUST have embedded: true
 const worker = new Worker('emails', async (job) => {
   console.log('Sending email to:', job.data.to);
   await job.updateProgress(50);
   return { sent: true };
-}, { concurrency: 5 });
+}, { embedded: true, concurrency: 5 });
 
 // Handle events
 worker.on('completed', (job, result) => {
@@ -106,6 +108,20 @@ worker.on('failed', (job, err) => {
 // Add jobs
 await queue.add('send-welcome', { to: 'user@example.com' });
 ```
+
+**With persistence (SQLite):**
+
+```typescript
+// Set DATA_PATH BEFORE importing bunqueue
+process.env.DATA_PATH = './data/bunqueue.db';
+
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue('emails', { embedded: true });
+const worker = new Worker('emails', processor, { embedded: true });
+```
+
+> Without `DATA_PATH`, bunqueue runs in-memory (no persistence across restarts).
 
 ### Server Mode
 
@@ -178,12 +194,15 @@ while (true) {
 
 ## Embedded Mode
 
+> **Important:** Both `Queue` and `Worker` require `embedded: true` to work in embedded mode.
+> Without it, they default to TCP mode and try to connect to a bunqueue server.
+
 ### Queue API
 
 ```typescript
 import { Queue } from 'bunqueue/client';
 
-const queue = new Queue('my-queue');
+const queue = new Queue('my-queue', { embedded: true });
 
 // Add job
 const job = await queue.add('task-name', { data: 'value' });
@@ -240,6 +259,7 @@ const worker = new Worker('my-queue', async (job) => {
   // Return result
   return { success: true };
 }, {
+  embedded: true,   // Required for embedded mode
   concurrency: 10,  // Parallel jobs
   autorun: true,    // Start automatically
 });
@@ -484,6 +504,54 @@ const worker = new Worker('pipeline', async (job) => {
 });
 ```
 
+### Multi-File Setup
+
+When using bunqueue across multiple files, ensure `DATA_PATH` is set before any imports:
+
+**main.ts:**
+```typescript
+// 1. Set DATA_PATH FIRST (before any bunqueue imports)
+import { mkdirSync } from 'fs';
+mkdirSync('./data', { recursive: true });
+process.env.DATA_PATH = './data/bunqueue.db';
+
+// 2. Then import your queue module
+import { recoverJobs, startWorker } from './queue';
+
+// 3. Start worker and recover jobs
+startWorker();
+await recoverJobs();
+```
+
+**queue.ts:**
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue<{ id: string }>('tasks', { embedded: true });
+
+const worker = new Worker<{ id: string }>('tasks', async (job) => {
+  console.log('Processing:', job.data.id);
+  return { success: true };
+}, {
+  embedded: true,
+  autorun: false,  // Don't start automatically
+});
+
+export function startWorker() {
+  worker.run();
+}
+
+export async function recoverJobs() {
+  // Your recovery logic
+  await queue.add('task', { id: 'job-1' });
+}
+
+export { queue, worker };
+```
+
+> **Why `autorun: false`?** When `autorun: true` (default), the Worker starts polling immediately on import.
+> If `DATA_PATH` isn't set yet, bunqueue uses in-memory mode. Use `autorun: false` and call `worker.run()` manually after setup.
+
 ### Shutdown
 
 ```typescript
@@ -492,6 +560,26 @@ import { shutdownManager } from 'bunqueue/client';
 // Cleanup when done
 shutdownManager();
 ```
+
+### Troubleshooting
+
+**"Command timeout" error:**
+```
+error: Command timeout
+      queue: "my-queue",
+      context: "pull"
+```
+This means your Worker is in TCP mode (trying to connect to a server) instead of embedded mode.
+**Fix:** Add `embedded: true` to your Worker options.
+
+**SQLite database not created:**
+- Set `DATA_PATH` environment variable before importing bunqueue
+- Ensure the directory exists: `mkdirSync('./data', { recursive: true })`
+- Without `DATA_PATH`, bunqueue runs in-memory (no persistence)
+
+**Jobs not being processed:**
+- Ensure both Queue AND Worker have `embedded: true`
+- Check Worker is running: use `worker.run()` if `autorun: false`
 
 ---
 

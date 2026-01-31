@@ -8,11 +8,12 @@ import { Cron } from 'croner';
 /**
  * Validate a cron expression
  * @param expression - Cron expression (5 or 6 fields)
+ * @param timezone - Optional IANA timezone (e.g., "Europe/Rome")
  * @returns null if valid, error message if invalid
  */
-export function validateCronExpression(expression: string): string | null {
+export function validateCronExpression(expression: string, timezone?: string): string | null {
   try {
-    new Cron(expression);
+    new Cron(expression, { timezone });
     return null;
   } catch (err) {
     return err instanceof Error ? err.message : 'Invalid cron expression';
@@ -23,10 +24,15 @@ export function validateCronExpression(expression: string): string | null {
  * Calculate next run time from a cron expression
  * @param expression - Cron expression
  * @param fromTime - Start time (default: now)
+ * @param timezone - Optional IANA timezone (e.g., "Europe/Rome", "America/New_York")
  * @returns Next run timestamp in milliseconds
  */
-export function getNextCronRun(expression: string, fromTime: number = Date.now()): number {
-  const cron = new Cron(expression);
+export function getNextCronRun(
+  expression: string,
+  fromTime: number = Date.now(),
+  timezone?: string
+): number {
+  const cron = new Cron(expression, { timezone });
   const nextDate = cron.nextRun(new Date(fromTime));
   return nextDate ? nextDate.getTime() : 0;
 }

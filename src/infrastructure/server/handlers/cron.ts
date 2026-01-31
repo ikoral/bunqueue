@@ -23,6 +23,7 @@ export function handleCron(
       repeatEvery: cmd.repeatEvery,
       priority: cmd.priority,
       maxLimit: cmd.maxLimit,
+      timezone: cmd.timezone,
     });
     return {
       ok: true,
@@ -32,6 +33,7 @@ export function handleCron(
         schedule: cron.schedule,
         repeatEvery: cron.repeatEvery,
         nextRun: cron.nextRun,
+        timezone: cron.timezone,
       },
       reqId,
     } as Response;
@@ -67,6 +69,7 @@ export function handleCronList(
       nextRun: c.nextRun,
       executions: c.executions,
       maxLimit: c.maxLimit,
+      timezone: c.timezone,
     })),
     reqId,
   } as Response;

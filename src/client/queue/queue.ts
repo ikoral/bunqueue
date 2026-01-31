@@ -219,6 +219,23 @@ export class Queue<T = unknown> {
     };
   }
 
+  /** Get job counts grouped by priority */
+  getCountsPerPriority(): Record<number, number> {
+    if (this.embedded) {
+      return getSharedManager().getCountsPerPriority(this.name);
+    }
+    // TCP mode returns empty for sync - use getCountsPerPriorityAsync
+    return {};
+  }
+
+  /** Get job counts grouped by priority (async, works with TCP) */
+  async getCountsPerPriorityAsync(): Promise<Record<number, number>> {
+    if (this.embedded) return this.getCountsPerPriority();
+    const response = await this.tcp.send({ cmd: 'GetCountsPerPriority', queue: this.name });
+    if (!response.ok) return {};
+    return (response as { counts?: Record<number, number> }).counts ?? {};
+  }
+
   pause(): void {
     if (this.embedded) getSharedManager().pause(this.name);
     else void this.tcp.send({ cmd: 'Pause', queue: this.name });
@@ -234,6 +251,79 @@ export class Queue<T = unknown> {
   obliterate(): void {
     if (this.embedded) getSharedManager().obliterate(this.name);
     else void this.tcp.send({ cmd: 'Obliterate', queue: this.name });
+  }
+
+  /** Get jobs with filtering and pagination */
+  getJobs(
+    options: {
+      state?: 'waiting' | 'delayed' | 'active' | 'completed' | 'failed';
+      start?: number;
+      end?: number;
+      asc?: boolean;
+    } = {}
+  ): Job<T>[] {
+    if (this.embedded) {
+      const jobs = getSharedManager().getJobs(this.name, options);
+      return jobs.map((job) => {
+        const jobData = job.data as { name?: string } | null;
+        return toPublicJob<T>(job, jobData?.name ?? 'default');
+      });
+    }
+    // Sync TCP version returns empty - use getJobsAsync
+    return [];
+  }
+
+  /** Get jobs with filtering and pagination (async, works with TCP) */
+  async getJobsAsync(
+    options: {
+      state?: 'waiting' | 'delayed' | 'active' | 'completed' | 'failed';
+      start?: number;
+      end?: number;
+      asc?: boolean;
+    } = {}
+  ): Promise<Job<T>[]> {
+    if (this.embedded) return this.getJobs(options);
+
+    const response = await this.tcp.send({
+      cmd: 'GetJobs',
+      queue: this.name,
+      state: options.state,
+      offset: options.start ?? 0,
+      limit: (options.end ?? 100) - (options.start ?? 0),
+    });
+
+    if (!response.ok || !Array.isArray((response as { jobs?: unknown[] }).jobs)) {
+      return [];
+    }
+
+    const jobs = (
+      response as {
+        jobs: Array<{
+          id: string;
+          queue: string;
+          data: unknown;
+          priority: number;
+          attempts: number;
+          createdAt: number;
+          progress?: number;
+        }>;
+      }
+    ).jobs;
+
+    return jobs.map((j) => {
+      const jobData = j.data as { name?: string } | null;
+      return {
+        id: j.id,
+        name: jobData?.name ?? 'default',
+        data: j.data as T,
+        queueName: j.queue,
+        attemptsMade: j.attempts,
+        timestamp: j.createdAt,
+        progress: j.progress ?? 0,
+        updateProgress: async () => {},
+        log: async () => {},
+      };
+    });
   }
 
   // Stall Detection
@@ -300,6 +390,24 @@ export class Queue<T = unknown> {
     if (this.embedded) return dlqOps.purgeDlqEmbedded(this.name);
     void this.tcp.send({ cmd: 'PurgeDlq', queue: this.name });
     return 0;
+  }
+
+  /** Retry a completed job by re-queueing it */
+  retryCompleted(id?: string): number {
+    if (this.embedded) {
+      const jid = id ? jobId(id) : undefined;
+      return getSharedManager().retryCompleted(this.name, jid);
+    }
+    void this.tcp.send({ cmd: 'RetryCompleted', queue: this.name, id });
+    return 0;
+  }
+
+  /** Retry a completed job (async, works with TCP) */
+  async retryCompletedAsync(id?: string): Promise<number> {
+    if (this.embedded) return this.retryCompleted(id);
+    const response = await this.tcp.send({ cmd: 'RetryCompleted', queue: this.name, id });
+    if (!response.ok) return 0;
+    return (response as { count?: number }).count ?? 0;
   }
 
   close(): void {

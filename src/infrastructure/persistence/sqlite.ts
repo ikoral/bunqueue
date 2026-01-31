@@ -363,7 +363,8 @@ export class SqliteStorage {
         cron.priority,
         cron.nextRun,
         cron.executions,
-        cron.maxLimit
+        cron.maxLimit,
+        cron.timezone
       );
   }
 
@@ -376,6 +377,7 @@ export class SqliteStorage {
       schedule: row.schedule,
       repeatEvery: row.repeat_every,
       priority: row.priority,
+      timezone: row.timezone,
       nextRun: row.next_run,
       executions: row.executions,
       maxLimit: row.max_limit,

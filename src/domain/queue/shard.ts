@@ -15,6 +15,8 @@ import {
 } from '../types/dlq';
 import type { StallConfig } from '../types/stall';
 import { DEFAULT_STALL_CONFIG } from '../types/stall';
+import type { UniqueKeyEntry } from '../types/deduplication';
+import { isUniqueKeyExpired, calculateExpiration } from '../types/deduplication';
 import { IndexedPriorityQueue } from './priorityQueue';
 import { SkipList } from '../../shared/skipList';
 import { MinHeap } from '../../shared/minHeap';
@@ -79,8 +81,8 @@ export class Shard {
     (a, b) => a.createdAt - b.createdAt
   );
 
-  /** Unique keys per queue for deduplication */
-  readonly uniqueKeys = new Map<string, Set<string>>();
+  /** Unique keys per queue for deduplication (with TTL support) */
+  readonly uniqueKeys = new Map<string, Map<string, UniqueKeyEntry>>();
 
   /** Jobs waiting for dependencies */
   readonly waitingDeps = new Map<JobId, Job>();
@@ -185,24 +187,81 @@ export class Shard {
 
   // ============ Unique Key Management ============
 
-  /** Check if unique key is available */
+  /** Check if unique key is available (not registered or expired) */
   isUniqueAvailable(queue: string, key: string): boolean {
-    return !this.uniqueKeys.get(queue)?.has(key);
+    const entry = this.uniqueKeys.get(queue)?.get(key);
+    if (!entry) return true;
+    // Check if expired
+    if (isUniqueKeyExpired(entry)) {
+      // Clean up expired entry
+      this.uniqueKeys.get(queue)?.delete(key);
+      return true;
+    }
+    return false;
   }
 
-  /** Register unique key */
+  /** Get unique key entry (returns null if not found or expired) */
+  getUniqueKeyEntry(queue: string, key: string): UniqueKeyEntry | null {
+    const entry = this.uniqueKeys.get(queue)?.get(key);
+    if (!entry) return null;
+    if (isUniqueKeyExpired(entry)) {
+      this.uniqueKeys.get(queue)?.delete(key);
+      return null;
+    }
+    return entry;
+  }
+
+  /** Register unique key (legacy method without TTL) */
   registerUniqueKey(queue: string, key: string): void {
+    this.registerUniqueKeyWithTtl(queue, key, undefined, undefined);
+  }
+
+  /** Register unique key with TTL support */
+  registerUniqueKeyWithTtl(
+    queue: string,
+    key: string,
+    jobId: JobId | undefined,
+    ttl?: number
+  ): void {
     let keys = this.uniqueKeys.get(queue);
     if (!keys) {
-      keys = new Set();
+      keys = new Map();
       this.uniqueKeys.set(queue, keys);
     }
-    keys.add(key);
+    const now = Date.now();
+    keys.set(key, {
+      jobId: jobId ?? ('' as JobId),
+      expiresAt: calculateExpiration(ttl, now),
+      registeredAt: now,
+    });
+  }
+
+  /** Extend TTL for an existing unique key */
+  extendUniqueKeyTtl(queue: string, key: string, ttl: number): boolean {
+    const entry = this.uniqueKeys.get(queue)?.get(key);
+    if (!entry) return false;
+    entry.expiresAt = calculateExpiration(ttl);
+    return true;
   }
 
   /** Release unique key */
   releaseUniqueKey(queue: string, key: string): void {
     this.uniqueKeys.get(queue)?.delete(key);
+  }
+
+  /** Clean expired unique keys (call periodically) */
+  cleanExpiredUniqueKeys(): number {
+    let cleaned = 0;
+    const now = Date.now();
+    for (const [_queue, keys] of this.uniqueKeys) {
+      for (const [key, entry] of keys) {
+        if (isUniqueKeyExpired(entry, now)) {
+          keys.delete(key);
+          cleaned++;
+        }
+      }
+    }
+    return cleaned;
   }
 
   // ============ FIFO Group Management ============
@@ -490,6 +549,19 @@ export class Shard {
     for (const name of this.dlq.keys()) names.add(name);
     for (const name of this.queueState.keys()) names.add(name);
     return Array.from(names);
+  }
+
+  /** Get job counts grouped by priority for a queue */
+  getCountsPerPriority(queue: string): Map<number, number> {
+    const q = this.queues.get(queue);
+    const counts = new Map<number, number>();
+    if (!q) return counts;
+
+    for (const job of q.values()) {
+      const count = counts.get(job.priority) ?? 0;
+      counts.set(job.priority, count + 1);
+    }
+    return counts;
   }
 
   // ============ Running Counters (O(1) Stats) ============

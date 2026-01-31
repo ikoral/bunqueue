@@ -66,19 +66,54 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
 
   // Insert into shard
   const idx = shardIndex(queue);
+  let returnedJob: Job | undefined;
+
   await withWriteLock(ctx.shardLocks[idx], () => {
     const shard = ctx.shards[idx];
 
-    // Check unique key
-    if (job.uniqueKey && !shard.isUniqueAvailable(queue, job.uniqueKey)) {
-      // Rollback custom ID
-      if (input.customId) {
-        ctx.customIdMap.delete(input.customId);
-      }
-      throw new Error('Duplicate unique_key');
-    }
+    // Check unique key with advanced deduplication support
     if (job.uniqueKey) {
-      shard.registerUniqueKey(queue, job.uniqueKey);
+      const existingEntry = shard.getUniqueKeyEntry(queue, job.uniqueKey);
+
+      if (existingEntry) {
+        // Duplicate detected - handle based on dedup options
+        const dedupOpts = input.dedup;
+
+        if (dedupOpts?.replace) {
+          // Replace strategy: remove old job, insert new
+          const existingJob = shard.getQueue(queue).find(existingEntry.jobId);
+          if (existingJob) {
+            shard.getQueue(queue).remove(existingEntry.jobId);
+            shard.decrementQueued(existingEntry.jobId);
+            ctx.jobIndex.delete(existingEntry.jobId);
+          }
+          // Register new key with TTL
+          shard.registerUniqueKeyWithTtl(queue, job.uniqueKey, job.id, dedupOpts?.ttl);
+        } else if (dedupOpts?.extend && dedupOpts?.ttl) {
+          // Extend strategy: reset TTL, return existing job
+          shard.extendUniqueKeyTtl(queue, job.uniqueKey, dedupOpts.ttl);
+          // Rollback custom ID since we're not inserting
+          if (input.customId) {
+            ctx.customIdMap.delete(input.customId);
+          }
+          // Set returnedJob to existing job
+          const existingJob = shard.getQueue(queue).find(existingEntry.jobId);
+          if (existingJob) {
+            returnedJob = existingJob;
+            return; // Exit early from withWriteLock
+          }
+          throw new Error('Duplicate unique_key (extended TTL)');
+        } else {
+          // Default: reject
+          if (input.customId) {
+            ctx.customIdMap.delete(input.customId);
+          }
+          throw new Error('Duplicate unique_key');
+        }
+      } else {
+        // No existing entry - register with TTL if specified
+        shard.registerUniqueKeyWithTtl(queue, job.uniqueKey, job.id, input.dedup?.ttl);
+      }
     }
 
     // Double-check dependencies inside lock to avoid race condition
@@ -102,6 +137,11 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
     // Index job
     ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
   });
+
+  // If extend strategy returned existing job, return it without persisting
+  if (returnedJob) {
+    return returnedJob;
+  }
 
   // Persist
   ctx.storage?.insertJob(job);

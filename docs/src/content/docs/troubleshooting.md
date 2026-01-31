@@ -85,6 +85,76 @@ sqlite3 ./data/queue.db "VACUUM;"
 sqlite3 ./data/queue.db "PRAGMA auto_vacuum = INCREMENTAL;"
 ```
 
+## Embedded Mode Issues
+
+### "Command timeout" error
+
+```
+error: Command timeout
+      queue: "my-queue",
+      context: "pull"
+```
+
+This error means your Worker is trying to connect to a TCP server instead of using embedded mode.
+
+**Solution:** Add `embedded: true` to **both** Queue and Worker:
+
+```typescript
+// WRONG - Worker defaults to TCP mode
+const queue = new Queue('tasks', { embedded: true });
+const worker = new Worker('tasks', processor); // Missing embedded: true!
+
+// CORRECT - Both have embedded: true
+const queue = new Queue('tasks', { embedded: true });
+const worker = new Worker('tasks', processor, { embedded: true });
+```
+
+### SQLite database not created
+
+The database is only created when `DATA_PATH` is set.
+
+**Solution:**
+
+```typescript
+// Set DATA_PATH BEFORE importing bunqueue
+import { mkdirSync } from 'fs';
+mkdirSync('./data', { recursive: true });
+process.env.DATA_PATH = './data/bunqueue.db';
+
+// Then import
+import { Queue, Worker } from 'bunqueue/client';
+```
+
+:::note
+Without `DATA_PATH`, bunqueue runs in-memory (no persistence across restarts).
+:::
+
+### Jobs not persisted across restarts
+
+If you're using multiple files, the Worker's `autorun: true` (default) can cause the QueueManager to initialize before `DATA_PATH` is set.
+
+**Solution:** Use `autorun: false` and start the worker manually:
+
+```typescript
+// queue.ts
+const worker = new Worker('tasks', processor, {
+  embedded: true,
+  autorun: false,  // Don't start automatically
+});
+
+export function startWorker() {
+  worker.run();
+}
+```
+
+```typescript
+// main.ts
+process.env.DATA_PATH = './data/bunqueue.db';
+
+import { startWorker } from './queue';
+startWorker();  // Start after DATA_PATH is set
+```
+
 ## Job Processing Issues
 
 ### Jobs stuck in "active" state
@@ -278,9 +348,10 @@ bunqueue backup restore <key> --force
 
 | Error | Cause | Solution |
 |-------|-------|----------|
+| `Command timeout` | Worker missing `embedded: true` | Add `embedded: true` to Worker options |
 | `SQLITE_BUSY` | Database locked | Use single writer |
 | `SQLITE_FULL` | Disk full | Free disk space |
-| `ECONNREFUSED` | Server not running | Start server |
+| `ECONNREFUSED` | Server not running | Start server or use embedded mode |
 | `ETIMEDOUT` | Network issue | Check connectivity |
 | `Job not found` | Already completed/removed | Check job lifecycle |
 

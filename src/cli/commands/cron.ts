@@ -33,6 +33,7 @@ function buildCronAdd(args: string[]): Record<string, unknown> {
       every: { type: 'string', short: 'e' },
       priority: { type: 'string', short: 'P' },
       'max-limit': { type: 'string' },
+      timezone: { type: 'string', short: 'z' },
     },
     allowPositionals: true,
     strict: false,
@@ -69,6 +70,8 @@ function buildCronAdd(args: string[]): Record<string, unknown> {
 
   const maxLimit = parseNumberArg(values['max-limit'] as string | undefined, 'max-limit');
   if (maxLimit !== undefined) cmd.maxLimit = maxLimit;
+
+  if (values.timezone) cmd.timezone = values.timezone;
 
   return cmd;
 }

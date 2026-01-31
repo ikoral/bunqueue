@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     priority INTEGER NOT NULL DEFAULT 0,
     next_run INTEGER NOT NULL,
     executions INTEGER NOT NULL DEFAULT 0,
-    max_limit INTEGER
+    max_limit INTEGER,
+    timezone TEXT
 );
 
 -- Queue state persistence (optional)

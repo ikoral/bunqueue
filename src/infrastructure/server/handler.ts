@@ -25,6 +25,7 @@ import {
   handleGetState,
   handleGetResult,
   handleGetJobCounts,
+  handleGetCountsPerPriority,
   handleGetJobByCustomId,
   handleGetJobs,
 } from './handlers/query';
@@ -40,7 +41,7 @@ import {
   handleMetrics,
 } from './handlers/management';
 
-import { handleDlq, handleRetryDlq, handlePurgeDlq } from './handlers/dlq';
+import { handleDlq, handleRetryDlq, handlePurgeDlq, handleRetryCompleted } from './handlers/dlq';
 
 import { handleCron, handleCronDelete, handleCronList } from './handlers/cron';
 
@@ -141,6 +142,8 @@ async function routeQueryCommand(
       return handleGetResult(cmd, ctx, reqId);
     case 'GetJobCounts':
       return handleGetJobCounts(cmd, ctx, reqId);
+    case 'GetCountsPerPriority':
+      return handleGetCountsPerPriority(cmd, ctx, reqId);
     case 'GetJobByCustomId':
       return handleGetJobByCustomId(cmd, ctx, reqId);
     case 'GetJobs':
@@ -220,6 +223,8 @@ function routeDlqCommand(cmd: Command, ctx: HandlerContext, reqId?: string): Res
       return handleRetryDlq(cmd, ctx, reqId);
     case 'PurgeDlq':
       return handlePurgeDlq(cmd, ctx, reqId);
+    case 'RetryCompleted':
+      return handleRetryCompleted(cmd, ctx, reqId);
     default:
       return null;
   }
