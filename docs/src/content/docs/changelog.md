@@ -10,6 +10,22 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [1.9.4] - 2026-01-31
+
+### Added
+- **5 BullMQ-Compatible Features**
+  - **Timezone support for cron jobs** - IANA timezones (e.g., "Europe/Rome", "America/New_York")
+  - **`getCountsPerPriority()`** - Get job counts grouped by priority level
+  - **`getJobs()` with pagination** - Filter by state, paginate with `start`/`end`, sort with `asc`
+  - **`retryCompleted()`** - Re-queue completed jobs for reprocessing
+  - **Advanced deduplication** - TTL-based unique keys with `extend` and `replace` strategies
+
+### Changed
+- **Documentation improvements**
+  - Clear comparison table for Embedded vs TCP Server modes
+  - Danger box warning about mixed modes causing "Command timeout" error
+  - Added "Connecting from Client" section to Server guide
+
 ## [1.9.3] - 2026-01-31
 
 ### Added
