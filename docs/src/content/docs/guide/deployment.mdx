@@ -48,6 +48,15 @@ bunqueue runs as a **single process**. There's no built-in clustering or multi-n
 
 Run bunqueue directly in your application process. No separate server needed.
 
+<Aside type="caution">
+Set `DATA_PATH` environment variable for SQLite persistence. Without it, data is stored **in-memory only** and will be lost on restart.
+</Aside>
+
+```bash
+# Enable SQLite persistence
+export DATA_PATH=./data/bunq.db
+```
+
 ```typescript
 // app.ts
 import { Queue, Worker } from 'bunqueue/client';
@@ -55,7 +64,7 @@ import { Queue, Worker } from 'bunqueue/client';
 // Your web framework (Hono, Elysia, Express...)
 const app = new Hono();
 
-// Queue is embedded in the same process
+// Queue is embedded in the same process (uses DATA_PATH for persistence)
 const emailQueue = new Queue('emails', { embedded: true });
 
 app.post('/send-email', async (c) => {
@@ -84,7 +93,12 @@ export default app;
 
 ### Option 2: Separate Worker Process
 
-Run your API and workers as separate processes sharing the same database.
+Run your API and workers as separate processes sharing the same SQLite database.
+
+```bash
+# Both processes MUST use the same DATA_PATH
+export DATA_PATH=./data/bunq.db
+```
 
 ```typescript
 // api.ts - Your web server
@@ -111,9 +125,9 @@ console.log('Worker started');
 ```
 
 ```bash
-# Run both
-bun run api.ts &
-bun run worker.ts &
+# Run both (same DATA_PATH)
+DATA_PATH=./data/bunq.db bun run api.ts &
+DATA_PATH=./data/bunq.db bun run worker.ts &
 ```
 
 **Pros:**
