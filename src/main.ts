@@ -136,17 +136,15 @@ function startServer(): void {
     dataPath: config.dataPath,
   });
 
-  // Start TCP server (Unix socket or TCP)
+  // Start TCP server
   const tcpServer = createTcpServer(queueManager, {
-    socketPath: config.tcpSocketPath,
     port: config.tcpPort,
     hostname: config.hostname,
     authTokens: config.authTokens,
   });
 
-  // Start HTTP server (Unix socket or TCP)
+  // Start HTTP server
   const httpServer = createHttpServer(queueManager, {
-    socketPath: config.httpSocketPath,
     port: config.httpPort,
     hostname: config.hostname,
     authTokens: config.authTokens,

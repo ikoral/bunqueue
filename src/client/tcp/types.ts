@@ -5,12 +5,10 @@
 
 /** Connection options */
 export interface ConnectionOptions {
-  /** Server host (ignored if socketPath is set) */
+  /** Server host */
   host: string;
-  /** Server port (ignored if socketPath is set) */
+  /** Server port */
   port: number;
-  /** Unix socket path (takes priority over host/port) */
-  socketPath?: string;
   /** Auth token */
   token?: string;
   /** Max reconnection attempts (default: Infinity) */
@@ -54,12 +52,9 @@ export interface ConnectionHealth {
 }
 
 /** Default connection options */
-export const DEFAULT_CONNECTION: Required<Omit<ConnectionOptions, 'socketPath'>> & {
-  socketPath: string | undefined;
-} = {
+export const DEFAULT_CONNECTION: Required<ConnectionOptions> = {
   host: 'localhost',
   port: 6789,
-  socketPath: undefined,
   token: '',
   maxReconnectAttempts: Infinity,
   reconnectDelay: 100,
@@ -82,13 +77,12 @@ export interface PendingCommand {
 
 /** Socket wrapper interface */
 export interface SocketWrapper {
-  write: (data: string) => void;
+  write: (data: Uint8Array | string) => void;
   end: () => void;
-  lineBuffer: LineBuffer;
+  frameParser: FrameParser;
 }
 
-/** Line buffer interface for protocol parsing */
-export interface LineBuffer {
-  addData(data: string): string[];
-  clear(): void;
+/** Frame parser interface for binary protocol parsing */
+export interface FrameParser {
+  addData(data: Uint8Array): Uint8Array[];
 }

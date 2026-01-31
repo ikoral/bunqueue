@@ -1,15 +1,15 @@
 /**
  * TCP Connection Handler
- * Manages low-level socket connection and data handling
+ * Manages low-level socket connection and data handling (msgpack binary protocol)
  */
 
 import type { Socket } from 'bun';
 import type { SocketWrapper, PendingCommand } from './types';
-import { LineBuffer } from './lineBuffer';
+import { FrameParser } from '../../infrastructure/server/protocol';
 
 /** Connection events */
 export interface ConnectionEvents {
-  onData: (line: string) => void;
+  onData: (frame: Uint8Array) => void;
   onClose: () => void;
   onError: (error: Error) => void;
 }
@@ -20,18 +20,16 @@ export interface ConnectionResult {
   cleanup: () => void;
 }
 
-/** Connection target - either Unix socket or TCP */
+/** Connection target */
 export interface ConnectionTarget {
-  /** Unix socket path (takes priority if set) */
-  socketPath?: string;
-  /** TCP host (used if socketPath not set) */
+  /** TCP host */
   host?: string;
-  /** TCP port (used if socketPath not set) */
+  /** TCP port */
   port?: number;
 }
 
 /**
- * Establish connection to server (Unix socket or TCP)
+ * Establish TCP connection to server
  */
 export async function createConnection(
   target: ConnectionTarget,
@@ -42,7 +40,7 @@ export async function createConnection(
     const socketData: SocketWrapper = {
       write: () => {},
       end: () => {},
-      lineBuffer: new LineBuffer(),
+      frameParser: new FrameParser(),
     };
 
     let connectionResolved = false;
@@ -55,19 +53,19 @@ export async function createConnection(
       }
     };
 
-    const targetDesc = target.socketPath ?? `${target.host}:${target.port}`;
+    const targetDesc = `${target.host}:${target.port}`;
 
     // Socket handlers
     const socketHandlers = {
       data(_sock: Socket<unknown>, data: Buffer) {
-        const lines = socketData.lineBuffer.addData(data.toString());
-        for (const line of lines) {
-          events.onData(line);
+        const frames = socketData.frameParser.addData(new Uint8Array(data));
+        for (const frame of frames) {
+          events.onData(frame);
         }
       },
       open(sock: Socket<unknown>) {
         cleanup();
-        socketData.write = (d: string) => sock.write(d);
+        socketData.write = (d: Uint8Array | string) => sock.write(d);
         socketData.end = () => sock.end();
         connectionResolved = true;
         resolve({ socket: socketData, cleanup });
@@ -97,19 +95,12 @@ export async function createConnection(
       },
     };
 
-    // Connect using Unix socket or TCP based on target
-    if (target.socketPath) {
-      void Bun.connect({
-        unix: target.socketPath,
-        socket: socketHandlers,
-      });
-    } else {
-      void Bun.connect({
-        hostname: target.host ?? 'localhost',
-        port: target.port ?? 6789,
-        socket: socketHandlers,
-      });
-    }
+    // Connect via TCP
+    void Bun.connect({
+      hostname: target.host ?? 'localhost',
+      port: target.port ?? 6789,
+      socket: socketHandlers,
+    });
 
     timeoutId = setTimeout(() => {
       if (!connectionResolved) {

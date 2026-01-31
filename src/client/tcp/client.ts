@@ -1,6 +1,6 @@
 /**
  * TCP Client
- * Production-ready TCP client with auto-reconnection
+ * Production-ready TCP client with auto-reconnection (msgpack binary protocol)
  */
 
 import { EventEmitter } from 'events';
@@ -9,20 +9,17 @@ import { DEFAULT_CONNECTION } from './types';
 import { HealthTracker } from './health';
 import { ReconnectManager } from './reconnect';
 import { createConnection, CommandQueue } from './connection';
+import { pack, unpack } from 'msgpackr';
+import { FrameParser } from '../../infrastructure/server/protocol';
 
 /**
  * TCP Client - manages connection to bunqueue server
  */
-/** Resolved options type - socketPath stays optional */
-type ResolvedOptions = Required<Omit<ConnectionOptions, 'socketPath'>> & {
-  socketPath: string | undefined;
-};
-
 export class TcpClient extends EventEmitter {
   private socket: SocketWrapper | null = null;
   private connected = false;
   private connecting = false;
-  private readonly options: ResolvedOptions;
+  private readonly options: Required<ConnectionOptions>;
   private readonly health: HealthTracker;
   private readonly reconnect: ReconnectManager;
   private readonly commands: CommandQueue;
@@ -94,14 +91,13 @@ export class TcpClient extends EventEmitter {
   private async doConnect(): Promise<void> {
     const { socket } = await createConnection(
       {
-        socketPath: this.options.socketPath,
         host: this.options.host,
         port: this.options.port,
       },
       this.options.connectTimeout,
       {
-        onData: (line) => {
-          this.handleData(line);
+        onData: (frame) => {
+          this.handleData(frame);
         },
         onClose: () => {
           this.handleClose();
@@ -127,12 +123,12 @@ export class TcpClient extends EventEmitter {
     }
   }
 
-  private handleData(line: string): void {
+  private handleData(frame: Uint8Array): void {
     const current = this.commands.getCurrentCommand();
     if (!current) return;
 
     try {
-      const response = JSON.parse(line) as Record<string, unknown>;
+      const response = unpack(frame) as Record<string, unknown>;
       clearTimeout(current.timeout);
       current.resolve(response);
       this.commands.setCurrentCommand(null);
@@ -239,7 +235,7 @@ export class TcpClient extends EventEmitter {
         timeout,
       });
 
-      this.socket?.write(JSON.stringify(command) + '\n');
+      this.socket?.write(FrameParser.frame(pack(command)));
     });
   }
 
@@ -250,7 +246,7 @@ export class TcpClient extends EventEmitter {
     if (!next || !this.socket) return;
 
     this.commands.setCurrentCommand(next);
-    this.socket.write(JSON.stringify(next.command) + '\n');
+    this.socket.write(FrameParser.frame(pack(next.command)));
   }
 
   /** Send command and wait for response */

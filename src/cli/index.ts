@@ -14,8 +14,6 @@ import { VERSION } from '../shared/version';
 interface GlobalOptions {
   host: string;
   port: number;
-  /** Unix socket path (takes priority over host/port) */
-  socketPath?: string;
   token?: string;
   json: boolean;
   help: boolean;
@@ -29,7 +27,6 @@ function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] }
   // Extract global options manually to preserve subcommand flags
   let host = 'localhost';
   let port = 6789;
-  let socketPath: string | undefined;
   let token: string | undefined;
   let json = false;
   let help = false;
@@ -45,8 +42,6 @@ function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] }
       host = allArgs[++i] ?? 'localhost';
     } else if (arg === '--port' || arg === '-p') {
       port = parseInt(allArgs[++i] ?? '6789', 10);
-    } else if (arg === '--socket' || arg === '-S') {
-      socketPath = allArgs[++i];
     } else if (arg === '--token' || arg === '-t') {
       token = allArgs[++i];
     } else if (arg === '--json') {
@@ -59,8 +54,6 @@ function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] }
       host = arg.slice(7);
     } else if (arg.startsWith('--port=')) {
       port = parseInt(arg.slice(7), 10);
-    } else if (arg.startsWith('--socket=')) {
-      socketPath = arg.slice(9);
     } else if (arg.startsWith('--token=')) {
       token = arg.slice(8);
     } else {
@@ -71,7 +64,7 @@ function parseGlobalOptions(): { options: GlobalOptions; commandArgs: string[] }
   }
 
   return {
-    options: { host, port, socketPath, token, json, help, version },
+    options: { host, port, token, json, help, version },
     commandArgs,
   };
 }
@@ -138,7 +131,6 @@ export async function main(): Promise<void> {
     await executeCommand(command, commandArgs.slice(1), {
       host: options.host,
       port: options.port,
-      socketPath: options.socketPath,
       token: options.token,
       json: options.json,
     });

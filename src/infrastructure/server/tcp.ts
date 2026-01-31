@@ -1,25 +1,25 @@
 /**
  * TCP Server
- * Handles TCP connections with JSON line protocol
+ * Handles TCP connections with msgpack binary protocol
  */
 
-import type { Socket, TCPSocketListener, UnixSocketListener } from 'bun';
+import type { Socket, TCPSocketListener } from 'bun';
 import type { QueueManager } from '../../application/queueManager';
 import type { Response } from '../../domain/types/response';
+import type { Command } from '../../domain/types/command';
 import { handleCommand, type HandlerContext } from './handler';
-import { LineBuffer, parseCommand, createConnectionState, type ConnectionState } from './protocol';
+import { FrameParser, createConnectionState, type ConnectionState } from './protocol';
 import { uuid } from '../../shared/hash';
 import { tcpLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
+import { pack, unpack } from 'msgpackr';
 
 /** TCP Server configuration */
 export interface TcpServerConfig {
-  /** TCP port (ignored if socketPath is set) */
+  /** TCP port */
   port?: number;
-  /** Hostname to bind (ignored if socketPath is set) */
+  /** Hostname to bind */
   hostname?: string;
-  /** Unix socket path (takes priority over port/hostname) */
-  socketPath?: string;
   /** Auth tokens for authentication */
   authTokens?: string[];
 }
@@ -27,24 +27,18 @@ export interface TcpServerConfig {
 /** Per-connection data */
 interface ConnectionData {
   state: ConnectionState;
-  buffer: LineBuffer;
+  frameParser: FrameParser;
   ctx: HandlerContext;
 }
 
-/** Reusable TextDecoder - avoid allocation per message */
-const textDecoder = new TextDecoder();
-
-/** Pre-allocated newline buffer for efficient writes */
-const NEWLINE = '\n';
-
-/** Serialize response with newline - avoids string concat per message */
-function serializeResponseLine(response: Response): string {
-  return JSON.stringify(response) + NEWLINE;
+/** Serialize response to framed msgpack */
+function serializeResponse(response: Response): Uint8Array {
+  return FrameParser.frame(pack(response));
 }
 
-/** Error response with newline */
-function errorResponseLine(message: string, reqId?: string): string {
-  return JSON.stringify({ ok: false, error: message, reqId }) + NEWLINE;
+/** Error response as framed msgpack */
+function errorResponse(message: string, reqId?: string): Uint8Array {
+  return FrameParser.frame(pack({ ok: false, error: message, reqId }));
 }
 
 /**
@@ -67,7 +61,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
 
       socket.data = {
         state,
-        buffer: new LineBuffer(),
+        frameParser: new FrameParser(),
         ctx,
       };
 
@@ -76,30 +70,37 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
     },
 
     async data(socket: Socket<ConnectionData>, data: Buffer) {
-      const { buffer, ctx, state } = socket.data;
+      const { frameParser, ctx, state } = socket.data;
       const rateLimiter = getRateLimiter();
 
       // Check rate limit
       if (!rateLimiter.isAllowed(state.clientId)) {
-        socket.write(errorResponseLine('Rate limit exceeded'));
+        socket.write(errorResponse('Rate limit exceeded'));
         return;
       }
 
-      const text = textDecoder.decode(data);
-      const lines = buffer.addData(text);
+      const frames = frameParser.addData(new Uint8Array(data));
 
-      for (const line of lines) {
-        const cmd = parseCommand(line);
-        if (!cmd) {
-          socket.write(errorResponseLine('Invalid command'));
+      for (const frame of frames) {
+        let cmd: Command;
+        try {
+          cmd = unpack(frame) as Command;
+        } catch {
+          socket.write(errorResponse('Invalid command format'));
           continue;
         }
+
+        if (!cmd?.cmd) {
+          socket.write(errorResponse('Invalid command'));
+          continue;
+        }
+
         try {
           const response = await handleCommand(cmd, ctx);
-          socket.write(serializeResponseLine(response));
+          socket.write(serializeResponse(response));
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
-          socket.write(errorResponseLine(message, cmd.reqId));
+          socket.write(errorResponse(message, cmd.reqId));
         }
       }
     },
@@ -133,23 +134,13 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
     },
   };
 
-  // Create server - Unix socket or TCP based on config
-  let server: TCPSocketListener<ConnectionData> | UnixSocketListener<ConnectionData>;
-
-  if (config.socketPath) {
-    server = Bun.listen<ConnectionData>({
-      unix: config.socketPath,
-      socket: socketHandlers,
-    });
-    tcpLog.info('Server listening', { unix: config.socketPath });
-  } else {
-    server = Bun.listen<ConnectionData>({
-      hostname: config.hostname ?? '0.0.0.0',
-      port: config.port ?? 6789,
-      socket: socketHandlers,
-    });
-    tcpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
-  }
+  // Create TCP server
+  const server: TCPSocketListener<ConnectionData> = Bun.listen<ConnectionData>({
+    hostname: config.hostname ?? '0.0.0.0',
+    port: config.port ?? 6789,
+    socket: socketHandlers,
+  });
+  tcpLog.info('Server listening', { host: config.hostname ?? '0.0.0.0', port: config.port });
 
   return {
     server,
@@ -161,10 +152,10 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
     },
 
     /** Broadcast to all connections */
-    broadcast(message: string): void {
-      const messageWithNewline = message + NEWLINE;
+    broadcast(message: unknown): void {
+      const frame = FrameParser.frame(pack(message));
       for (const socket of connections.values()) {
-        socket.write(messageWithNewline);
+        socket.write(frame);
       }
     },
 

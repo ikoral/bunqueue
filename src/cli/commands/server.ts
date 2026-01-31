@@ -12,8 +12,6 @@ interface ServerOptions {
   tcpPort: number;
   httpPort: number;
   host: string;
-  tcpSocketPath?: string;
-  httpSocketPath?: string;
   dataPath?: string;
   authTokens: string[];
 }
@@ -25,8 +23,6 @@ function parseServerArgs(args: string[]): ServerOptions {
     options: {
       'tcp-port': { type: 'string' },
       'http-port': { type: 'string' },
-      'tcp-socket': { type: 'string' },
-      'http-socket': { type: 'string' },
       host: { type: 'string' },
       'data-path': { type: 'string' },
       'auth-tokens': { type: 'string' },
@@ -38,8 +34,6 @@ function parseServerArgs(args: string[]): ServerOptions {
   return {
     tcpPort: parseInt((values['tcp-port'] as string) ?? process.env.TCP_PORT ?? '6789', 10),
     httpPort: parseInt((values['http-port'] as string) ?? process.env.HTTP_PORT ?? '6790', 10),
-    tcpSocketPath: (values['tcp-socket'] as string) ?? process.env.TCP_SOCKET_PATH,
-    httpSocketPath: (values['http-socket'] as string) ?? process.env.HTTP_SOCKET_PATH,
     host: (values.host as string) ?? process.env.HOST ?? '0.0.0.0',
     dataPath: (values['data-path'] as string) ?? process.env.DATA_PATH,
     authTokens:
@@ -62,12 +56,6 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
   process.env.TCP_PORT = String(options.tcpPort);
   process.env.HTTP_PORT = String(options.httpPort);
   process.env.HOST = options.host;
-  if (options.tcpSocketPath) {
-    process.env.TCP_SOCKET_PATH = options.tcpSocketPath;
-  }
-  if (options.httpSocketPath) {
-    process.env.HTTP_SOCKET_PATH = options.httpSocketPath;
-  }
   if (options.dataPath) {
     process.env.DATA_PATH = options.dataPath;
   }
@@ -88,26 +76,22 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
 
   const authTokens = options.authTokens.length > 0 ? options.authTokens : undefined;
 
-  // Start servers (Unix socket or TCP)
+  // Start TCP and HTTP servers
   const tcpServer = createTcpServer(qm, {
-    socketPath: options.tcpSocketPath,
     port: options.tcpPort,
     hostname: options.host,
     authTokens,
   });
 
   const httpServer = createHttpServer(qm, {
-    socketPath: options.httpSocketPath,
     port: options.httpPort,
     hostname: options.host,
     authTokens,
   });
 
   serverLog.info('bunqueue server started', {
-    tcpSocket: options.tcpSocketPath,
-    tcpPort: options.tcpSocketPath ? undefined : options.tcpPort,
-    httpSocket: options.httpSocketPath,
-    httpPort: options.httpSocketPath ? undefined : options.httpPort,
+    tcpPort: options.tcpPort,
+    httpPort: options.httpPort,
     host: options.host,
     dataPath: options.dataPath ?? 'in-memory',
     auth: authTokens ? 'enabled' : 'disabled',
@@ -121,19 +105,8 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
   const yellow = '\x1b[33m';
 
   // Format endpoint display
-  const tcpDisplay = options.tcpSocketPath
-    ? `${bold}${options.tcpSocketPath}${reset} ${dim}(unix)${reset}`
-    : `${bold}${options.host}:${options.tcpPort}${reset}`;
-  const httpDisplay = options.httpSocketPath
-    ? `${bold}${options.httpSocketPath}${reset} ${dim}(unix)${reset}`
-    : `${bold}${options.host}:${options.httpPort}${reset}`;
-
-  // Socket mode display
-  const hasUnixSockets =
-    options.tcpSocketPath !== undefined || options.httpSocketPath !== undefined;
-  const socketDisplay = hasUnixSockets
-    ? `${green}enabled${reset} ${dim}(${options.tcpSocketPath ? 'TCP' : ''}${options.tcpSocketPath && options.httpSocketPath ? '+' : ''}${options.httpSocketPath ? 'HTTP' : ''})${reset}`
-    : `${dim}disabled${reset}`;
+  const tcpDisplay = `${bold}${options.host}:${options.tcpPort}${reset}`;
+  const httpDisplay = `${bold}${options.host}:${options.httpPort}${reset}`;
 
   console.log(`
 ${magenta}        (\\(\\        ${reset}
@@ -144,7 +117,6 @@ ${dim}────────────────────────�
 
   ${green}●${reset} TCP    ${tcpDisplay}
   ${green}●${reset} HTTP   ${httpDisplay}
-  ${yellow}●${reset} Socket ${socketDisplay}
   ${yellow}●${reset} Data   ${options.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${authTokens ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
 

@@ -91,13 +91,16 @@ class TestResults {
   }
 }
 
-// ============ TCP Client ============
+// ============ TCP Client (msgpack binary protocol) ============
+import { pack, unpack } from 'msgpackr';
+import { FrameParser } from '../infrastructure/server/protocol';
+
 class TcpClient {
-  private socketWrite: ((data: string) => void) | null = null;
+  private socketWrite: ((data: Uint8Array) => void) | null = null;
   private socketEnd: (() => void) | null = null;
   private responseQueue: Array<{ resolve: (v: any) => void; reject: (e: any) => void }> = [];
   private connected = false;
-  private buffer = '';
+  private frameParser = new FrameParser();
 
   async connect(port: number): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -106,24 +109,20 @@ class TcpClient {
         port,
         socket: {
           data: (_socket, data) => {
-            this.buffer += new TextDecoder().decode(data);
-            const lines = this.buffer.split('\n');
-            this.buffer = lines.pop() || '';
-            for (const line of lines) {
-              if (line.trim()) {
-                const pending = this.responseQueue.shift();
-                if (pending) {
-                  try {
-                    pending.resolve(JSON.parse(line));
-                  } catch (e) {
-                    pending.reject(e);
-                  }
+            const frames = this.frameParser.addData(new Uint8Array(data));
+            for (const frame of frames) {
+              const pending = this.responseQueue.shift();
+              if (pending) {
+                try {
+                  pending.resolve(unpack(frame));
+                } catch (e) {
+                  pending.reject(e);
                 }
               }
             }
           },
           open: (socket) => {
-            this.socketWrite = (d: string) => socket.write(d);
+            this.socketWrite = (d: Uint8Array) => socket.write(d);
             this.socketEnd = () => socket.end();
             this.connected = true;
             resolve();
@@ -143,7 +142,7 @@ class TcpClient {
     if (!this.socketWrite || !this.connected) throw new Error('Not connected');
     return new Promise((resolve, reject) => {
       this.responseQueue.push({ resolve, reject });
-      this.socketWrite!(JSON.stringify(cmd) + '\n');
+      this.socketWrite!(FrameParser.frame(pack(cmd)));
     });
   }
 

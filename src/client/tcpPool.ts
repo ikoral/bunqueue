@@ -10,10 +10,8 @@ export interface PoolOptions extends Partial<ConnectionOptions> {
   poolSize?: number;
 }
 
-/** Resolved pool options - socketPath stays optional */
-type ResolvedPoolOptions = Required<Omit<PoolOptions, 'socketPath'>> & {
-  socketPath: string | undefined;
-};
+/** Resolved pool options */
+type ResolvedPoolOptions = Required<PoolOptions>;
 
 /**
  * Connection pool for parallel TCP operations
@@ -32,7 +30,6 @@ export class TcpConnectionPool {
     this.options = {
       host: options.host ?? 'localhost',
       port: options.port ?? 6789,
-      socketPath: options.socketPath,
       token: options.token ?? '',
       poolSize,
       maxReconnectAttempts: options.maxReconnectAttempts ?? Infinity,
@@ -48,7 +45,6 @@ export class TcpConnectionPool {
     // Create pool of connections
     for (let i = 0; i < this.options.poolSize; i++) {
       const client = new TcpClient({
-        socketPath: this.options.socketPath,
         host: this.options.host,
         port: this.options.port,
         token: this.options.token,
@@ -207,10 +203,6 @@ const sharedPools = new Map<string, TcpConnectionPool>();
 
 /** Get pool key from options */
 function getPoolKey(options?: PoolOptions): string {
-  // Unix socket takes priority
-  if (options?.socketPath) {
-    return `unix:${options.socketPath}`;
-  }
   const host = options?.host ?? 'localhost';
   const port = options?.port ?? 6789;
   return `${host}:${port}`;

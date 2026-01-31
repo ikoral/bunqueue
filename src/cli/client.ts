@@ -1,19 +1,19 @@
 /**
  * CLI TCP Client
- * Connects to bunQ server and executes commands
+ * Connects to bunQ server and executes commands (msgpack binary protocol)
  */
 
 import type { Socket } from 'bun';
 import { formatOutput, formatError } from './output';
+import { pack, unpack } from 'msgpackr';
+import { FrameParser } from '../infrastructure/server/protocol';
 
 /** Client options */
 export interface ClientOptions {
-  /** Server host (ignored if socketPath is set) */
+  /** Server host */
   host: string;
-  /** Server port (ignored if socketPath is set) */
+  /** Server port */
   port: number;
-  /** Unix socket path (takes priority over host/port) */
-  socketPath?: string;
   /** Auth token */
   token?: string;
   /** Output as JSON */
@@ -22,20 +22,20 @@ export interface ClientOptions {
 
 /** Socket data context */
 interface SocketData {
-  buffer: string;
+  frameParser: FrameParser;
   resolve: ((value: Record<string, unknown>) => void) | null;
   reject: ((error: Error) => void) | null;
 }
 
 /** Send a command and wait for response */
 async function sendCommand(
-  socket: { write: (data: string) => void; data: SocketData },
+  socket: { write: (data: Uint8Array) => void; data: SocketData },
   command: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     socket.data.resolve = resolve;
     socket.data.reject = reject;
-    socket.write(JSON.stringify(command) + '\n');
+    socket.write(FrameParser.frame(pack(command)));
 
     // Timeout after 30 seconds
     setTimeout(() => {
@@ -48,35 +48,30 @@ async function sendCommand(
   });
 }
 
-/** Create connection (Unix socket or TCP) */
+/** Create TCP connection */
 async function connect(options: ClientOptions): Promise<{
-  socket: { write: (data: string) => void; end: () => void; data: SocketData };
+  socket: { write: (data: Uint8Array) => void; end: () => void; data: SocketData };
   close: () => void;
 }> {
   return new Promise((resolve, reject) => {
     const socketData: SocketData = {
-      buffer: '',
+      frameParser: new FrameParser(),
       resolve: null,
       reject: null,
     };
 
     let connected = false;
-    const targetDesc = options.socketPath ?? `${options.host}:${options.port}`;
+    const targetDesc = `${options.host}:${options.port}`;
 
     // Socket handlers
     const socketHandlers = {
       data(_sock: Socket<unknown>, data: Buffer) {
-        socketData.buffer += data.toString();
+        const frames = socketData.frameParser.addData(new Uint8Array(data));
 
-        // Look for complete JSON response (newline-delimited)
-        let newlineIdx: number;
-        while ((newlineIdx = socketData.buffer.indexOf('\n')) !== -1) {
-          const line = socketData.buffer.slice(0, newlineIdx);
-          socketData.buffer = socketData.buffer.slice(newlineIdx + 1);
-
-          if (line.trim() && socketData.resolve) {
+        for (const frame of frames) {
+          if (socketData.resolve) {
             try {
-              const response = JSON.parse(line) as Record<string, unknown>;
+              const response = unpack(frame) as Record<string, unknown>;
               socketData.resolve(response);
               socketData.resolve = null;
               socketData.reject = null;
@@ -94,7 +89,7 @@ async function connect(options: ClientOptions): Promise<{
         connected = true;
         resolve({
           socket: {
-            write: (data: string) => sock.write(data),
+            write: (data: Uint8Array) => sock.write(data),
             end: () => sock.end(),
             data: socketData,
           },
@@ -114,19 +109,12 @@ async function connect(options: ClientOptions): Promise<{
       },
     };
 
-    // Connect using Unix socket or TCP
-    if (options.socketPath) {
-      void Bun.connect({
-        unix: options.socketPath,
-        socket: socketHandlers,
-      });
-    } else {
-      void Bun.connect({
-        hostname: options.host,
-        port: options.port,
-        socket: socketHandlers,
-      });
-    }
+    // Connect via TCP
+    void Bun.connect({
+      hostname: options.host,
+      port: options.port,
+      socket: socketHandlers,
+    });
 
     // Handle connection timeout
     setTimeout(() => {
