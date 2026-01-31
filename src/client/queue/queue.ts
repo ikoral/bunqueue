@@ -80,6 +80,7 @@ export class Queue<T = unknown> {
         removeOnComplete: merged.removeOnComplete,
         removeOnFail: merged.removeOnFail,
         repeat: merged.repeat,
+        stallTimeout: merged.stallTimeout,
       });
       return toPublicJob<T>(job, name);
     }
@@ -96,6 +97,7 @@ export class Queue<T = unknown> {
       customId: merged.jobId,
       removeOnComplete: merged.removeOnComplete,
       removeOnFail: merged.removeOnFail,
+      stallTimeout: merged.stallTimeout,
     });
 
     if (!response.ok) {
@@ -125,6 +127,7 @@ export class Queue<T = unknown> {
           removeOnComplete: m.removeOnComplete,
           removeOnFail: m.removeOnFail,
           repeat: m.repeat,
+          stallTimeout: m.stallTimeout,
         };
       });
       const ids = await manager.pushBatch(this.name, inputs);
@@ -143,6 +146,7 @@ export class Queue<T = unknown> {
         customId: m.jobId,
         removeOnComplete: m.removeOnComplete,
         removeOnFail: m.removeOnFail,
+        stallTimeout: m.stallTimeout,
       };
     });
 

@@ -22,6 +22,10 @@ async function runBenchmark() {
   // Create queue and worker (TCP mode - no embedded flag)
   const queue = new Queue(QUEUE_NAME, {
     connection: { host: 'localhost', port: 6789, poolSize: 8 },
+    defaultJobOptions: {
+      // Very long stall timeout for benchmark (jobs complete instantly, no need for stall detection)
+      stallTimeout: 300_000, // 5 minutes
+    },
   });
 
   let completed = 0;
