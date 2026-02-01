@@ -4,6 +4,10 @@
  * Main entry point - routes to CLI for client commands or starts server
  */
 
+/** Configurable timeouts from environment (must be before startServer call) */
+const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? '30000', 10);
+const STATS_INTERVAL_MS = parseInt(process.env.STATS_INTERVAL_MS ?? '30000', 10);
+
 // Check for CLI client commands (not server mode)
 const clientCommands = [
   'push',
@@ -62,10 +66,6 @@ interface ServerConfig {
   requireAuthForMetrics: boolean;
   s3BackupEnabled: boolean;
 }
-
-/** Configurable timeouts from environment */
-const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? '30000', 10);
-const STATS_INTERVAL_MS = parseInt(process.env.STATS_INTERVAL_MS ?? '30000', 10);
 
 /** Load configuration from environment variables */
 function loadConfig(): ServerConfig {
