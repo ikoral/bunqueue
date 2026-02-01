@@ -2,7 +2,69 @@
 
 High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ, S3 backups.
 
-## Architecture
+## Architecture Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              CLIENT                                          │
+│  Queue.add() ─────┐                              ┌───── Worker.process()    │
+│  Queue.addBulk() ─┤                              │                          │
+│                   ▼                              ▼                          │
+│            ┌──────────┐                   ┌──────────┐                      │
+│            │ TcpPool  │◄─── msgpack ────► │ TcpPool  │                      │
+│            └────┬─────┘                   └────┬─────┘                      │
+└─────────────────┼──────────────────────────────┼────────────────────────────┘
+                  │ TCP :6789                    │
+┌─────────────────┼──────────────────────────────┼────────────────────────────┐
+│                 ▼           SERVER             ▼                            │
+│          ┌───────────┐                  ┌───────────┐                       │
+│          │ TcpServer │                  │ TcpServer │                       │
+│          └─────┬─────┘                  └─────┬─────┘                       │
+│                │                              │                             │
+│                ▼                              ▼                             │
+│   ┌────────────────────────────────────────────────────────────┐           │
+│   │                    QueueManager                             │           │
+│   │  ┌─────────────────────────────────────────────────────┐   │           │
+│   │  │                  32 Shards                           │   │           │
+│   │  │  ┌─────────┬─────────┬─────────┬─────────┐          │   │           │
+│   │  │  │ Shard 0 │ Shard 1 │   ...   │ Shard 31│          │   │           │
+│   │  │  │┌───────┐│┌───────┐│         │┌───────┐│          │   │           │
+│   │  │  ││PQueue ││PQueue ││         ││PQueue ││          │   │           │
+│   │  │  │└───────┘│└───────┘│         │└───────┘│          │   │           │
+│   │  │  └─────────┴─────────┴─────────┴─────────┘          │   │           │
+│   │  └─────────────────────────────────────────────────────┘   │           │
+│   │                           │                                 │           │
+│   │  ┌────────────────────────┼────────────────────────────┐   │           │
+│   │  │  jobIndex (Map)        │   completedJobs (Set)      │   │           │
+│   │  │  customIdMap (LRU)     │   jobResults (LRU)         │   │           │
+│   │  └────────────────────────┼────────────────────────────┘   │           │
+│   └───────────────────────────┼─────────────────────────────────┘           │
+│                               │                                             │
+│   ┌───────────────────────────┼─────────────────────────────────┐           │
+│   │                           ▼                                 │           │
+│   │  ┌─────────────┐    ┌──────────┐    ┌─────────────┐        │           │
+│   │  │ WriteBuffer │───►│ SQLite   │◄───│ ReadThrough │        │           │
+│   │  │ (10ms batch)│    │ WAL Mode │    │   Cache     │        │           │
+│   │  └─────────────┘    └──────────┘    └─────────────┘        │           │
+│   │                      Persistence                            │           │
+│   └─────────────────────────────────────────────────────────────┘           │
+│                                                                             │
+│   ┌───────────────────────────────────────────────────────────┐             │
+│   │  Background Tasks                                          │             │
+│   │  • Scheduler (cron, delayed jobs)    • Stall detector     │             │
+│   │  • DLQ maintenance (retry, expire)   • Lock expiration    │             │
+│   │  • Cleanup (memory bounds)           • S3 backup          │             │
+│   └───────────────────────────────────────────────────────────┘             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Request Flow:**
+1. **PUSH**: Client → TcpPool → TcpServer → QueueManager → Shard[hash(queue)] → PriorityQueue → WriteBuffer → SQLite
+2. **PULL**: Client → TcpServer → QueueManager → Shard → PriorityQueue.pop() → Job (state: active)
+3. **ACK**: Client → TcpServer → AckBatcher → Shard.complete() → jobResults (LRU) + completedJobs (Set)
+4. **FAIL**: Client → TcpServer → Shard.fail() → retry (backoff) OR → DLQ (max attempts)
+
+## Directory Structure
 
 ```
 src/
