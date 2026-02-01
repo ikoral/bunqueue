@@ -265,6 +265,7 @@ async function main() {
 
   // Cleanup
   queue.obliterate();
+  queue.close();
 
   // Summary
   console.log('\n=== Summary ===');

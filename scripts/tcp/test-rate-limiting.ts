@@ -15,6 +15,7 @@ async function main() {
     connection: { port: TCP_PORT },
   });
   const tcp = new TcpConnectionPool({ port: TCP_PORT });
+  await tcp.connect();
   let passed = 0;
   let failed = 0;
 

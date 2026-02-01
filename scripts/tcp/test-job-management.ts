@@ -5,7 +5,7 @@
  */
 
 import { Queue, Worker } from '../../src/client';
-import { TcpClient } from '../../src/client/tcp/client';
+import { TcpClient } from '../../src/client/tcp';
 
 const QUEUE_NAME = 'tcp-test-job-management';
 const TCP_PORT = parseInt(process.env.TCP_PORT ?? '16789');
@@ -34,27 +34,27 @@ async function main() {
     // Create a delayed job (5 second delay)
     const job = await queue.add('delayed-job', { value: 1 }, { delay: 5000 });
 
-    // Verify it's delayed
-    const beforeJob = await queue.getJob(job.id);
-    const wasDelayed = beforeJob && beforeJob.runAt > Date.now();
+    // Check job state before promote (should be 'delayed')
+    const stateResponse = await tcp.send({ cmd: 'GetState', id: String(job.id) });
+    const wasDelayed = stateResponse.state === 'delayed';
 
     if (!wasDelayed) {
-      console.log('   ❌ Job was not created as delayed');
+      console.log(`   ❌ Job was not created as delayed (state: ${stateResponse.state})`);
       failed++;
     } else {
       // Promote the job via TCP
       const response = await tcp.send({ cmd: 'Promote', id: String(job.id) });
 
       if (response.ok) {
-        // Verify job is now ready to run
-        const afterJob = await queue.getJob(job.id);
-        const isNowReady = afterJob && afterJob.runAt <= Date.now();
+        // Verify job state changed to 'waiting' after promote
+        const afterStateResponse = await tcp.send({ cmd: 'GetState', id: String(job.id) });
+        const isNowWaiting = afterStateResponse.state === 'waiting';
 
-        if (isNowReady) {
+        if (isNowWaiting) {
           console.log('   ✅ Delayed job promoted to waiting');
           passed++;
         } else {
-          console.log('   ❌ Job still delayed after promote');
+          console.log(`   ❌ Job state after promote: ${afterStateResponse.state} (expected: waiting)`);
           failed++;
         }
       } else {

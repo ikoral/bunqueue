@@ -22,6 +22,7 @@ async function main() {
     port: TCP_PORT,
     poolSize: 1,
   });
+  await tcp.connect();
 
   let passed = 0;
   let failed = 0;
