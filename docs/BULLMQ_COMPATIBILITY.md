@@ -63,13 +63,32 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `getWorkers()` | `getWorkers(): Promise<{id, name, addr?}[]>` | ✅ Implementato |
 | `getWorkersCount()` | `getWorkersCount(): Promise<number>` | ✅ Implementato |
 
+| `trimEvents(maxLength)` | `trimEvents(maxLength: number): Promise<number>` | No-op (eventi non persistiti) |
+| `getPrioritized(start?, end?)` | `getPrioritized(start?, end?): Promise<Job[]>` | Alias di getWaiting |
+| `getPrioritizedCount()` | `getPrioritizedCount(): Promise<number>` | Alias di getWaitingCount |
+| `getWaitingChildren(start?, end?)` | `getWaitingChildren(start?, end?): Promise<Job[]>` | Per job flows |
+| `getWaitingChildrenCount()` | `getWaitingChildrenCount(): Promise<number>` | Per job flows |
+| `getDependencies(parentId, type, start, end)` | `getDependencies(...): Promise<{...}>` | Per job flows (stub) |
+| `getRateLimitTtl(maxJobs?)` | `getRateLimitTtl(maxJobs?): Promise<number>` | Stub |
+| `rateLimit(expireTimeMs)` | `rateLimit(expireTimeMs): Promise<void>` | Rate limit temporaneo |
+| `isMaxed()` | `isMaxed(): Promise<boolean>` | Check rate limit (stub) |
+| `upsertJobScheduler(id, repeatOpts, template?)` | `upsertJobScheduler(...): Promise<JobScheduler>` | Usa cron scheduler interno |
+| `removeJobScheduler(id)` | `removeJobScheduler(id): Promise<boolean>` | Rimuove scheduler |
+| `getJobScheduler(id)` | `getJobScheduler(id): Promise<JobScheduler \| null>` | Ottiene scheduler |
+| `getJobSchedulers(start?, end?, asc?)` | `getJobSchedulers(...): Promise<JobScheduler[]>` | Lista schedulers |
+| `getJobSchedulersCount()` | `getJobSchedulersCount(): Promise<number>` | Conta schedulers |
+| `getDeduplicationJobId(id)` | `getDeduplicationJobId(id): Promise<string \| null>` | Usa customIdMap |
+| `removeDeduplicationKey(id)` | `removeDeduplicationKey(id): Promise<number>` | Rimuove dedupe key |
+| `waitUntilReady()` | `waitUntilReady(): Promise<void>` | Attende connessione |
+| `disconnect()` | `disconnect(): Promise<void>` | Alias di close() |
+
 ### Metodi Extra bunqueue ✅
 
 | Metodo | Firma | Descrizione |
 |--------|-------|-------------|
 | `setStallConfig(config)` | `setStallConfig(config: Partial<StallConfig>): void` | Configura stall detection |
 | `getStallConfig()` | `getStallConfig(): StallConfig` | Ottiene config stall |
-| `setDlqConfig(config)` | `setDlqConfig(config: Partial<DlqConfig>): void` | Configura DLQ |
+| `setDlqConfig(config)` | `setDlqConfig(config: Partial<DlqConfig>): void` | Configura Dead Letter Queue |
 | `getDlqConfig()` | `getDlqConfig(): DlqConfig` | Ottiene config DLQ |
 | `getDlq(filter?)` | `getDlq(filter?: DlqFilter): DlqEntry<T>[]` | Lista entry DLQ |
 | `getDlqStats()` | `getDlqStats(): DlqStats` | Statistiche DLQ |
@@ -78,28 +97,10 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `purgeDlq()` | `purgeDlq(): number` | Svuota DLQ |
 | `retryCompleted(id?)` | `retryCompletedAsync(id?: string): Promise<number>` | Riprova job completati |
 | `retryJob(id)` | `retryJob(id: string): Promise<void>` | Riprova singolo job |
-| `trimEvents(maxLength)` | `trimEvents(maxLength: number): Promise<number>` | ✅ No-op (eventi non persistiti) |
-| `getPrioritized(start?, end?)` | `getPrioritized(start?, end?): Promise<Job[]>` | ✅ Alias di getWaiting |
-| `getPrioritizedCount()` | `getPrioritizedCount(): Promise<number>` | ✅ Alias di getWaitingCount |
-| `getWaitingChildren(start?, end?)` | `getWaitingChildren(start?, end?): Promise<Job[]>` | ✅ Implementato |
-| `getWaitingChildrenCount()` | `getWaitingChildrenCount(): Promise<number>` | ✅ Implementato |
-| `getDependencies(parentId, type, start, end)` | `getDependencies(...): Promise<{...}>` | ✅ Implementato (stub) |
-| `getRateLimitTtl(maxJobs?)` | `getRateLimitTtl(maxJobs?): Promise<number>` | ✅ Implementato (stub) |
-| `rateLimit(expireTimeMs)` | `rateLimit(expireTimeMs): Promise<void>` | ✅ Implementato |
-| `isMaxed()` | `isMaxed(): Promise<boolean>` | ✅ Implementato (stub) |
-| `upsertJobScheduler(id, repeatOpts, template?)` | `upsertJobScheduler(...): Promise<JobScheduler>` | ✅ Usa cron scheduler |
-| `removeJobScheduler(id)` | `removeJobScheduler(id): Promise<boolean>` | ✅ Implementato |
-| `getJobScheduler(id)` | `getJobScheduler(id): Promise<JobScheduler \| null>` | ✅ Implementato |
-| `getJobSchedulers(start?, end?, asc?)` | `getJobSchedulers(...): Promise<JobScheduler[]>` | ✅ Implementato |
-| `getJobSchedulersCount()` | `getJobSchedulersCount(): Promise<number>` | ✅ Implementato |
-| `getDeduplicationJobId(id)` | `getDeduplicationJobId(id): Promise<string \| null>` | ✅ Usa customIdMap |
-| `removeDeduplicationKey(id)` | `removeDeduplicationKey(id): Promise<number>` | ✅ Implementato (stub) |
-| `waitUntilReady()` | `waitUntilReady(): Promise<void>` | ✅ Implementato |
-| `disconnect()` | `disconnect(): Promise<void>` | ✅ Alias di close() |
 
 ### Metodi Da Implementare 🔴
 
-Tutti i metodi Queue BullMQ v5 sono ora implementati.
+**Tutti i 53 metodi Queue BullMQ v5 sono implementati.** ✅
 
 ---
 
