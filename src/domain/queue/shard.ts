@@ -125,7 +125,7 @@ export class Shard {
         resolve();
       };
       this.waiters.push(waiter);
-      setTimeout(cleanup, Math.min(timeoutMs, 100));
+      setTimeout(cleanup, timeoutMs);
     });
   }
 

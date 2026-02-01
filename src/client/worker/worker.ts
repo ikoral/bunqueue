@@ -219,9 +219,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
       if (!item) {
         const items = await this.pullBatch();
-        // Re-check closing after async operation (can be modified during await)
+        // Re-check state after async operation (can be modified during await)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (this.closing) return;
+        if (!this.running || this.closing) return;
         if (items.length > 0) {
           // Register ALL pulled jobs for heartbeat tracking immediately
           this.registerPulledJobs(items);
