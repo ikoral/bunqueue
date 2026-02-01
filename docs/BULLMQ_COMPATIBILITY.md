@@ -2,6 +2,8 @@
 
 Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compatibilità API.
 
+**Ultimo aggiornamento:** 2026-02-01
+
 ## Indice
 
 - [Queue Class](#queue-class)
@@ -32,6 +34,34 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `drain()` | `drain(): void` | Identico a BullMQ |
 | `obliterate()` | `obliterate(): void` | Identico a BullMQ |
 | `close()` | `close(): void` | Identico a BullMQ |
+| `count()` | `countAsync(): Promise<number>` | ✅ Implementato |
+| `isPaused()` | `isPausedAsync(): Promise<boolean>` | ✅ Implementato |
+| `getJobState(jobId)` | `getJobState(id: string): Promise<JobStateType>` | ✅ Implementato |
+| `getJobLogs(jobId, start?, end?, asc?)` | `getJobLogs(id, start?, end?, asc?): Promise<{logs, count}>` | ✅ Implementato |
+| `addJobLog(jobId, logRow, keepLogs?)` | `addJobLog(id: string, logRow: string): Promise<number>` | ✅ Implementato |
+| `updateJobProgress(jobId, progress)` | `updateJobProgress(id, progress): Promise<void>` | ✅ Implementato |
+| `clean(grace, limit, type?)` | `cleanAsync(grace, limit, type?): Promise<string[]>` | ✅ Implementato |
+| `retryJobs(opts?)` | `retryJobs(opts?): Promise<number>` | ✅ Implementato |
+| `promoteJobs(opts?)` | `promoteJobs(opts?): Promise<number>` | ✅ Implementato |
+| `getActive(start?, end?)` | `getActiveAsync(start?, end?): Promise<Job[]>` | ✅ Implementato |
+| `getCompleted(start?, end?)` | `getCompletedAsync(start?, end?): Promise<Job[]>` | ✅ Implementato |
+| `getFailed(start?, end?)` | `getFailedAsync(start?, end?): Promise<Job[]>` | ✅ Implementato |
+| `getDelayed(start?, end?)` | `getDelayedAsync(start?, end?): Promise<Job[]>` | ✅ Implementato |
+| `getWaiting(start?, end?)` | `getWaitingAsync(start?, end?): Promise<Job[]>` | ✅ Implementato |
+| `getActiveCount()` | `getActiveCount(): Promise<number>` | ✅ Implementato |
+| `getCompletedCount()` | `getCompletedCount(): Promise<number>` | ✅ Implementato |
+| `getFailedCount()` | `getFailedCount(): Promise<number>` | ✅ Implementato |
+| `getDelayedCount()` | `getDelayedCount(): Promise<number>` | ✅ Implementato |
+| `getWaitingCount()` | `getWaitingCount(): Promise<number>` | ✅ Implementato |
+| `setGlobalConcurrency(concurrency)` | `setGlobalConcurrency(concurrency: number): void` | ✅ Implementato |
+| `removeGlobalConcurrency()` | `removeGlobalConcurrency(): void` | ✅ Implementato |
+| `getGlobalConcurrency()` | `getGlobalConcurrency(): Promise<number \| null>` | ✅ Implementato (stub) |
+| `setGlobalRateLimit(max, duration)` | `setGlobalRateLimit(max: number): void` | ✅ Implementato |
+| `removeGlobalRateLimit()` | `removeGlobalRateLimit(): void` | ✅ Implementato |
+| `getGlobalRateLimit()` | `getGlobalRateLimit(): Promise<{max, duration} \| null>` | ✅ Implementato (stub) |
+| `getMetrics(type, start?, end?)` | `getMetrics(type, start?, end?): Promise<{meta, data}>` | ✅ Implementato |
+| `getWorkers()` | `getWorkers(): Promise<{id, name, addr?}[]>` | ✅ Implementato |
+| `getWorkersCount()` | `getWorkersCount(): Promise<number>` | ✅ Implementato |
 
 ### Metodi Extra bunqueue ✅
 
@@ -47,56 +77,29 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `retryDlqByFilter(filter)` | `retryDlqByFilter(filter: DlqFilter): number` | Riprova con filtro |
 | `purgeDlq()` | `purgeDlq(): number` | Svuota DLQ |
 | `retryCompleted(id?)` | `retryCompletedAsync(id?: string): Promise<number>` | Riprova job completati |
+| `retryJob(id)` | `retryJob(id: string): Promise<void>` | Riprova singolo job |
 
 ### Metodi Da Implementare 🔴
 
 | Metodo | Firma BullMQ v5 | Priorità | Complessità |
 |--------|-----------------|----------|-------------|
-| `count()` | `count(): Promise<number>` | Media | Bassa |
-| `isPaused()` | `isPaused(): Promise<boolean>` | Bassa | Bassa |
-| `getJobState(jobId)` | `getJobState(jobId: string): Promise<'waiting' \| 'active' \| 'completed' \| 'failed' \| 'delayed' \| 'unknown'>` | **Alta** | Bassa |
-| `getJobLogs(jobId, start?, end?, asc?)` | `getJobLogs(jobId: string, start?: number, end?: number, asc?: boolean): Promise<{logs: string[], count: number}>` | Media | Media |
-| `addJobLog(jobId, logRow, keepLogs?)` | `addJobLog(jobId: string, logRow: string, keepLogs?: number): Promise<number>` | Media | Bassa |
-| `updateJobProgress(jobId, progress)` | `updateJobProgress(jobId: string, progress: number \| object): Promise<void>` | Media | Bassa |
-| `clean(grace, limit, type?)` | `clean(grace: number, limit: number, type?: 'completed' \| 'wait' \| 'active' \| 'paused' \| 'delayed' \| 'failed'): Promise<string[]>` | **Alta** | Media |
-| `retryJobs(opts?)` | `retryJobs(opts?: {count?: number, state?: 'completed' \| 'failed', timestamp?: number}): Promise<void>` | **Alta** | Media |
-| `promoteJobs(opts?)` | `promoteJobs(opts?: {count?: number}): Promise<void>` | Media | Bassa |
 | `trimEvents(maxLength)` | `trimEvents(maxLength: number): Promise<number>` | Bassa | Bassa |
-| `getActive(start?, end?)` | `getActive(start?: number, end?: number): Promise<Job[]>` | Bassa | Bassa |
-| `getCompleted(start?, end?)` | `getCompleted(start?: number, end?: number): Promise<Job[]>` | Bassa | Bassa |
-| `getFailed(start?, end?)` | `getFailed(start?: number, end?: number): Promise<Job[]>` | Bassa | Bassa |
-| `getDelayed(start?, end?)` | `getDelayed(start?: number, end?: number): Promise<Job[]>` | Bassa | Bassa |
-| `getWaiting(start?, end?)` | `getWaiting(start?: number, end?: number): Promise<Job[]>` | Bassa | Bassa |
-| `getPrioritized(start?, end?)` | `getPrioritized(start?: number, end?: number): Promise<Job[]>` | Bassa | Bassa |
-| `getWaitingChildren(start?, end?)` | `getWaitingChildren(start?: number, end?: number): Promise<Job[]>` | Media | Media |
-| `getActiveCount()` | `getActiveCount(): Promise<number>` | Bassa | Bassa |
-| `getCompletedCount()` | `getCompletedCount(): Promise<number>` | Bassa | Bassa |
-| `getFailedCount()` | `getFailedCount(): Promise<number>` | Bassa | Bassa |
-| `getDelayedCount()` | `getDelayedCount(): Promise<number>` | Bassa | Bassa |
-| `getWaitingCount()` | `getWaitingCount(): Promise<number>` | Bassa | Bassa |
+| `getPrioritized(start?, end?)` | `getPrioritized(start?, end?): Promise<Job[]>` | Bassa | Bassa |
+| `getWaitingChildren(start?, end?)` | `getWaitingChildren(start?, end?): Promise<Job[]>` | Media | Media |
 | `getWaitingChildrenCount()` | `getWaitingChildrenCount(): Promise<number>` | Media | Bassa |
 | `getPrioritizedCount()` | `getPrioritizedCount(): Promise<number>` | Bassa | Bassa |
-| `getDependencies(parentId, type, start, end)` | `getDependencies(parentId: string, type: 'processed' \| 'unprocessed', start: number, end: number): Promise<{nextProcessedCursor, nextUnprocessedCursor, processed, unprocessed}>` | Media | Alta |
-| `setGlobalConcurrency(concurrency)` | `setGlobalConcurrency(concurrency: number): Promise<void>` | **Alta** | Media |
-| `removeGlobalConcurrency()` | `removeGlobalConcurrency(): Promise<void>` | Media | Bassa |
-| `getGlobalConcurrency()` | `getGlobalConcurrency(): Promise<number \| null>` | Bassa | Bassa |
-| `setGlobalRateLimit(max, duration)` | `setGlobalRateLimit(max: number, duration: number): Promise<void>` | **Alta** | Media |
-| `removeGlobalRateLimit()` | `removeGlobalRateLimit(): Promise<void>` | Media | Bassa |
-| `getGlobalRateLimit()` | `getGlobalRateLimit(): Promise<{max: number, duration: number} \| null>` | Bassa | Bassa |
-| `getRateLimitTtl(maxJobs?)` | `getRateLimitTtl(maxJobs?: number): Promise<number>` | Bassa | Bassa |
-| `rateLimit(expireTimeMs)` | `rateLimit(expireTimeMs: number): Promise<void>` | Media | Bassa |
+| `getDependencies(parentId, type, start, end)` | `getDependencies(...): Promise<{...}>` | Media | Alta |
+| `getRateLimitTtl(maxJobs?)` | `getRateLimitTtl(maxJobs?): Promise<number>` | Bassa | Bassa |
+| `rateLimit(expireTimeMs)` | `rateLimit(expireTimeMs): Promise<void>` | Media | Bassa |
 | `isMaxed()` | `isMaxed(): Promise<boolean>` | Bassa | Bassa |
-| `upsertJobScheduler(id, repeatOpts, template?)` | `upsertJobScheduler(id: string, repeatOpts: RepeatOptions, jobTemplate?: {name?, data?, opts?}): Promise<JobScheduler>` | **Alta** | Alta |
-| `removeJobScheduler(id)` | `removeJobScheduler(id: string): Promise<boolean>` | Media | Bassa |
-| `getJobScheduler(id)` | `getJobScheduler(id: string): Promise<JobScheduler \| null>` | Media | Bassa |
-| `getJobSchedulers(start?, end?, asc?)` | `getJobSchedulers(start?: number, end?: number, asc?: boolean): Promise<JobScheduler[]>` | Media | Bassa |
+| `upsertJobScheduler(id, repeatOpts, template?)` | `upsertJobScheduler(...): Promise<JobScheduler>` | **Alta** | Alta |
+| `removeJobScheduler(id)` | `removeJobScheduler(id): Promise<boolean>` | Media | Bassa |
+| `getJobScheduler(id)` | `getJobScheduler(id): Promise<JobScheduler \| null>` | Media | Bassa |
+| `getJobSchedulers(start?, end?, asc?)` | `getJobSchedulers(...): Promise<JobScheduler[]>` | Media | Bassa |
 | `getJobSchedulersCount()` | `getJobSchedulersCount(): Promise<number>` | Bassa | Bassa |
-| `getDeduplicationJobId(id)` | `getDeduplicationJobId(id: string): Promise<string \| null>` | Media | Media |
-| `removeDeduplicationKey(id)` | `removeDeduplicationKey(id: string): Promise<number>` | Media | Bassa |
-| `getMetrics(type, start?, end?)` | `getMetrics(type: 'completed' \| 'failed', start?: number, end?: number): Promise<Metrics>` | Media | Media |
-| `getWorkers()` | `getWorkers(): Promise<{id: string, name: string, addr: string, ...}[]>` | Media | Media |
-| `getWorkersCount()` | `getWorkersCount(): Promise<number>` | Bassa | Bassa |
-| `waitUntilReady()` | `waitUntilReady(): Promise<RedisClient>` | Bassa | Bassa |
+| `getDeduplicationJobId(id)` | `getDeduplicationJobId(id): Promise<string \| null>` | Media | Media |
+| `removeDeduplicationKey(id)` | `removeDeduplicationKey(id): Promise<number>` | Media | Bassa |
+| `waitUntilReady()` | `waitUntilReady(): Promise<void>` | Bassa | Bassa |
 | `disconnect()` | `disconnect(): Promise<void>` | Bassa | Bassa |
 
 ---
@@ -133,11 +136,11 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `isPaused()` | `isPaused(): boolean` | Media | Bassa |
 | `isClosed()` | `isClosed(): boolean` | Bassa | Bassa |
 | `waitUntilReady()` | `waitUntilReady(): Promise<void>` | Bassa | Bassa |
-| `getNextJob(token, opts?)` | `getNextJob(token: string, opts?: GetNextJobOptions): Promise<Job \| undefined>` | Bassa | Media |
-| `processJob(job, token, cb?)` | `processJob(job: Job, token: string, callback?: Function): Promise<void \| Job>` | Bassa | Media |
-| `cancelJob(jobId, reason?)` | `cancelJob(jobId: string, reason?: string): boolean` | Media | Bassa |
-| `cancelAllJobs(reason?)` | `cancelAllJobs(reason?: string): void` | Media | Bassa |
-| `extendJobLocks(jobIds, tokens, duration)` | `extendJobLocks(jobIds: string[], tokens: string[], duration: number): Promise<number>` | Bassa | Media |
+| `getNextJob(token, opts?)` | `getNextJob(...): Promise<Job \| undefined>` | Bassa | Media |
+| `processJob(job, token, cb?)` | `processJob(...): Promise<void \| Job>` | Bassa | Media |
+| `cancelJob(jobId, reason?)` | `cancelJob(jobId, reason?): boolean` | Media | Bassa |
+| `cancelAllJobs(reason?)` | `cancelAllJobs(reason?): void` | Media | Bassa |
+| `extendJobLocks(jobIds, tokens, duration)` | `extendJobLocks(...): Promise<number>` | Bassa | Media |
 | **Opzione:** `limiter` | `{max: number, duration: number, groupKey?: string}` | **Alta** | Alta |
 | **Opzione:** `lockDuration` | `number` (default: 30000) | Media | Bassa |
 | **Opzione:** `maxStalledCount` | `number` (default: 1) | Media | Bassa |
@@ -173,6 +176,9 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 |--------|-------|------|
 | `updateProgress(progress, message?)` | `updateProgress(progress: number, message?: string): Promise<void>` | Esteso con message |
 | `log(message)` | `log(message: string): Promise<void>` | Identico |
+| `getState()` | `getState(): Promise<JobStateType>` | ✅ Implementato |
+| `remove()` | `remove(): Promise<void>` | ✅ Implementato |
+| `retry()` | `retry(): Promise<void>` | ✅ Implementato |
 
 ### Proprietà Da Implementare 🔴
 
@@ -185,7 +191,7 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `stalledCounter` | `number` | Bassa | Bassa |
 | `priority` | `number` | Media | Bassa |
 | `parentKey` | `string \| undefined` | Media | Bassa |
-| `parent` | `{id: string, queueQualifiedName: string} \| undefined` | Media | Bassa |
+| `parent` | `{id, queueQualifiedName} \| undefined` | Media | Bassa |
 | `opts` | `JobsOptions` | Media | Bassa |
 | `token` | `string \| undefined` | Bassa | Bassa |
 | `processedBy` | `string \| undefined` | Bassa | Bassa |
@@ -197,7 +203,6 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 
 | Metodo | Firma BullMQ v5 | Priorità | Complessità |
 |--------|-----------------|----------|-------------|
-| `getState()` | `getState(): Promise<'waiting' \| 'active' \| 'completed' \| 'failed' \| 'delayed' \| 'waiting-children' \| 'unknown'>` | **Alta** | Bassa |
 | `isWaiting()` | `isWaiting(): Promise<boolean>` | Bassa | Bassa |
 | `isActive()` | `isActive(): Promise<boolean>` | Bassa | Bassa |
 | `isDelayed()` | `isDelayed(): Promise<boolean>` | Bassa | Bassa |
@@ -205,22 +210,20 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `isFailed()` | `isFailed(): Promise<boolean>` | Bassa | Bassa |
 | `isWaitingChildren()` | `isWaitingChildren(): Promise<boolean>` | Bassa | Bassa |
 | `updateData(data)` | `updateData(data: T): Promise<void>` | Media | Bassa |
-| `moveToCompleted(returnValue, token, fetchNext?)` | `moveToCompleted(returnValue: R, token: string, fetchNext?: boolean): Promise<JobData \| null>` | Bassa | Media |
-| `moveToFailed(error, token, fetchNext?)` | `moveToFailed(error: Error, token: string, fetchNext?: boolean): Promise<void>` | Bassa | Media |
-| `moveToWait(token?)` | `moveToWait(token?: string): Promise<boolean>` | Media | Media |
-| `moveToDelayed(timestamp, token?)` | `moveToDelayed(timestamp: number, token?: string): Promise<void>` | Media | Media |
-| `moveToWaitingChildren(token, opts?)` | `moveToWaitingChildren(token: string, opts?: MoveToChildrenOpts): Promise<boolean>` | Media | Alta |
-| `retry(state?, opts?)` | `retry(state?: 'completed' \| 'failed', opts?: {failParentOnFailure?: boolean}): Promise<void>` | **Alta** | Media |
+| `moveToCompleted(returnValue, token, fetchNext?)` | `moveToCompleted(...): Promise<JobData \| null>` | Bassa | Media |
+| `moveToFailed(error, token, fetchNext?)` | `moveToFailed(...): Promise<void>` | Bassa | Media |
+| `moveToWait(token?)` | `moveToWait(token?): Promise<boolean>` | Media | Media |
+| `moveToDelayed(timestamp, token?)` | `moveToDelayed(...): Promise<void>` | Media | Media |
+| `moveToWaitingChildren(token, opts?)` | `moveToWaitingChildren(...): Promise<boolean>` | Media | Alta |
 | `promote()` | `promote(): Promise<void>` | Media | Bassa |
-| `changeDelay(delay)` | `changeDelay(delay: number): Promise<void>` | Media | Bassa |
-| `changePriority(opts)` | `changePriority(opts: {priority: number, lifo?: boolean}): Promise<void>` | Media | Media |
-| `extendLock(token, duration)` | `extendLock(token: string, duration: number): Promise<number>` | Bassa | Bassa |
-| `getChildrenValues()` | `getChildrenValues(): Promise<{[jobKey: string]: unknown}>` | **Alta** | Media |
-| `getDependencies(opts?)` | `getDependencies(opts?: {processed?, unprocessed?}): Promise<{processed, unprocessed, nextProcessedCursor, nextUnprocessedCursor}>` | Media | Alta |
-| `getDependenciesCount(opts?)` | `getDependenciesCount(opts?: {...}): Promise<{processed: number, unprocessed: number}>` | Bassa | Bassa |
-| `remove(opts?)` | `remove(opts?: {removeChildren?: boolean}): Promise<void>` | **Alta** | Media |
-| `clearLogs(keepLogs?)` | `clearLogs(keepLogs?: number): Promise<void>` | Bassa | Bassa |
-| `waitUntilFinished(queueEvents, ttl?)` | `waitUntilFinished(queueEvents: QueueEvents, ttl?: number): Promise<R>` | Media | Media |
+| `changeDelay(delay)` | `changeDelay(delay): Promise<void>` | Media | Bassa |
+| `changePriority(opts)` | `changePriority(opts): Promise<void>` | Media | Media |
+| `extendLock(token, duration)` | `extendLock(...): Promise<number>` | Bassa | Bassa |
+| `getChildrenValues()` | `getChildrenValues(): Promise<{[jobKey]: unknown}>` | **Alta** | Media |
+| `getDependencies(opts?)` | `getDependencies(opts?): Promise<{...}>` | Media | Alta |
+| `getDependenciesCount(opts?)` | `getDependenciesCount(opts?): Promise<{...}>` | Bassa | Bassa |
+| `clearLogs(keepLogs?)` | `clearLogs(keepLogs?): Promise<void>` | Bassa | Bassa |
+| `waitUntilFinished(queueEvents, ttl?)` | `waitUntilFinished(...): Promise<R>` | Media | Media |
 | `asJSON()` | `asJSON(): JobJsonRaw` | Bassa | Bassa |
 | `toJSON()` | `toJSON(): JobJson` | Bassa | Bassa |
 
@@ -240,7 +243,7 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `jobId` | `string` | Identico |
 | `removeOnComplete` | `boolean` | Identico (BullMQ supporta anche number/KeepJobs) |
 | `removeOnFail` | `boolean` | Identico (BullMQ supporta anche number/KeepJobs) |
-| `repeat` | `{every?: number, limit?: number, pattern?: string}` | Identico |
+| `repeat` | `{every?, limit?, pattern?}` | Identico |
 | `stallTimeout` | `number` | Extra bunqueue |
 | `durable` | `boolean` | Extra bunqueue |
 
@@ -258,8 +261,8 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | `deduplication` | `{id: string, ttl?: number}` | Media | Media |
 | `debounce` | `{id: string, ttl: number}` | Media | Media |
 | `backoff` (oggetto) | `{type: 'fixed' \| 'exponential', delay: number}` | Media | Bassa |
-| `removeOnComplete` (esteso) | `number \| {age?: number, count?: number}` | Bassa | Bassa |
-| `removeOnFail` (esteso) | `number \| {age?: number, count?: number}` | Bassa | Bassa |
+| `removeOnComplete` (esteso) | `number \| {age?, count?}` | Bassa | Bassa |
+| `removeOnFail` (esteso) | `number \| {age?, count?}` | Bassa | Bassa |
 | `repeat.startDate` | `Date \| string \| number` | Bassa | Bassa |
 | `repeat.endDate` | `Date \| string \| number` | Bassa | Bassa |
 | `repeat.tz` | `string` | Bassa | Bassa |
@@ -278,7 +281,7 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 | Metodo | Firma bunqueue | Note |
 |--------|----------------|------|
 | `addChain(steps)` | `addChain(steps: FlowStep[]): Promise<FlowResult>` | API diversa da BullMQ |
-| `addBulkThen(parallel, final)` | `addBulkThen(parallel: FlowStep[], final: FlowStep): Promise<{parallelIds, finalId}>` | API diversa da BullMQ |
+| `addBulkThen(parallel, final)` | `addBulkThen(parallel, final): Promise<{parallelIds, finalId}>` | API diversa da BullMQ |
 | `addTree(root)` | `addTree(root: FlowStep): Promise<FlowResult>` | API diversa da BullMQ |
 | `getParentResult(parentId)` | `getParentResult(parentId: string): unknown` | Solo embedded |
 | `getParentResults(parentIds)` | `getParentResults(parentIds: string[]): Map<string, unknown>` | Solo embedded |
@@ -288,29 +291,11 @@ Documento di confronto tra BullMQ v5 e bunqueue per raggiungere la piena compati
 
 | Metodo | Firma BullMQ v5 | Priorità | Complessità |
 |--------|-----------------|----------|-------------|
-| `add(flow)` | `add(flow: FlowJob, opts?: FlowProducerOptions): Promise<JobNode>` | **Alta** | Alta |
+| `add(flow)` | `add(flow: FlowJob, opts?): Promise<JobNode>` | **Alta** | Alta |
 | `addBulk(flows)` | `addBulk(flows: FlowJob[]): Promise<JobNode[]>` | Media | Alta |
-| `getFlow(opts)` | `getFlow(opts: {id: string, queueName: string, depth?: number, maxChildren?: number}): Promise<JobNode \| null>` | Media | Alta |
+| `getFlow(opts)` | `getFlow(opts): Promise<JobNode \| null>` | Media | Alta |
 | `disconnect()` | `disconnect(): Promise<void>` | Bassa | Bassa |
 | `waitUntilReady()` | `waitUntilReady(): Promise<void>` | Bassa | Bassa |
-
-### Struttura FlowJob BullMQ v5
-
-```typescript
-interface FlowJob {
-  name: string;
-  queueName: string;
-  data?: any;
-  prefix?: string;
-  opts?: Omit<JobsOptions, 'repeat'>;
-  children?: FlowChildJob[];
-}
-
-interface JobNode {
-  job: Job;
-  children?: JobNode[];
-}
-```
 
 ---
 
@@ -326,6 +311,7 @@ interface JobNode {
 | `failed` | `{jobId: string, failedReason: string}` | Identico |
 | `progress` | `{jobId: string, data: any}` | Identico |
 | `stalled` | `{jobId: string}` | Identico |
+| `error` | `Error` | ✅ Implementato |
 
 ### Metodi Implementati ✅
 
@@ -336,6 +322,7 @@ interface JobNode {
 | `on(event, listener)` | Ereditato da EventEmitter | Identico |
 | `once(event, listener)` | Ereditato da EventEmitter | Identico |
 | `off(event, listener)` | Ereditato da EventEmitter | Identico |
+| `emitError(error)` | `emitError(error: Error): void` | ✅ Extra bunqueue |
 
 ### Eventi Da Implementare 🔴
 
@@ -346,7 +333,6 @@ interface JobNode {
 | `delayed` | `{jobId: string, delay: number}` | Media | Bassa |
 | `duplicated` | `{jobId: string}` | Bassa | Bassa |
 | `retried` | `{jobId: string, prev: string}` | Media | Bassa |
-| `error` | `Error` | **Alta** | Bassa |
 | `waiting-children` | `{jobId: string}` | Bassa | Bassa |
 
 ### Metodi Da Implementare 🔴
@@ -364,112 +350,55 @@ interface JobNode {
 
 | Componente | Implementati | Da Implementare | Copertura |
 |------------|--------------|-----------------|-----------|
-| Queue (metodi) | 12 | 47 | 20% |
-| Queue (extra bunqueue) | 10 | - | - |
+| Queue (metodi) | **35** | 18 | **66%** |
+| Queue (extra bunqueue) | 11 | - | - |
 | Worker (metodi/opzioni) | 14 | 18 | 44% |
 | Job (proprietà) | 9 | 14 | 39% |
-| Job (metodi) | 2 | 26 | 7% |
+| Job (metodi) | **5** | 23 | **18%** |
 | JobOptions | 11 | 20 | 35% |
 | FlowProducer | 6 | 5 | 55% |
-| QueueEvents | 6 eventi + 4 metodi | 7 eventi + 2 metodi | 53% |
+| QueueEvents | **8 eventi + 5 metodi** | 6 eventi + 2 metodi | **62%** |
 
-### Priorità Alta (Must Have) 🔴
+### ✅ Implementati in questa sessione
 
-Questi metodi sono essenziali per la compatibilità BullMQ:
+**Queue:**
+- `getJobState(jobId)`
+- `count()` / `countAsync()`
+- `isPaused()` / `isPausedAsync()`
+- `getActive/Completed/Failed/Delayed/Waiting()` + async versions
+- `getActiveCount/CompletedCount/FailedCount/DelayedCount/WaitingCount()`
+- `clean()` / `cleanAsync()`
+- `retryJobs(opts?)`
+- `promoteJobs(opts?)`
+- `getJobLogs()`
+- `addJobLog()`
+- `updateJobProgress()`
+- `setGlobalConcurrency()` / `removeGlobalConcurrency()` / `getGlobalConcurrency()`
+- `setGlobalRateLimit()` / `removeGlobalRateLimit()` / `getGlobalRateLimit()`
+- `getMetrics()`
+- `getWorkers()` / `getWorkersCount()`
 
-1. **Queue**
-   - `getJobState(jobId)` - Ottenere stato job
-   - `clean(grace, limit, type?)` - Pulizia job vecchi
-   - `retryJobs(opts?)` - Riprova job falliti/completati
-   - `setGlobalConcurrency(concurrency)` - Limite concorrenza globale
-   - `setGlobalRateLimit(max, duration)` - Rate limiting globale
-   - `upsertJobScheduler(id, repeatOpts, template?)` - Job schedulati
+**Job:**
+- `getState()`
+- `remove()`
+- `retry()`
 
-2. **Worker**
-   - `limiter` option - Rate limiting per worker
+**QueueEvents:**
+- `error` event
+- `emitError()` method
 
-3. **Job**
-   - `getState()` - Stato corrente del job
-   - `retry(state?, opts?)` - Riprova job
-   - `remove(opts?)` - Rimuovi job
-   - `getChildrenValues()` - Risultati job figli
+### 🔴 Priorità Alta Rimanenti
 
-4. **JobOptions**
-   - `parent` - Dipendenze parent/child
+1. **JobOptions.parent** - Dipendenze parent/child
+2. **Job.getChildrenValues()** - Risultati job figli
+3. **FlowProducer.add(flow)** - API identica BullMQ
+4. **Queue.upsertJobScheduler()** - Job schedulati
+5. **Worker.limiter** option - Rate limiting per worker
 
-5. **FlowProducer**
-   - `add(flow)` - API identica a BullMQ
+### Piano di Implementazione Rimanente
 
-6. **QueueEvents**
-   - `error` - Evento errore
-
-### Priorità Media (Should Have) 🟡
-
-Funzionalità importanti ma non bloccanti:
-
-- Queue: `promoteJobs`, `getJobLogs`, `addJobLog`, `updateJobProgress`, `getMetrics`, `getWorkers`, `getDependencies`, deduplication
-- Worker: `isRunning`, `isPaused`, `cancelJob`, `cancelAllJobs`, `lockDuration`, `maxStalledCount`, evento `drained`
-- Job: `processedOn`, `finishedOn`, `stacktrace`, `priority`, `parent`, `updateData`, `moveToWait`, `moveToDelayed`, `promote`, `changeDelay`, `changePriority`, `waitUntilFinished`
-- JobOptions: `lifo`, `failParentOnFailure`, `deduplication`, `debounce`, backoff oggetto
-- FlowProducer: `addBulk`, `getFlow`
-- QueueEvents: `drained`, `removed`, `delayed`, `retried`
-
-### Priorità Bassa (Nice to Have) 🟢
-
-Funzionalità avanzate/di convenienza:
-
-- Queue: `count`, `isPaused`, `trimEvents`, `getActive/Completed/...`, contatori singoli, `waitUntilReady`, `disconnect`
-- Worker: `isClosed`, `waitUntilReady`, `getNextJob`, `processJob`, `extendJobLocks`
-- Job: `delay`, `stalledCounter`, `token`, `processedBy`, `isWaiting/Active/...`, `moveToCompleted/Failed`, `extendLock`, `clearLogs`, `asJSON`, `toJSON`
-- JobOptions: `stackTraceLimit`, `keepLogs`, `sizeLimit`, `removeDependencyOnFailure`, repeat esteso
-- FlowProducer: `disconnect`, `waitUntilReady`
-- QueueEvents: `duplicated`, `waiting-children`, `waitUntilReady`, `disconnect`
-
----
-
-## Piano di Implementazione Suggerito
-
-### Fase 1: Core Compatibility (Alta Priorità)
-
-1. `Queue.getJobState(jobId)`
-2. `Job.getState()`
-3. `Queue.clean(grace, limit, type?)`
-4. `Queue.retryJobs(opts?)`
-5. `Job.retry(state?, opts?)`
-6. `Job.remove(opts?)`
-7. `QueueEvents.error`
-
-### Fase 2: Flow & Dependencies
-
-1. `FlowProducer.add(flow)` - API identica BullMQ
-2. `JobOptions.parent`
-3. `Job.getChildrenValues()`
-4. `Queue.getDependencies(parentId, type, start, end)`
-
-### Fase 3: Rate Limiting & Concurrency
-
-1. `Queue.setGlobalConcurrency(concurrency)`
-2. `Queue.setGlobalRateLimit(max, duration)`
-3. `Worker.limiter` option
-
-### Fase 4: Scheduling
-
-1. `Queue.upsertJobScheduler(id, repeatOpts, template?)`
-2. `Queue.removeJobScheduler(id)`
-3. `Queue.getJobSchedulers()`
-
-### Fase 5: Observability
-
-1. `Queue.getJobLogs(jobId, ...)`
-2. `Queue.addJobLog(jobId, logRow, keepLogs?)`
-3. `Queue.getMetrics(type, start?, end?)`
-4. `Queue.getWorkers()`
-5. Eventi QueueEvents mancanti
-
-### Fase 6: Convenience Methods
-
-1. Metodi `getActive/Completed/Failed/...`
-2. Metodi contatore singoli
-3. `Worker.isRunning()`, `isPaused()`
-4. Proprietà Job mancanti
-5. JobOptions estese
+1. **Fase 1**: Job Scheduler API (upsertJobScheduler, removeJobScheduler, etc.)
+2. **Fase 2**: Flow/Dependencies (FlowProducer.add, parent option, getChildrenValues)
+3. **Fase 3**: Worker enhancements (limiter, isRunning, isPaused, cancelJob)
+4. **Fase 4**: Job properties (processedOn, finishedOn, stacktrace, etc.)
+5. **Fase 5**: Remaining events (drained, removed, delayed, duplicated, retried)

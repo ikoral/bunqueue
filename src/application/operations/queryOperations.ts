@@ -4,6 +4,7 @@
  */
 
 import type { Job, JobId } from '../../domain/types/job';
+import { JobState } from '../../domain/types/job';
 import type { JobLocation } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
@@ -84,6 +85,38 @@ export function getJobProgress(
 /** Extended context for getJobs (needs SHARD_COUNT) */
 export interface GetJobsContext extends QueryContext {
   shardCount: number;
+}
+
+/** Get job state by ID */
+export async function getJobState(jobId: JobId, ctx: QueryContext): Promise<JobState | 'unknown'> {
+  const location = ctx.jobIndex.get(jobId);
+
+  // Check completed set first (fast path)
+  if (ctx.completedJobs.has(jobId)) {
+    return JobState.Completed;
+  }
+
+  if (!location) {
+    return 'unknown';
+  }
+
+  switch (location.type) {
+    case 'queue': {
+      // Check if job is delayed or waiting
+      const job = await withReadLock(ctx.shardLocks[location.shardIdx], () => {
+        return ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
+      });
+      if (!job) return 'unknown';
+      const now = Date.now();
+      return job.runAt > now ? JobState.Delayed : JobState.Waiting;
+    }
+    case 'processing':
+      return JobState.Active;
+    case 'completed':
+      return JobState.Completed;
+    case 'dlq':
+      return JobState.Failed;
+  }
 }
 
 /** Get jobs from queue with filters */

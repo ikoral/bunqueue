@@ -38,12 +38,12 @@ export async function processJob<T, R>(
   // Use a holder to break the circular reference between job and progress handler
   const jobHolder: { current: Job<T> | null } = { current: null };
 
-  const job = createPublicJob<T>(
-    internalJob,
-    jobName,
-    createProgressHandler(embedded, tcp, emitter, jobHolder),
-    createLogHandler(embedded, tcp)
-  );
+  const job = createPublicJob<T>({
+    job: internalJob,
+    name: jobName,
+    updateProgress: createProgressHandler(embedded, tcp, emitter, jobHolder),
+    log: createLogHandler(embedded, tcp),
+  });
 
   jobHolder.current = job;
 

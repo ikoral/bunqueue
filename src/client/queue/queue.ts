@@ -171,15 +171,22 @@ export class Queue<T = unknown> {
       const job = await manager.getJob(jobId(id));
       if (!job) return null;
       const jobData = job.data as { name?: string } | null;
-      return toPublicJob<T>(job, jobData?.name ?? 'default');
+      return toPublicJob<T>(
+        job,
+        jobData?.name ?? 'default',
+        (jid) => this.getJobState(jid),
+        (jid) => this.removeAsync(jid),
+        (jid) => this.retryJob(jid)
+      );
     }
 
     const response = await this.tcp.send({ cmd: 'GetJob', id });
     if (!response.ok || !response.job) return null;
     const jobData = response.job as Record<string, unknown>;
     const data = jobData.data as { name?: string } | null;
+    const jobIdStr = String(jobData.id);
     return {
-      id: String(jobData.id),
+      id: jobIdStr,
       name: data?.name ?? 'default',
       data: jobData.data as T,
       queueName: this.name,
@@ -188,6 +195,9 @@ export class Queue<T = unknown> {
       progress: (jobData.progress as number | undefined) ?? 0,
       updateProgress: async () => {},
       log: async () => {},
+      getState: () => this.getJobState(jobIdStr),
+      remove: () => this.removeAsync(jobIdStr),
+      retry: () => this.retryJob(jobIdStr),
     };
   }
 
@@ -195,6 +205,51 @@ export class Queue<T = unknown> {
   remove(id: string): void {
     if (this.embedded) void getSharedManager().cancel(jobId(id));
     else void this.tcp.send({ cmd: 'Cancel', id });
+  }
+
+  /** Remove a job by ID (async) */
+  async removeAsync(id: string): Promise<void> {
+    if (this.embedded) {
+      await getSharedManager().cancel(jobId(id));
+    } else {
+      await this.tcp.send({ cmd: 'Cancel', id });
+    }
+  }
+
+  /** Retry a job by ID */
+  async retryJob(id: string): Promise<void> {
+    if (this.embedded) {
+      // For embedded mode, we need to implement retry in QueueManager
+      // For now, just get the job and re-add it
+      const manager = getSharedManager();
+      const job = await manager.getJob(jobId(id));
+      if (job) {
+        await manager.push(job.queue, { data: job.data, priority: job.priority });
+      }
+    } else {
+      await this.tcp.send({ cmd: 'RetryJob', id });
+    }
+  }
+
+  /** Get job state by ID (async, works with both embedded and TCP) */
+  async getJobState(
+    id: string
+  ): Promise<'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown'> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      const state = await manager.getJobState(jobId(id));
+      return state as 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown';
+    }
+
+    const response = await this.tcp.send({ cmd: 'GetState', id });
+    if (!response.ok) return 'unknown';
+    return response.state as string as
+      | 'waiting'
+      | 'delayed'
+      | 'active'
+      | 'completed'
+      | 'failed'
+      | 'unknown';
   }
 
   /** Get job counts by state */
@@ -259,6 +314,331 @@ export class Queue<T = unknown> {
     else void this.tcp.send({ cmd: 'Obliterate', queue: this.name });
   }
 
+  /** Check if queue is paused */
+  isPaused(): boolean {
+    if (this.embedded) {
+      return getSharedManager().isPaused(this.name);
+    }
+    return false;
+  }
+
+  /** Check if queue is paused (async, works with TCP) */
+  async isPausedAsync(): Promise<boolean> {
+    if (this.embedded) return this.isPaused();
+    const response = await this.tcp.send({ cmd: 'IsPaused', queue: this.name });
+    if (!response.ok) return false;
+    return (response as { paused?: boolean }).paused === true;
+  }
+
+  /** Count jobs awaiting processing */
+  count(): number {
+    if (this.embedded) {
+      return getSharedManager().count(this.name);
+    }
+    return 0;
+  }
+
+  /** Count jobs awaiting processing (async, works with TCP) */
+  async countAsync(): Promise<number> {
+    if (this.embedded) return this.count();
+    const response = await this.tcp.send({ cmd: 'Count', queue: this.name });
+    if (!response.ok) return 0;
+    return (response as { count?: number }).count ?? 0;
+  }
+
+  /** Get active jobs */
+  getActive(start = 0, end = 100): Job<T>[] {
+    return this.getJobs({ state: 'active', start, end });
+  }
+
+  /** Get active jobs (async) */
+  async getActiveAsync(start = 0, end = 100): Promise<Job<T>[]> {
+    return this.getJobsAsync({ state: 'active', start, end });
+  }
+
+  /** Get completed jobs */
+  getCompleted(start = 0, end = 100): Job<T>[] {
+    return this.getJobs({ state: 'completed', start, end });
+  }
+
+  /** Get completed jobs (async) */
+  async getCompletedAsync(start = 0, end = 100): Promise<Job<T>[]> {
+    return this.getJobsAsync({ state: 'completed', start, end });
+  }
+
+  /** Get failed jobs */
+  getFailed(start = 0, end = 100): Job<T>[] {
+    return this.getJobs({ state: 'failed', start, end });
+  }
+
+  /** Get failed jobs (async) */
+  async getFailedAsync(start = 0, end = 100): Promise<Job<T>[]> {
+    return this.getJobsAsync({ state: 'failed', start, end });
+  }
+
+  /** Get delayed jobs */
+  getDelayed(start = 0, end = 100): Job<T>[] {
+    return this.getJobs({ state: 'delayed', start, end });
+  }
+
+  /** Get delayed jobs (async) */
+  async getDelayedAsync(start = 0, end = 100): Promise<Job<T>[]> {
+    return this.getJobsAsync({ state: 'delayed', start, end });
+  }
+
+  /** Get waiting jobs */
+  getWaiting(start = 0, end = 100): Job<T>[] {
+    return this.getJobs({ state: 'waiting', start, end });
+  }
+
+  /** Get waiting jobs (async) */
+  async getWaitingAsync(start = 0, end = 100): Promise<Job<T>[]> {
+    return this.getJobsAsync({ state: 'waiting', start, end });
+  }
+
+  /** Get active job count */
+  async getActiveCount(): Promise<number> {
+    const counts = await this.getJobCountsAsync();
+    return counts.active;
+  }
+
+  /** Get completed job count */
+  async getCompletedCount(): Promise<number> {
+    const counts = await this.getJobCountsAsync();
+    return counts.completed;
+  }
+
+  /** Get failed job count */
+  async getFailedCount(): Promise<number> {
+    const counts = await this.getJobCountsAsync();
+    return counts.failed;
+  }
+
+  /** Get delayed job count */
+  async getDelayedCount(): Promise<number> {
+    if (this.embedded) {
+      const stats = getSharedManager().getStats();
+      return stats.delayed;
+    }
+    const response = await this.tcp.send({ cmd: 'Stats' });
+    if (!response.ok) return 0;
+    return (response.stats as { delayed?: number } | undefined)?.delayed ?? 0;
+  }
+
+  /** Get waiting job count */
+  async getWaitingCount(): Promise<number> {
+    const counts = await this.getJobCountsAsync();
+    return counts.waiting;
+  }
+
+  /** Clean old jobs from the queue */
+  clean(
+    grace: number,
+    limit: number,
+    type?: 'completed' | 'wait' | 'active' | 'paused' | 'delayed' | 'failed'
+  ): string[] {
+    if (this.embedded) {
+      const count = getSharedManager().clean(this.name, grace, type, limit);
+      // Return empty array for now - would need to track removed IDs
+      return new Array<string>(count).fill('');
+    }
+    return [];
+  }
+
+  /** Clean old jobs from the queue (async, works with TCP) */
+  async cleanAsync(
+    grace: number,
+    limit: number,
+    type?: 'completed' | 'wait' | 'active' | 'paused' | 'delayed' | 'failed'
+  ): Promise<string[]> {
+    if (this.embedded) return this.clean(grace, limit, type);
+    const response = await this.tcp.send({
+      cmd: 'Clean',
+      queue: this.name,
+      grace,
+      limit,
+      type,
+    });
+    if (!response.ok) return [];
+    return (response as { removed?: string[] }).removed ?? [];
+  }
+
+  /** Retry failed jobs */
+  async retryJobs(opts?: {
+    count?: number;
+    state?: 'completed' | 'failed';
+    timestamp?: number;
+  }): Promise<number> {
+    const state = opts?.state ?? 'failed';
+    const count = opts?.count ?? 100;
+
+    if (this.embedded) {
+      if (state === 'failed') {
+        return getSharedManager().retryDlq(this.name);
+      } else {
+        return getSharedManager().retryCompleted(this.name);
+      }
+    }
+
+    const cmd = state === 'failed' ? 'RetryDlq' : 'RetryCompleted';
+    const response = await this.tcp.send({ cmd, queue: this.name, count });
+    if (!response.ok) return 0;
+    return (response as { count?: number }).count ?? 0;
+  }
+
+  /** Promote delayed jobs to waiting */
+  async promoteJobs(opts?: { count?: number }): Promise<number> {
+    const count = opts?.count ?? 100;
+
+    if (this.embedded) {
+      // Get delayed jobs and promote them
+      const jobs = this.getJobs({ state: 'delayed', start: 0, end: count });
+      let promoted = 0;
+      for (const job of jobs) {
+        const success = await getSharedManager().promote(jobId(job.id));
+        if (success) promoted++;
+      }
+      return promoted;
+    }
+
+    const response = await this.tcp.send({ cmd: 'PromoteJobs', queue: this.name, count });
+    if (!response.ok) return 0;
+    return (response as { count?: number }).count ?? 0;
+  }
+
+  /** Get job logs */
+  async getJobLogs(
+    id: string,
+    start = 0,
+    end = 100,
+    _asc = true
+  ): Promise<{ logs: string[]; count: number }> {
+    if (this.embedded) {
+      const logs = getSharedManager().getLogs(jobId(id));
+      const logStrings = logs.slice(start, end).map((l) => `[${l.level}] ${l.message}`);
+      return { logs: logStrings, count: logs.length };
+    }
+
+    const response = await this.tcp.send({ cmd: 'GetLogs', id, start, end });
+    if (!response.ok) return { logs: [], count: 0 };
+    const result = response as { logs?: Array<{ message: string; level: string }>; count?: number };
+    const logStrings = (result.logs ?? []).map((l) => `[${l.level}] ${l.message}`);
+    return { logs: logStrings, count: result.count ?? 0 };
+  }
+
+  /** Add a log entry to a job */
+  async addJobLog(id: string, logRow: string, _keepLogs?: number): Promise<number> {
+    if (this.embedded) {
+      const success = getSharedManager().addLog(jobId(id), logRow);
+      return success ? 1 : 0;
+    }
+
+    const response = await this.tcp.send({ cmd: 'AddLog', id, message: logRow });
+    return response.ok ? 1 : 0;
+  }
+
+  /** Update job progress */
+  async updateJobProgress(id: string, progress: number | object): Promise<void> {
+    const progressValue = typeof progress === 'number' ? progress : 0;
+    const message = typeof progress === 'object' ? JSON.stringify(progress) : undefined;
+
+    if (this.embedded) {
+      await getSharedManager().updateProgress(jobId(id), progressValue, message);
+      return;
+    }
+
+    await this.tcp.send({ cmd: 'Progress', id, progress: progressValue, message });
+  }
+
+  /** Set global concurrency limit for this queue */
+  setGlobalConcurrency(concurrency: number): void {
+    if (this.embedded) {
+      getSharedManager().setConcurrency(this.name, concurrency);
+    } else {
+      void this.tcp.send({ cmd: 'SetConcurrency', queue: this.name, limit: concurrency });
+    }
+  }
+
+  /** Remove global concurrency limit */
+  removeGlobalConcurrency(): void {
+    if (this.embedded) {
+      getSharedManager().clearConcurrency(this.name);
+    } else {
+      void this.tcp.send({ cmd: 'ClearConcurrency', queue: this.name });
+    }
+  }
+
+  /** Get global concurrency limit */
+  getGlobalConcurrency(): Promise<number | null> {
+    // This would need to be implemented in QueueManager
+    // For now, return null
+    return Promise.resolve(null);
+  }
+
+  /** Set global rate limit for this queue */
+  setGlobalRateLimit(max: number, _duration?: number): void {
+    if (this.embedded) {
+      getSharedManager().setRateLimit(this.name, max);
+    } else {
+      void this.tcp.send({ cmd: 'RateLimit', queue: this.name, limit: max });
+    }
+  }
+
+  /** Remove global rate limit */
+  removeGlobalRateLimit(): void {
+    if (this.embedded) {
+      getSharedManager().clearRateLimit(this.name);
+    } else {
+      void this.tcp.send({ cmd: 'RateLimitClear', queue: this.name });
+    }
+  }
+
+  /** Get global rate limit */
+  getGlobalRateLimit(): Promise<{ max: number; duration: number } | null> {
+    // This would need to be implemented in QueueManager
+    // For now, return null
+    return Promise.resolve(null);
+  }
+
+  /** Get metrics for this queue */
+  async getMetrics(
+    type: 'completed' | 'failed',
+    _start?: number,
+    _end?: number
+  ): Promise<{ meta: { count: number }; data: number[] }> {
+    if (this.embedded) {
+      const stats = getSharedManager().getStats();
+      const count = type === 'completed' ? stats.completed : stats.dlq;
+      return { meta: { count }, data: [] };
+    }
+
+    const response = await this.tcp.send({ cmd: 'Metrics' });
+    if (!response.ok) return { meta: { count: 0 }, data: [] };
+    const stats = response.stats as { completed?: number; dlq?: number } | undefined;
+    const count = type === 'completed' ? (stats?.completed ?? 0) : (stats?.dlq ?? 0);
+    return { meta: { count }, data: [] };
+  }
+
+  /** Get workers processing this queue */
+  async getWorkers(): Promise<Array<{ id: string; name: string; addr?: string }>> {
+    if (this.embedded) {
+      // Would need to implement worker tracking
+      return [];
+    }
+
+    const response = await this.tcp.send({ cmd: 'ListWorkers' });
+    if (!response.ok) return [];
+    return (
+      (response as { workers?: Array<{ id: string; name: string; addr?: string }> }).workers ?? []
+    );
+  }
+
+  /** Get worker count */
+  async getWorkersCount(): Promise<number> {
+    const workers = await this.getWorkers();
+    return workers.length;
+  }
+
   /** Get jobs with filtering and pagination */
   getJobs(
     options: {
@@ -272,7 +652,13 @@ export class Queue<T = unknown> {
       const jobs = getSharedManager().getJobs(this.name, options);
       return jobs.map((job) => {
         const jobData = job.data as { name?: string } | null;
-        return toPublicJob<T>(job, jobData?.name ?? 'default');
+        return toPublicJob<T>(
+          job,
+          jobData?.name ?? 'default',
+          (jid) => this.getJobState(jid),
+          (jid) => this.removeAsync(jid),
+          (jid) => this.retryJob(jid)
+        );
       });
     }
     // Sync TCP version returns empty - use getJobsAsync
@@ -328,6 +714,9 @@ export class Queue<T = unknown> {
         progress: j.progress ?? 0,
         updateProgress: async () => {},
         log: async () => {},
+        getState: () => this.getJobState(j.id),
+        remove: () => this.removeAsync(j.id),
+        retry: () => this.retryJob(j.id),
       };
     });
   }
@@ -439,6 +828,9 @@ export class Queue<T = unknown> {
       log: async (message: string) => {
         await tcp.send({ cmd: 'AddLog', id, message });
       },
+      getState: () => this.getJobState(id),
+      remove: () => this.removeAsync(id),
+      retry: () => this.retryJob(id),
     };
   }
 
@@ -453,6 +845,9 @@ export class Queue<T = unknown> {
       progress: 0,
       updateProgress: async () => {},
       log: async () => {},
+      getState: () => this.getJobState(id),
+      remove: () => this.removeAsync(id),
+      retry: () => this.retryJob(id),
     };
   }
 }

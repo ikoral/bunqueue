@@ -25,20 +25,7 @@ export async function handleGetState(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const job = await ctx.queueManager.getJob(jobId(cmd.id));
-  if (!job) return resp.error('Job not found', reqId);
-
-  let state: string;
-  if (job.completedAt) {
-    state = 'completed';
-  } else if (job.startedAt) {
-    state = 'active';
-  } else if (job.runAt > Date.now()) {
-    state = 'delayed';
-  } else {
-    state = 'waiting';
-  }
-
+  const state = await ctx.queueManager.getJobState(jobId(cmd.id));
   return { ok: true, id: cmd.id, state, reqId } as Response;
 }
 

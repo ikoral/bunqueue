@@ -389,6 +389,10 @@ export class QueueManager {
     return queryOps.getJob(jobId, this.contextFactory.getQueryContext());
   }
 
+  async getJobState(jobId: JobId): Promise<string> {
+    return queryOps.getJobState(jobId, this.contextFactory.getQueryContext());
+  }
+
   getResult(jobId: JobId): unknown {
     return queryOps.getJobResult(jobId, this.contextFactory.getQueryContext());
   }

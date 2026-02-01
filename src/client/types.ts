@@ -4,6 +4,9 @@
 
 import type { Job as InternalJob } from '../domain/types/job';
 
+/** Job state type */
+export type JobStateType = 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown';
+
 /** Job interface exposed to users */
 export interface Job<T = unknown> {
   id: string;
@@ -19,6 +22,12 @@ export interface Job<T = unknown> {
   updateProgress(progress: number, message?: string): Promise<void>;
   /** Log a message to the job */
   log(message: string): Promise<void>;
+  /** Get current job state */
+  getState(): Promise<JobStateType>;
+  /** Remove this job from the queue */
+  remove(): Promise<void>;
+  /** Retry this job */
+  retry(): Promise<void>;
 }
 
 /** Job options when adding to queue */
@@ -195,13 +204,20 @@ function extractUserData(jobData: unknown): unknown {
   return jobData;
 }
 
+/** Options for creating a public job */
+export interface CreatePublicJobOptions {
+  job: InternalJob;
+  name: string;
+  updateProgress: (id: string, progress: number, message?: string) => Promise<void>;
+  log: (id: string, message: string) => Promise<void>;
+  getState?: (id: string) => Promise<JobStateType>;
+  remove?: (id: string) => Promise<void>;
+  retry?: (id: string) => Promise<void>;
+}
+
 /** Convert internal job to public job (with methods) */
-export function createPublicJob<T>(
-  job: InternalJob,
-  name: string,
-  updateProgress: (id: string, progress: number, message?: string) => Promise<void>,
-  log: (id: string, message: string) => Promise<void>
-): Job<T> {
+export function createPublicJob<T>(opts: CreatePublicJobOptions): Job<T> {
+  const { job, name, updateProgress, log, getState, remove, retry } = opts;
   const id = String(job.id);
   return {
     id,
@@ -213,11 +229,20 @@ export function createPublicJob<T>(
     progress: job.progress,
     updateProgress: (progress: number, message?: string) => updateProgress(id, progress, message),
     log: (message: string) => log(id, message),
+    getState: () => (getState ? getState(id) : Promise.resolve('unknown' as JobStateType)),
+    remove: () => (remove ? remove(id) : Promise.resolve()),
+    retry: () => (retry ? retry(id) : Promise.resolve()),
   };
 }
 
 /** Simple public job without methods (for Queue.getJob) */
-export function toPublicJob<T>(job: InternalJob, name: string): Job<T> {
+export function toPublicJob<T>(
+  job: InternalJob,
+  name: string,
+  getState?: (id: string) => Promise<JobStateType>,
+  remove?: (id: string) => Promise<void>,
+  retry?: (id: string) => Promise<void>
+): Job<T> {
   const id = String(job.id);
   return {
     id,
@@ -229,6 +254,9 @@ export function toPublicJob<T>(job: InternalJob, name: string): Job<T> {
     progress: job.progress,
     updateProgress: async () => {},
     log: async () => {},
+    getState: () => (getState ? getState(id) : Promise.resolve('unknown' as JobStateType)),
+    remove: () => (remove ? remove(id) : Promise.resolve()),
+    retry: () => (retry ? retry(id) : Promise.resolve()),
   };
 }
 
