@@ -239,11 +239,32 @@ export class LineBuffer {
   }
 }
 
+/** Maximum allowed frame size (64MB) - prevents memory exhaustion DoS */
+export const MAX_FRAME_SIZE = 64 * 1024 * 1024;
+
+/** Error thrown when frame size exceeds maximum */
+export class FrameSizeError extends Error {
+  constructor(
+    public readonly requestedSize: number,
+    public readonly maxSize: number
+  ) {
+    super(`Frame size ${requestedSize} exceeds maximum allowed size ${maxSize}`);
+    this.name = 'FrameSizeError';
+  }
+}
+
 /** Binary protocol frame parser */
 export class FrameParser {
   private buffer: Uint8Array = new Uint8Array(0);
+  private readonly maxFrameSize: number;
 
-  /** Add data and extract complete frames */
+  constructor(maxFrameSize: number = MAX_FRAME_SIZE) {
+    this.maxFrameSize = maxFrameSize;
+  }
+
+  /** Add data and extract complete frames
+   * @throws {FrameSizeError} if frame length exceeds maxFrameSize
+   */
   addData(data: Uint8Array): Uint8Array[] {
     // Concatenate buffers
     const newBuffer = new Uint8Array(this.buffer.length + data.length);
@@ -254,9 +275,21 @@ export class FrameParser {
     const frames: Uint8Array[] = [];
 
     while (this.buffer.length >= 4) {
-      // Read length prefix (big-endian u32)
+      // Read length prefix (big-endian u32) using unsigned right shift to ensure positive value
+      // Using >>> 0 at the end converts the result to an unsigned 32-bit integer
       const length =
-        (this.buffer[0] << 24) | (this.buffer[1] << 16) | (this.buffer[2] << 8) | this.buffer[3];
+        ((this.buffer[0] << 24) |
+          (this.buffer[1] << 16) |
+          (this.buffer[2] << 8) |
+          this.buffer[3]) >>>
+        0;
+
+      // Validate frame size to prevent memory exhaustion DoS
+      if (length > this.maxFrameSize) {
+        // Clear buffer to prevent further processing of malicious data
+        this.buffer = new Uint8Array(0);
+        throw new FrameSizeError(length, this.maxFrameSize);
+      }
 
       if (this.buffer.length < 4 + length) {
         // Not enough data
@@ -269,6 +302,11 @@ export class FrameParser {
     }
 
     return frames;
+  }
+
+  /** Clear the internal buffer */
+  clear(): void {
+    this.buffer = new Uint8Array(0);
   }
 
   /** Create a framed message */

@@ -88,6 +88,17 @@ export class DlqShard {
     return entry;
   }
 
+  /** Restore an existing DlqEntry (for recovery from persistence) */
+  restoreEntry(queue: string, entry: DlqEntry): void {
+    let entries = this.dlq.get(queue);
+    if (!entries) {
+      entries = [];
+      this.dlq.set(queue, entries);
+    }
+    entries.push(entry);
+    this.stats.incrementDlq();
+  }
+
   /** Get DLQ entries (raw) */
   getEntries(queue: string): DlqEntry[] {
     return this.dlq.get(queue) ?? [];
@@ -109,8 +120,8 @@ export class DlqShard {
     const now = Date.now();
     let result = entries.filter((entry) => {
       if (filter.reason && entry.reason !== filter.reason) return false;
-      if (filter.olderThan && entry.enteredAt >= filter.olderThan) return false;
-      if (filter.newerThan && entry.enteredAt <= filter.newerThan) return false;
+      if (filter.olderThan && entry.enteredAt > filter.olderThan) return false;
+      if (filter.newerThan && entry.enteredAt < filter.newerThan) return false;
       if (filter.retriable && !canAutoRetry(entry, this.getConfig(queue), now)) return false;
       if (filter.expired && !isDlqEntryExpired(entry, now)) return false;
       return true;

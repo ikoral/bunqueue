@@ -9,6 +9,7 @@ import { jobId } from '../../domain/types/job';
 /**
  * Parse job from TCP response data
  */
+// eslint-disable-next-line complexity
 export function parseJobFromResponse(
   jobData: Record<string, unknown>,
   queueName: string
@@ -20,7 +21,7 @@ export function parseJobFromResponse(
     priority: (jobData.priority as number | undefined) ?? 0,
     createdAt: (jobData.createdAt as number | undefined) ?? Date.now(),
     runAt: (jobData.runAt as number | undefined) ?? Date.now(),
-    startedAt: Date.now(),
+    startedAt: (jobData.startedAt as number | undefined) ?? Date.now(),
     completedAt: null,
     attempts: (jobData.attempts as number | undefined) ?? 0,
     maxAttempts: (jobData.maxAttempts as number | undefined) ?? 3,
@@ -31,12 +32,12 @@ export function parseJobFromResponse(
     customId: (jobData.customId as string | undefined) ?? null,
     progress: (jobData.progress as number | undefined) ?? 0,
     progressMessage: (jobData.progressMessage as string | undefined) ?? null,
-    dependsOn: [],
-    parentId: null,
-    childrenIds: [],
-    childrenCompleted: 0,
-    tags: [],
-    groupId: null,
+    dependsOn: Array.isArray(jobData.dependsOn) ? (jobData.dependsOn as string[]) : [],
+    parentId: (jobData.parentId as string | undefined) ?? null,
+    childrenIds: Array.isArray(jobData.childrenIds) ? (jobData.childrenIds as string[]) : [],
+    childrenCompleted: (jobData.childrenCompleted as number | undefined) ?? 0,
+    tags: Array.isArray(jobData.tags) ? (jobData.tags as string[]) : [],
+    groupId: (jobData.groupId as string | undefined) ?? null,
     lifo: false,
     removeOnComplete: (jobData.removeOnComplete as boolean | undefined) ?? false,
     removeOnFail: false,

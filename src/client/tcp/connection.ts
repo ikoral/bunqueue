@@ -5,7 +5,7 @@
 
 import type { Socket } from 'bun';
 import type { SocketWrapper, PendingCommand } from './types';
-import { FrameParser } from '../../infrastructure/server/protocol';
+import { FrameParser, FrameSizeError } from '../../infrastructure/server/protocol';
 
 /** Connection events */
 export interface ConnectionEvents {
@@ -58,7 +58,20 @@ export async function createConnection(
     // Socket handlers
     const socketHandlers = {
       data(_sock: Socket<unknown>, data: Buffer) {
-        const frames = socketData.frameParser.addData(new Uint8Array(data));
+        let frames: Uint8Array[];
+        try {
+          frames = socketData.frameParser.addData(new Uint8Array(data));
+        } catch (err) {
+          if (err instanceof FrameSizeError) {
+            events.onError(
+              new Error(
+                `Frame too large: ${err.requestedSize} bytes exceeds maximum ${err.maxSize}`
+              )
+            );
+            return;
+          }
+          throw err;
+        }
         for (const frame of frames) {
           events.onData(frame);
         }

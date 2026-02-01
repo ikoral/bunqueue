@@ -13,7 +13,6 @@ import { EventType, type JobEvent } from '../domain/types/queue';
 export class QueueEvents extends EventEmitter {
   readonly name: string;
   private running = false;
-  private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private unsubscribe: (() => void) | null = null;
 
   constructor(name: string) {
@@ -23,7 +22,8 @@ export class QueueEvents extends EventEmitter {
   }
 
   private start(): void {
-    if (this.running) return;
+    // Guard against double subscription (race condition prevention)
+    if (this.running || this.unsubscribe) return;
     this.running = true;
 
     // Subscribe to events from QueueManager
@@ -59,14 +59,11 @@ export class QueueEvents extends EventEmitter {
   /** Close the event listener */
   close(): void {
     this.running = false;
-    if (this.pollTimer) {
-      clearTimeout(this.pollTimer);
-      this.pollTimer = null;
-    }
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
     }
-    this.removeAllListeners();
+    // Note: User-attached listeners are NOT removed here.
+    // Users should manage their own listeners via removeListener() or removeAllListeners().
   }
 }

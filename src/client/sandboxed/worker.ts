@@ -25,10 +25,12 @@ export class SandboxedWorker {
   private pullPromise: Promise<void> | null = null;
   private wrapperPath: string | null = null;
   private readonly manager: SharedManager;
+  private readonly workerId: string;
 
   constructor(queueName: string, options: SandboxedWorkerOptions) {
     this.queueName = queueName;
     this.manager = options.manager ?? getSharedManager();
+    this.workerId = `sandboxed-worker-${queueName}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     this.options = {
       processor: options.processor,
       concurrency: options.concurrency ?? 1,
@@ -81,6 +83,7 @@ export class SandboxedWorker {
       worker,
       busy: false,
       currentJob: null,
+      currentToken: null,
       restarts: this.workers[index]?.restarts ?? 0,
       timeoutId: null,
     };
@@ -105,14 +108,15 @@ export class SandboxedWorker {
         continue;
       }
 
-      const job = await this.manager.pull(this.queueName, 1000);
-      if (job) this.dispatch(idle, job);
+      const { job, token } = await this.manager.pullWithLock(this.queueName, this.workerId, 1000);
+      if (job) this.dispatch(idle, job, token);
     }
   }
 
-  private dispatch(wp: WorkerProcess, job: DomainJob): void {
+  private dispatch(wp: WorkerProcess, job: DomainJob, token: string | null): void {
     wp.busy = true;
     wp.currentJob = job;
+    wp.currentToken = token;
     wp.timeoutId = setTimeout(() => {
       this.handleTimeout(wp, job);
     }, this.options.timeout);
@@ -149,12 +153,14 @@ export class SandboxedWorker {
     }
     if (wp.currentJob) {
       const jobId = wp.currentJob.id;
-      this.manager.ack(jobId, result).catch((e: unknown) => {
+      const token = wp.currentToken ?? undefined;
+      this.manager.ack(jobId, result, token).catch((e: unknown) => {
         console.error(`[SandboxedWorker] Failed to ack job ${jobId}:`, e);
       });
     }
     wp.busy = false;
     wp.currentJob = null;
+    wp.currentToken = null;
   }
 
   private fail(wp: WorkerProcess, error: string): void {
@@ -164,28 +170,48 @@ export class SandboxedWorker {
     }
     if (wp.currentJob) {
       const jobId = wp.currentJob.id;
-      this.manager.fail(jobId, error).catch((e: unknown) => {
+      const token = wp.currentToken ?? undefined;
+      this.manager.fail(jobId, error, token).catch((e: unknown) => {
         console.error(`[SandboxedWorker] Failed to fail job ${jobId}:`, e);
       });
     }
     wp.busy = false;
     wp.currentJob = null;
+    wp.currentToken = null;
   }
 
   private handleTimeout(wp: WorkerProcess, job: DomainJob): void {
     console.error(`[SandboxedWorker] Job ${job.id} timed out after ${this.options.timeout}ms`);
     wp.worker.terminate();
-    this.manager.fail(job.id, `Job timed out after ${this.options.timeout}ms`).catch(() => {});
+    const token = wp.currentToken ?? undefined;
+    this.manager
+      .fail(job.id, `Job timed out after ${this.options.timeout}ms`, token)
+      .catch(() => {});
+
+    // Clear job state so handleCrash won't fail it again
+    wp.currentJob = null;
+    wp.currentToken = null;
+    wp.timeoutId = null;
 
     const index = this.workers.indexOf(wp);
     if (index !== -1) this.handleCrash(wp, index);
   }
 
   private handleCrash(wp: WorkerProcess, index: number): void {
-    if (wp.currentJob) this.manager.fail(wp.currentJob.id, 'Worker crashed').catch(() => {});
+    // Clear timeout if still pending (e.g., when called from onerror)
+    if (wp.timeoutId) {
+      clearTimeout(wp.timeoutId);
+      wp.timeoutId = null;
+    }
+
+    if (wp.currentJob) {
+      const token = wp.currentToken ?? undefined;
+      this.manager.fail(wp.currentJob.id, 'Worker crashed', token).catch(() => {});
+    }
 
     wp.busy = false;
     wp.currentJob = null;
+    wp.currentToken = null;
     wp.restarts++;
 
     if (this.options.autoRestart && wp.restarts < this.options.maxRestarts && this.running) {

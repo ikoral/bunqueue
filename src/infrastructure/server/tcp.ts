@@ -8,7 +8,12 @@ import type { QueueManager } from '../../application/queueManager';
 import type { Response } from '../../domain/types/response';
 import type { Command } from '../../domain/types/command';
 import { handleCommand, type HandlerContext } from './handler';
-import { FrameParser, createConnectionState, type ConnectionState } from './protocol';
+import {
+  FrameParser,
+  FrameSizeError,
+  createConnectionState,
+  type ConnectionState,
+} from './protocol';
 import { uuid } from '../../shared/hash';
 import { tcpLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
@@ -79,7 +84,26 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
         return;
       }
 
-      const frames = frameParser.addData(new Uint8Array(data));
+      let frames: Uint8Array[];
+      try {
+        frames = frameParser.addData(new Uint8Array(data));
+      } catch (err) {
+        if (err instanceof FrameSizeError) {
+          tcpLog.warn('Frame size exceeded', {
+            clientId: state.clientId,
+            requestedSize: err.requestedSize,
+            maxSize: err.maxSize,
+          });
+          socket.write(
+            errorResponse(
+              `Frame too large: ${err.requestedSize} bytes exceeds maximum ${err.maxSize}`
+            )
+          );
+          socket.end();
+          return;
+        }
+        throw err;
+      }
 
       for (const frame of frames) {
         let cmd: Command;

@@ -33,6 +33,8 @@ export interface PushCommand extends BaseCommand {
   readonly removeOnFail?: boolean;
   /** Force immediate persistence to disk (bypass write buffer) */
   readonly durable?: boolean;
+  /** Repeat configuration for recurring jobs */
+  readonly repeat?: { every?: number; limit?: number; count?: number };
 }
 
 export interface PushBatchCommand extends BaseCommand {

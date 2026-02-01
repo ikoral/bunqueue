@@ -42,6 +42,7 @@ export interface WorkerProcess {
   worker: Worker;
   busy: boolean;
   currentJob: DomainJob | null;
+  currentToken: string | null;
   restarts: number;
   timeoutId: Timer | null;
 }

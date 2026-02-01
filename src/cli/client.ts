@@ -6,7 +6,7 @@
 import type { Socket } from 'bun';
 import { formatOutput, formatError } from './output';
 import { pack, unpack } from 'msgpackr';
-import { FrameParser } from '../infrastructure/server/protocol';
+import { FrameParser, FrameSizeError } from '../infrastructure/server/protocol';
 
 /** Client options */
 export interface ClientOptions {
@@ -66,7 +66,24 @@ async function connect(options: ClientOptions): Promise<{
     // Socket handlers
     const socketHandlers = {
       data(_sock: Socket<unknown>, data: Buffer) {
-        const frames = socketData.frameParser.addData(new Uint8Array(data));
+        let frames: Uint8Array[];
+        try {
+          frames = socketData.frameParser.addData(new Uint8Array(data));
+        } catch (err) {
+          if (err instanceof FrameSizeError) {
+            if (socketData.reject) {
+              socketData.reject(
+                new Error(
+                  `Frame too large: ${err.requestedSize} bytes exceeds maximum ${err.maxSize}`
+                )
+              );
+              socketData.resolve = null;
+              socketData.reject = null;
+            }
+            return;
+          }
+          throw err;
+        }
 
         for (const frame of frames) {
           if (socketData.resolve) {

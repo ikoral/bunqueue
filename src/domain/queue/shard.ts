@@ -149,16 +149,11 @@ export class Shard {
     return this.uniqueKeyManager.getEntry(queue, key);
   }
 
-  registerUniqueKey(queue: string, key: string): void {
-    this.uniqueKeyManager.register(queue, key);
+  registerUniqueKey(queue: string, key: string, jobId: JobId): void {
+    this.uniqueKeyManager.register(queue, key, jobId);
   }
 
-  registerUniqueKeyWithTtl(
-    queue: string,
-    key: string,
-    jobId: JobId | undefined,
-    ttl?: number
-  ): void {
+  registerUniqueKeyWithTtl(queue: string, key: string, jobId: JobId, ttl?: number): void {
     this.uniqueKeyManager.registerWithTtl(queue, key, jobId, ttl);
   }
 
@@ -321,6 +316,11 @@ export class Shard {
     error: string | null = null
   ): DlqEntry {
     return this.dlqManager.add(job, reason, error);
+  }
+
+  /** Restore an existing DlqEntry (for recovery from persistence) */
+  restoreDlqEntry(queue: string, entry: DlqEntry): void {
+    this.dlqManager.restoreEntry(queue, entry);
   }
 
   getDlqEntries(queue: string): DlqEntry[] {

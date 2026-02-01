@@ -95,11 +95,12 @@ export class Queue<T = unknown> {
       maxAttempts: merged.attempts,
       backoff: merged.backoff,
       timeout: merged.timeout,
-      customId: merged.jobId,
+      jobId: merged.jobId,
       removeOnComplete: merged.removeOnComplete,
       removeOnFail: merged.removeOnFail,
       stallTimeout: merged.stallTimeout,
       durable: merged.durable,
+      repeat: merged.repeat,
     });
 
     if (!response.ok) {
@@ -130,6 +131,7 @@ export class Queue<T = unknown> {
           removeOnFail: m.removeOnFail,
           repeat: m.repeat,
           stallTimeout: m.stallTimeout,
+          durable: m.durable,
         };
       });
       const ids = await manager.pushBatch(this.name, inputs);

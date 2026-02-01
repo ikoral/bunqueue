@@ -8,6 +8,14 @@ import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { tmpdir } from 'os';
 
 /**
+ * Escape a string for safe embedding in a template literal
+ * Prevents code injection via backticks or backslashes in paths
+ */
+function escapeForTemplateLiteral(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
+}
+
+/**
  * Create wrapper script file that loads the processor
  */
 export function createWrapperScript(queueName: string, processorPath: string): string {
@@ -15,9 +23,12 @@ export function createWrapperScript(queueName: string, processorPath: string): s
     ? processorPath
     : join(process.cwd(), processorPath);
 
+  // Escape the path to prevent code injection via backticks or template expressions
+  const escapedPath = escapeForTemplateLiteral(fullPath);
+
   const wrapperCode = `
 // Sandboxed Worker Wrapper
-const processor = (await import('${fullPath}')).default;
+const processor = (await import('${escapedPath}')).default;
 
 self.onmessage = async (event) => {
   const { type, job } = event.data;

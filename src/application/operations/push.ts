@@ -87,6 +87,8 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
             shard.decrementQueued(existingEntry.jobId);
             ctx.jobIndex.delete(existingEntry.jobId);
           }
+          // Release old unique key entry before registering new one to avoid stale TTL
+          shard.releaseUniqueKey(queue, job.uniqueKey);
           // Register new key with TTL
           shard.registerUniqueKeyWithTtl(queue, job.uniqueKey, job.id, dedupOpts?.ttl);
         } else if (dedupOpts?.extend && dedupOpts?.ttl) {

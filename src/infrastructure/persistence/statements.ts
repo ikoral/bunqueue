@@ -18,7 +18,8 @@ export type StatementName =
   | 'loadDlq'
   | 'deleteDlqEntry'
   | 'clearDlqQueue'
-  | 'insertCron';
+  | 'insertCron'
+  | 'updateCron';
 
 /** SQL statements */
 export const SQL_STATEMENTS: Record<StatementName, string> = {
@@ -26,12 +27,12 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
     INSERT INTO jobs (
       id, queue, data, priority, created_at, run_at, attempts,
       max_attempts, backoff, ttl, timeout, unique_key, custom_id,
-      depends_on, parent_id, tags, state, lifo, group_id,
+      depends_on, parent_id, children_ids, tags, state, lifo, group_id,
       remove_on_complete, remove_on_fail, stall_timeout
     ) VALUES (
       ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?
     )
   `,
@@ -62,6 +63,8 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
     (name, queue, data, schedule, repeat_every, priority, next_run, executions, max_limit, timezone)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
+
+  updateCron: 'UPDATE cron_jobs SET executions = ?, next_run = ? WHERE name = ?',
 };
 
 /** Prepare all statements */

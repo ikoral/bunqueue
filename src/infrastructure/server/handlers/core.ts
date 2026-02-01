@@ -51,26 +51,32 @@ export async function handlePush(
     }
   }
 
-  const job = await ctx.queueManager.push(cmd.queue, {
-    data: cmd.data,
-    priority: cmd.priority,
-    delay: cmd.delay,
-    maxAttempts: cmd.maxAttempts,
-    backoff: cmd.backoff,
-    ttl: cmd.ttl,
-    timeout: cmd.timeout,
-    uniqueKey: cmd.uniqueKey,
-    customId: cmd.jobId,
-    dependsOn: cmd.dependsOn?.map((id) => jobId(id)),
-    tags: cmd.tags,
-    groupId: cmd.groupId,
-    lifo: cmd.lifo,
-    removeOnComplete: cmd.removeOnComplete,
-    removeOnFail: cmd.removeOnFail,
-    durable: cmd.durable,
-  });
+  try {
+    const job = await ctx.queueManager.push(cmd.queue, {
+      data: cmd.data,
+      priority: cmd.priority,
+      delay: cmd.delay,
+      maxAttempts: cmd.maxAttempts,
+      backoff: cmd.backoff,
+      ttl: cmd.ttl,
+      timeout: cmd.timeout,
+      uniqueKey: cmd.uniqueKey,
+      customId: cmd.jobId,
+      dependsOn: cmd.dependsOn?.map((id) => jobId(id)),
+      tags: cmd.tags,
+      groupId: cmd.groupId,
+      lifo: cmd.lifo,
+      removeOnComplete: cmd.removeOnComplete,
+      removeOnFail: cmd.removeOnFail,
+      durable: cmd.durable,
+      repeat: cmd.repeat,
+    });
 
-  return resp.ok(job.id, reqId);
+    return resp.ok(job.id, reqId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return resp.error(message, reqId);
+  }
 }
 
 /** Handle PUSHB (batch push) command */

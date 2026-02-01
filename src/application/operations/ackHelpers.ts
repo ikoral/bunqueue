@@ -156,6 +156,7 @@ export interface FinalizeContext {
   completedJobs: SetLike<JobId>;
   jobResults: MapLike<JobId, unknown>;
   jobIndex: Map<JobId, JobLocation>;
+  customIdMap?: MapLike<string, JobId>;
   totalCompleted: { value: bigint };
   broadcast: (event: {
     eventType: EventType;
@@ -173,6 +174,7 @@ export interface FinalizeContext {
 /**
  * Finalize batch ack - update indexes, metrics, broadcast, notify
  */
+// eslint-disable-next-line complexity
 export function finalizeBatchAck<T>(
   extractedJobs: Array<ExtractedJob<T>>,
   ctx: FinalizeContext,
@@ -191,16 +193,28 @@ export function finalizeBatchAck<T>(
   ctx.totalCompleted.value += BigInt(jobCount);
 
   // Main loop
+  // IMPORTANT: Order of operations matters for race condition prevention.
+  // jobResults must be set BEFORE completedJobs.add() so that dependent jobs
+  // checking completedJobs.has(jobId) will always find the result available.
   for (let i = 0; i < jobCount; i++) {
     const { id: jobId, job, result } = extractedJobs[i];
+
+    // Release customId so it can be reused
+    if (job.customId && ctx.customIdMap) {
+      ctx.customIdMap.delete(job.customId);
+    }
+
     if (!job.removeOnComplete) {
-      ctx.completedJobs.add(jobId);
+      // 1. Store result first (if any) - must happen before completedJobs.add()
       if (includeResults && result !== undefined) {
         ctx.jobResults.set(jobId, result);
         if (hasStorage) storage.storeResult(jobId, result);
       }
+      // 2. Update job index
       ctx.jobIndex.set(jobId, completedLocation);
       if (hasStorage) storage.markCompleted(jobId, now);
+      // 3. Mark as completed LAST - this is the signal other threads wait for
+      ctx.completedJobs.add(jobId);
     } else {
       ctx.jobIndex.delete(jobId);
       if (hasStorage) storage.deleteJob(jobId);

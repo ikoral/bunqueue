@@ -139,13 +139,8 @@ function releaseJobToQueue(opts: ReleaseJobOptions): number {
   // Release lock if exists
   ctx.jobLocks.delete(jobId);
 
-  // Release concurrency
-  shard.releaseConcurrency(job.queue);
-
-  // Release group if active
-  if (job.groupId) {
-    shard.releaseGroup(job.queue, job.groupId);
-  }
+  // Release all job resources (concurrency, uniqueKey, groupId)
+  shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
 
   // Reset job state for retry
   job.startedAt = null;

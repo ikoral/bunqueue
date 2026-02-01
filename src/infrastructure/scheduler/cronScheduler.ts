@@ -27,6 +27,9 @@ const DEFAULT_CONFIG: Required<CronSchedulerConfig> = {
 /** Push job callback type */
 export type PushJobCallback = (queue: string, input: JobInput) => Promise<void>;
 
+/** Persist cron state callback type */
+export type PersistCronCallback = (name: string, executions: number, nextRun: number) => void;
+
 /** Heap entry with generation for lazy deletion */
 interface CronHeapEntry {
   cron: CronJob;
@@ -49,6 +52,7 @@ export class CronScheduler {
   private generation = 0;
   private checkInterval: ReturnType<typeof setInterval> | null = null;
   private pushJob: PushJobCallback | null = null;
+  private persistCron: PersistCronCallback | null = null;
 
   constructor(config: CronSchedulerConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -59,6 +63,13 @@ export class CronScheduler {
    */
   setPushCallback(callback: PushJobCallback): void {
     this.pushJob = callback;
+  }
+
+  /**
+   * Set the persist cron callback for saving state after execution
+   */
+  setPersistCallback(callback: PersistCronCallback): void {
+    this.persistCron = callback;
   }
 
   /**
@@ -213,12 +224,25 @@ export class CronScheduler {
         // Update execution count
         cron.executions++;
 
-        // Calculate next run
+        // Calculate next run using actual execution time to prevent timing drift
+        const executionTime = Date.now();
         if (cron.schedule) {
           const expanded = expandCronShortcut(cron.schedule);
-          cron.nextRun = getNextCronRun(expanded, now, cron.timezone ?? undefined);
+          cron.nextRun = getNextCronRun(expanded, executionTime, cron.timezone ?? undefined);
         } else if (cron.repeatEvery) {
-          cron.nextRun = getNextIntervalRun(cron.repeatEvery, now);
+          cron.nextRun = getNextIntervalRun(cron.repeatEvery, executionTime);
+        }
+
+        // Persist updated cron state to database
+        if (this.persistCron) {
+          try {
+            this.persistCron(cron.name, cron.executions, cron.nextRun);
+          } catch (persistErr) {
+            cronLog.error('Failed to persist cron state', {
+              name: cron.name,
+              error: String(persistErr),
+            });
+          }
         }
 
         // Re-insert with same generation (not stale)

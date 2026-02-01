@@ -102,9 +102,16 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
 
     // WebSocket upgrade
     if (path === '/ws' || path.startsWith('/ws/')) {
+      // Validate auth token if authentication is required
+      if (authTokens.size > 0) {
+        const token = req.headers.get('Authorization')?.replace('Bearer ', '') ?? '';
+        if (!validateAuthToken(token, authTokens)) {
+          return jsonResponse({ ok: false, error: 'Unauthorized' }, 401);
+        }
+      }
       const queueFilter = path.startsWith('/ws/queues/') ? path.slice('/ws/queues/'.length) : null;
       const upgraded = server.upgrade(req, {
-        data: { id: uuid(), authenticated: authTokens.size === 0, queueFilter },
+        data: { id: uuid(), authenticated: true, queueFilter },
       });
       return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 400 });
     }
@@ -144,7 +151,9 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       }
     }
 
-    const ctx: HandlerContext = { queueManager, authTokens, authenticated: true };
+    // Generate unique clientId for HTTP request (stateless, but needed for job ownership tracking)
+    const clientId = uuid();
+    const ctx: HandlerContext = { queueManager, authTokens, authenticated: true, clientId };
 
     try {
       return await routeRequest(req, path, ctx, corsOrigins);
@@ -164,11 +173,27 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         queueManager,
         authTokens,
         authenticated: ws.data.authenticated,
+        clientId: ws.data.id, // Use WebSocket connection ID for job ownership tracking
       };
       await wsHandler.onMessage(ws, message, ctx);
     },
     close(ws: ServerWebSocket<WsData>) {
+      const clientId = ws.data.id;
       wsHandler.onClose(ws);
+      // Release all jobs owned by this WebSocket client back to queue
+      queueManager
+        .releaseClientJobs(clientId)
+        .then((released) => {
+          if (released > 0) {
+            httpLog.info('WebSocket client disconnected, released jobs', { clientId, released });
+          }
+        })
+        .catch((err: unknown) => {
+          httpLog.error('Failed to release WebSocket client jobs', {
+            clientId,
+            error: String(err),
+          });
+        });
     },
   };
 

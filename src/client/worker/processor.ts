@@ -35,12 +35,17 @@ export async function processJob<T, R>(
   const jobName = jobData?.name ?? 'default';
   const jobIdStr = String(internalJob.id);
 
+  // Use a holder to break the circular reference between job and progress handler
+  const jobHolder: { current: Job<T> | null } = { current: null };
+
   const job = createPublicJob<T>(
     internalJob,
     jobName,
-    createProgressHandler(embedded, tcp, emitter),
+    createProgressHandler(embedded, tcp, emitter, jobHolder),
     createLogHandler(embedded, tcp)
   );
+
+  jobHolder.current = job;
 
   emitter.emit('active', job);
 
@@ -53,7 +58,7 @@ export async function processJob<T, R>(
       await manager.ack(internalJob.id, result, token ?? undefined);
     } else {
       // Queue with token for batch ACK
-      ackBatcher.queue(jobIdStr, result, token ?? undefined);
+      void ackBatcher.queue(jobIdStr, result, token ?? undefined);
     }
 
     (job as { returnvalue?: unknown }).returnvalue = result;
@@ -63,10 +68,11 @@ export async function processJob<T, R>(
   }
 }
 
-function createProgressHandler(
+function createProgressHandler<T>(
   embedded: boolean,
   tcp: TcpConnection | null,
-  emitter: EventEmitter
+  emitter: EventEmitter,
+  jobHolder: { current: Job<T> | null }
 ) {
   return async (id: string, progress: number, message?: string) => {
     if (embedded) {
@@ -75,7 +81,7 @@ function createProgressHandler(
     } else if (tcp) {
       await tcp.send({ cmd: 'Progress', id, progress, message });
     }
-    emitter.emit('progress', null, progress);
+    emitter.emit('progress', jobHolder.current, progress);
   };
 }
 
@@ -83,6 +89,7 @@ function createLogHandler(embedded: boolean, tcp: TcpConnection | null) {
   return async (id: string, message: string) => {
     if (embedded) {
       const manager = getSharedManager();
+      // addLog is synchronous (in-memory Map update)
       manager.addLog(jobId(id), message);
     } else if (tcp) {
       await tcp.send({ cmd: 'AddLog', id, message });
@@ -112,12 +119,12 @@ async function handleJobFailure<T, R>(
       // Pass token for lock verification
       await manager.fail(internalJob.id, err.message, token ?? undefined);
     } else if (tcp) {
-      // Include token for lock verification
+      // Include token for lock verification (only if defined)
       await tcp.send({
         cmd: 'FAIL',
         id: internalJob.id,
         error: err.message,
-        token: token ?? undefined,
+        ...(token ? { token } : {}),
       });
     }
   } catch (failError) {

@@ -21,7 +21,7 @@ export class BatchInsertManager {
     if (jobs.length === 0) return;
 
     const now = Date.now();
-    const COLS_PER_ROW = 22;
+    const COLS_PER_ROW = 23;
     // SQLite has a limit of ~999 variables, so batch in chunks
     const MAX_ROWS_PER_INSERT = Math.floor(999 / COLS_PER_ROW);
 
@@ -37,12 +37,13 @@ export class BatchInsertManager {
   private getBatchInsertStmt(size: number): ReturnType<Database['prepare']> {
     let stmt = this.cache.get(size);
     if (!stmt) {
-      const rowPlaceholder = '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      const rowPlaceholder =
+        '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
       const placeholders = Array(size).fill(rowPlaceholder).join(', ');
       const sql = `INSERT INTO jobs (
         id, queue, data, priority, created_at, run_at, attempts, max_attempts,
         backoff, ttl, timeout, unique_key, custom_id, depends_on, parent_id,
-        tags, state, lifo, group_id, remove_on_complete, remove_on_fail, stall_timeout
+        children_ids, tags, state, lifo, group_id, remove_on_complete, remove_on_fail, stall_timeout
       ) VALUES ${placeholders}`;
       stmt = this.db.prepare(sql);
       // Cache statements for common batch sizes (1-100)
@@ -76,6 +77,7 @@ export class BatchInsertManager {
         job.customId,
         job.dependsOn.length > 0 ? pack(job.dependsOn) : null,
         job.parentId,
+        job.childrenIds.length > 0 ? pack(job.childrenIds) : null,
         job.tags.length > 0 ? pack(job.tags) : null,
         job.runAt > now ? 'delayed' : 'waiting',
         job.lifo ? 1 : 0,

@@ -170,13 +170,7 @@ export function recover(ctx: BackgroundContext): void {
     const idx = shardIndex(queue);
     const shard = ctx.shards[idx];
     for (const entry of entries) {
-      let dlq = shard.dlq.get(queue);
-      if (!dlq) {
-        dlq = [];
-        shard.dlq.set(queue, dlq);
-      }
-      dlq.push(entry);
-      shard.incrementDlq();
+      shard.restoreDlqEntry(queue, entry);
       dlqCount++;
     }
     ctx.registerQueueName(queue);

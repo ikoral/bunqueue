@@ -4,7 +4,7 @@
  */
 
 import { parseArgs } from 'node:util';
-import { CommandError, requireArg, parseJsonArg, parseNumberArg } from './types';
+import { CommandError, requireArg, parseJsonArg, parseNumberArg, parseBigIntArg } from './types';
 
 /** Build a job subcommand */
 export function buildJobCommand(args: string[]): Record<string, unknown> {
@@ -46,22 +46,22 @@ export function buildJobCommand(args: string[]): Record<string, unknown> {
 }
 
 function buildGetJob(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   return { cmd: 'GetJob', id };
 }
 
 function buildGetState(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   return { cmd: 'GetState', id };
 }
 
 function buildGetResult(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   return { cmd: 'GetResult', id };
 }
 
 function buildCancel(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   return { cmd: 'Cancel', id };
 }
 
@@ -75,7 +75,7 @@ function buildProgress(args: string[]): Record<string, unknown> {
     strict: false,
   });
 
-  const id = requireArg(positionals, 0, 'id');
+  const id = parseBigIntArg(requireArg(positionals, 0, 'id'), 'id');
   const progress = parseNumberArg(requireArg(positionals, 1, 'progress'), 'progress');
 
   if (progress === undefined || progress < 0 || progress > 100) {
@@ -94,13 +94,13 @@ function buildProgress(args: string[]): Record<string, unknown> {
 }
 
 function buildUpdate(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   const data = parseJsonArg(requireArg(args, 1, 'data'), 'data');
   return { cmd: 'Update', id, data };
 }
 
 function buildChangePriority(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   const priority = parseNumberArg(requireArg(args, 1, 'priority'), 'priority');
 
   if (priority === undefined) {
@@ -111,12 +111,12 @@ function buildChangePriority(args: string[]): Record<string, unknown> {
 }
 
 function buildPromote(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   return { cmd: 'Promote', id };
 }
 
 function buildMoveToDelayed(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   const delay = parseNumberArg(requireArg(args, 1, 'delay'), 'delay');
 
   if (delay === undefined || delay < 0) {
@@ -127,12 +127,12 @@ function buildMoveToDelayed(args: string[]): Record<string, unknown> {
 }
 
 function buildDiscard(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   return { cmd: 'Discard', id };
 }
 
 function buildGetLogs(args: string[]): Record<string, unknown> {
-  const id = requireArg(args, 0, 'id');
+  const id = parseBigIntArg(requireArg(args, 0, 'id'), 'id');
   return { cmd: 'GetLogs', id };
 }
 
@@ -146,7 +146,7 @@ function buildAddLog(args: string[]): Record<string, unknown> {
     strict: false,
   });
 
-  const id = requireArg(positionals, 0, 'id');
+  const id = parseBigIntArg(requireArg(positionals, 0, 'id'), 'id');
   const message = requireArg(positionals, 1, 'message');
   const level = (values.level as string) ?? 'info';
 
@@ -172,7 +172,7 @@ function buildWaitJob(args: string[]): Record<string, unknown> {
     strict: false,
   });
 
-  const id = requireArg(positionals, 0, 'id');
+  const id = parseBigIntArg(requireArg(positionals, 0, 'id'), 'id');
 
   const cmd: Record<string, unknown> = {
     cmd: 'WaitJob',

@@ -166,6 +166,7 @@ export class ContextFactory {
       completedJobs: this.deps.completedJobs,
       jobResults: this.deps.jobResults,
       jobIndex: this.deps.jobIndex,
+      customIdMap: this.deps.customIdMap,
       totalCompleted: this.deps.metrics.totalCompleted,
       totalFailed: this.deps.metrics.totalFailed,
       broadcast: this.deps.eventsManager.broadcast.bind(this.deps.eventsManager),

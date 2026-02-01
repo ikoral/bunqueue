@@ -41,28 +41,30 @@ export class AckBatcher {
   }
 
   /** Queue ACK for batch processing (with optional lock token) */
-  queue(id: string, result: unknown, token?: string): void {
-    this.pendingAcks.push({
-      id,
-      result,
-      token,
-      resolve: () => {},
-      reject: () => {},
-    });
+  queue(id: string, result: unknown, token?: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      this.pendingAcks.push({
+        id,
+        result,
+        token,
+        resolve,
+        reject,
+      });
 
-    if (this.pendingAcks.length >= this.config.batchSize) {
-      // Track in-flight flush
-      const flushPromise = this.flush();
-      this.inFlightFlushes.add(flushPromise);
-      void flushPromise.finally(() => this.inFlightFlushes.delete(flushPromise));
-    } else {
-      this.ackTimer ??= setTimeout(() => {
-        this.ackTimer = null;
+      if (this.pendingAcks.length >= this.config.batchSize) {
+        // Track in-flight flush
         const flushPromise = this.flush();
         this.inFlightFlushes.add(flushPromise);
         void flushPromise.finally(() => this.inFlightFlushes.delete(flushPromise));
-      }, this.config.interval);
-    }
+      } else {
+        this.ackTimer ??= setTimeout(() => {
+          this.ackTimer = null;
+          const flushPromise = this.flush();
+          this.inFlightFlushes.add(flushPromise);
+          void flushPromise.finally(() => this.inFlightFlushes.delete(flushPromise));
+        }, this.config.interval);
+      }
+    });
   }
 
   /** Flush pending ACKs with retry logic */

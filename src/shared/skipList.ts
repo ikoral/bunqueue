@@ -33,6 +33,7 @@ export class SkipList<T> {
   private readonly maxLevel: number;
   private readonly probability: number;
   private readonly compare: (a: T, b: T) => number;
+  private readonly equals?: (a: T, b: T) => boolean;
   private head: SkipNode<T>;
   private level: number = 0;
   private _size: number = 0;
@@ -42,11 +43,20 @@ export class SkipList<T> {
    * @param compare Comparator function (negative if a < b, positive if a > b, 0 if equal)
    * @param maxLevel Maximum level (default 16, supports ~65k elements efficiently)
    * @param probability Level promotion probability (default 0.5)
+   * @param equals Optional equality function for duplicate detection. If provided,
+   *               duplicates where equals returns true are skipped during insert.
+   *               If not provided, multiple entries with same comparator result are allowed.
    */
-  constructor(compare: (a: T, b: T) => number, maxLevel: number = 16, probability: number = 0.5) {
+  constructor(
+    compare: (a: T, b: T) => number,
+    maxLevel: number = 16,
+    probability: number = 0.5,
+    equals?: (a: T, b: T) => boolean
+  ) {
     this.compare = compare;
     this.maxLevel = maxLevel;
     this.probability = probability;
+    this.equals = equals;
     this.head = createHead<T>(maxLevel);
   }
 
@@ -71,8 +81,12 @@ export class SkipList<T> {
 
   /**
    * Insert value - O(log n)
+   * If an equals function was provided to the constructor, duplicates
+   * (where equals returns true) are skipped. Otherwise, multiple entries
+   * with the same comparator result are allowed (sorted multiset behavior).
+   * @returns true if inserted, false if duplicate was skipped
    */
-  insert(value: T): void {
+  insert(value: T): boolean {
     const update: Array<SkipNode<T> | null> = [];
     for (let i = 0; i <= this.maxLevel; i++) {
       update.push(null);
@@ -87,6 +101,18 @@ export class SkipList<T> {
         fwd = current.forward[i];
       }
       update[i] = current;
+    }
+
+    // Check for duplicate if equals function is provided
+    if (this.equals) {
+      // Check all nodes with same comparator result for true equality
+      let node = current.forward[0];
+      while (node !== null && this.compare(node.value, value) === 0) {
+        if (this.equals(node.value, value)) {
+          return false; // True duplicate found - skip insertion
+        }
+        node = node.forward[0];
+      }
     }
 
     // Generate level for new node
@@ -120,6 +146,7 @@ export class SkipList<T> {
     }
 
     this._size++;
+    return true;
   }
 
   /**

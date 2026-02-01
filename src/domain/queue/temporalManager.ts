@@ -31,8 +31,14 @@ export class TemporalManager {
   /**
    * Temporal index: Skip List for O(log n) insert/delete
    * Ordered by createdAt for efficient cleanQueue range queries
+   * Uses equality check on jobId to prevent duplicate entries for the same job
    */
-  private readonly temporalIndex = new SkipList<TemporalEntry>((a, b) => a.createdAt - b.createdAt);
+  private readonly temporalIndex = new SkipList<TemporalEntry>(
+    (a, b) => a.createdAt - b.createdAt,
+    16,
+    0.5,
+    (a, b) => a.jobId === b.jobId
+  );
 
   /** Set of delayed job IDs for tracking when they become ready */
   private readonly delayedJobIds = new Set<JobId>();

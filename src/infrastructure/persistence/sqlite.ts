@@ -110,6 +110,7 @@ export class SqliteStorage {
         job.customId,
         job.dependsOn.length > 0 ? pack(job.dependsOn) : null,
         job.parentId,
+        job.childrenIds.length > 0 ? pack(job.childrenIds) : null,
         job.tags.length > 0 ? pack(job.tags) : null,
         job.runAt > Date.now() ? 'delayed' : 'waiting',
         job.lifo ? 1 : 0,
@@ -262,6 +263,11 @@ export class SqliteStorage {
 
   deleteCron(name: string): void {
     this.db.prepare('DELETE FROM cron_jobs WHERE name = ?').run(name);
+  }
+
+  /** Update cron job execution state (executions count and next run time) */
+  updateCron(name: string, executions: number, nextRun: number): void {
+    this.statements.get('updateCron')!.run(executions, nextRun, name);
   }
 
   // ============ Utilities ============

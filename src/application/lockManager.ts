@@ -31,38 +31,63 @@ export { registerClientJob, unregisterClientJob, releaseClientJobs } from './cli
  * Jobs with expired locks are requeued for retry.
  *
  * Uses proper locking to prevent race conditions.
+ * Lock hierarchy: shards[N] -> processingShards[N] (per CLAUDE.md)
  */
 export async function checkExpiredLocks(ctx: LockContext): Promise<void> {
   const now = Date.now();
 
-  // Phase 1: Collect expired locks (read-only)
-  const expired: Array<{ jobId: JobId; lock: JobLock; procIdx: number }> = [];
+  // Phase 1: Collect expired locks and look up their jobs (read-only from processing shards)
+  // We need to know the queue name to determine shard index
+  const expired: Array<{
+    jobId: JobId;
+    lock: JobLock;
+    procIdx: number;
+    shardIdx: number;
+    job: Job;
+  }> = [];
 
   for (const [jobId, lock] of ctx.jobLocks) {
     if (isLockExpired(lock, now)) {
       const procIdx = processingShardIndex(String(jobId));
-      expired.push({ jobId, lock, procIdx });
+      const job = ctx.processingShards[procIdx].get(jobId);
+      if (job) {
+        const shardIdx = shardIndex(job.queue);
+        expired.push({ jobId, lock, procIdx, shardIdx, job });
+      } else {
+        // Job not in processing - just clean up the orphan lock
+        ctx.jobLocks.delete(jobId);
+      }
     }
   }
 
   if (expired.length === 0) return;
 
-  // Phase 2: Group by processing shard
-  const byProcShard = new Map<number, typeof expired>();
+  // Phase 2: Group by shard index first (primary), then by processing shard (secondary)
+  // This ensures we acquire locks in the correct hierarchy order
+  const byShard = new Map<number, Map<number, typeof expired>>();
   for (const item of expired) {
-    let list = byProcShard.get(item.procIdx);
+    let procMap = byShard.get(item.shardIdx);
+    if (!procMap) {
+      procMap = new Map();
+      byShard.set(item.shardIdx, procMap);
+    }
+    let list = procMap.get(item.procIdx);
     if (!list) {
       list = [];
-      byProcShard.set(item.procIdx, list);
+      procMap.set(item.procIdx, list);
     }
     list.push(item);
   }
 
-  // Phase 3: Process each shard with proper locking
-  for (const [procIdx, items] of byProcShard) {
-    await withWriteLock(ctx.processingLocks[procIdx], async () => {
-      for (const { jobId, lock } of items) {
-        await processExpiredLock(jobId, lock, procIdx, ctx, now);
+  // Phase 3: Process with correct lock hierarchy: shardLock -> processingLock
+  for (const [shardIdx, procMap] of byShard) {
+    await withWriteLock(ctx.shardLocks[shardIdx], async () => {
+      for (const [procIdx, items] of procMap) {
+        await withWriteLock(ctx.processingLocks[procIdx], async () => {
+          for (const { jobId, lock, job } of items) {
+            processExpiredLockInner(jobId, lock, job, shardIdx, procIdx, ctx, now);
+          }
+        });
       }
     });
   }
@@ -70,40 +95,38 @@ export async function checkExpiredLocks(ctx: LockContext): Promise<void> {
   queueLog.info('Processed expired locks', { count: expired.length });
 }
 
-/** Process a single expired lock */
-async function processExpiredLock(
+/**
+ * Process a single expired lock (called with both locks already held)
+ * Lock hierarchy already satisfied: shardLock -> processingLock held by caller
+ */
+// eslint-disable-next-line max-params
+function processExpiredLockInner(
   jobId: JobId,
   lock: JobLock,
+  job: Job,
+  shardIdx: number,
   procIdx: number,
   ctx: LockContext,
   now: number
-): Promise<void> {
-  const job = ctx.processingShards[procIdx].get(jobId);
+): void {
+  const shard = ctx.shards[shardIdx];
+  const queue = shard.getQueue(job.queue);
 
-  if (job) {
-    const idx = shardIndex(job.queue);
+  // Remove from processing
+  ctx.processingShards[procIdx].delete(jobId);
 
-    await withWriteLock(ctx.shardLocks[idx], () => {
-      const shard = ctx.shards[idx];
-      const queue = shard.getQueue(job.queue);
+  // Increment attempts and reset state
+  job.attempts++;
+  job.startedAt = null;
+  job.lastHeartbeat = now;
+  job.stallCount++;
 
-      // Remove from processing
-      ctx.processingShards[procIdx].delete(jobId);
-
-      // Increment attempts and reset state
-      job.attempts++;
-      job.startedAt = null;
-      job.lastHeartbeat = now;
-      job.stallCount++;
-
-      // Check if max stalls exceeded
-      const stallConfig = shard.getStallConfig(job.queue);
-      if (stallConfig.maxStalls > 0 && job.stallCount >= stallConfig.maxStalls) {
-        handleMaxStallsExceeded({ jobId, job, lock, shard, ctx, now });
-      } else {
-        requeueExpiredJob({ jobId, job, lock, queue, idx, ctx, now });
-      }
-    });
+  // Check if max stalls exceeded
+  const stallConfig = shard.getStallConfig(job.queue);
+  if (stallConfig.maxStalls > 0 && job.stallCount >= stallConfig.maxStalls) {
+    handleMaxStallsExceeded({ jobId, job, lock, shard, ctx, now });
+  } else {
+    requeueExpiredJob({ jobId, job, lock, queue, idx: shardIdx, ctx, now });
   }
 
   // Remove the expired lock

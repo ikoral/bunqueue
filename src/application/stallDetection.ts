@@ -130,7 +130,7 @@ function moveStalliedJobToDlq(
   });
 
   ctx.processingShards[procIdx].delete(job.id);
-  shard.releaseConcurrency(job.queue);
+  shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
 
   const entry = shard.addToDlq(
     job,
@@ -163,7 +163,7 @@ function retryStalliedJob(
   });
 
   ctx.processingShards[procIdx].delete(job.id);
-  shard.releaseConcurrency(job.queue);
+  shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
 
   shard.getQueue(job.queue).push(job);
   const isDelayed = job.runAt > Date.now();

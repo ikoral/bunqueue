@@ -245,6 +245,22 @@ export class TcpClient extends EventEmitter {
     const next = this.commands.dequeue();
     if (!next || !this.socket) return;
 
+    // Clear the old timeout (it checked pendingCommands which no longer has this command)
+    clearTimeout(next.timeout);
+
+    // Create a new timeout for the current command
+    const newTimeout = setTimeout(() => {
+      const current = this.commands.getCurrentCommand();
+      if (current === next) {
+        this.commands.setCurrentCommand(null);
+        this.health.recordError();
+        next.reject(new Error('Command timeout'));
+        this.processNextCommand();
+      }
+    }, this.options.commandTimeout);
+
+    // Update the command with the new timeout and set as current
+    next.timeout = newTimeout;
     this.commands.setCurrentCommand(next);
     this.socket.write(FrameParser.frame(pack(next.command)));
   }

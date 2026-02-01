@@ -42,7 +42,7 @@ describe('Shard', () => {
 
     expect(shard.isUniqueAvailable('emails', 'key1')).toBe(true);
 
-    shard.registerUniqueKey('emails', 'key1');
+    shard.registerUniqueKey('emails', 'key1', jobId('test-job-1'));
     expect(shard.isUniqueAvailable('emails', 'key1')).toBe(false);
 
     shard.releaseUniqueKey('emails', 'key1');
@@ -104,7 +104,7 @@ describe('Shard', () => {
     const shard = new Shard();
     shard.getQueue('emails').push(makeJob(1, 'emails'));
     shard.addToDlq(makeJob(2, 'emails'));
-    shard.registerUniqueKey('emails', 'key1');
+    shard.registerUniqueKey('emails', 'key1', jobId('test-job-3'));
     shard.pause('emails');
 
     shard.obliterate('emails');
@@ -128,7 +128,7 @@ describe('Shard', () => {
 
   test('should release job resources', () => {
     const shard = new Shard();
-    shard.registerUniqueKey('emails', 'key1');
+    shard.registerUniqueKey('emails', 'key1', jobId('test-job-4'));
     shard.activateGroup('emails', 'group1');
 
     shard.releaseJobResources('emails', 'key1', 'group1');

@@ -87,7 +87,7 @@ export class QueueManager {
   private readonly startTime = Date.now();
 
   // Background task handles
-  private readonly backgroundTaskHandles: bgTasks.BackgroundTaskHandles | null = null;
+  private readonly backgroundTaskHandles!: bgTasks.BackgroundTaskHandles | null;
 
   // Queue names cache
   private readonly queueNamesCache = new Set<string>();
@@ -120,6 +120,13 @@ export class QueueManager {
     this.cronScheduler.setPushCallback(async (queue, input) => {
       await this.push(queue, input);
     });
+    // Set up persistence callback for cron state
+    if (this.storage) {
+      const storage = this.storage;
+      this.cronScheduler.setPersistCallback((name, executions, nextRun) => {
+        storage.updateCron(name, executions, nextRun);
+      });
+    }
 
     // Initialize managers
     this.webhookManager = new WebhookManager();

@@ -133,6 +133,10 @@ function cleanUniqueKeysAndGroups(ctx: BackgroundContext): void {
 function cleanStalledCandidates(ctx: BackgroundContext): void {
   for (const jobId of ctx.stalledCandidates) {
     const loc = ctx.jobIndex.get(jobId);
+    // Remove from stalledCandidates if the job is no longer actively processing:
+    // 1. Job no longer exists in jobIndex (completed/removed)
+    // 2. Job was moved back to queue (retried)
+    // 3. Any other state that's not 'processing'
     if (loc?.type !== 'processing') {
       ctx.stalledCandidates.delete(jobId);
     }

@@ -4,7 +4,7 @@
  */
 
 import { parseArgs } from 'node:util';
-import { CommandError, requireArg, parseJsonArg, parseNumberArg } from './types';
+import { CommandError, requireArg, parseJsonArg, parseNumberArg, parseBigIntArg } from './types';
 
 /** Build a core command from CLI args */
 export function buildCoreCommand(command: string, args: string[]): Record<string, unknown> {
@@ -128,7 +128,7 @@ function buildAck(args: string[]): Record<string, unknown> {
     strict: false,
   });
 
-  const id = requireArg(positionals, 0, 'id');
+  const id = parseBigIntArg(requireArg(positionals, 0, 'id'), 'id');
 
   const cmd: Record<string, unknown> = {
     cmd: 'ACK',
@@ -153,7 +153,7 @@ function buildFail(args: string[]): Record<string, unknown> {
     strict: false,
   });
 
-  const id = requireArg(positionals, 0, 'id');
+  const id = parseBigIntArg(requireArg(positionals, 0, 'id'), 'id');
 
   const cmd: Record<string, unknown> = {
     cmd: 'FAIL',

@@ -5,6 +5,7 @@
 
 import { type Job, type JobId, calculateBackoff, canRetry } from '../../domain/types/job';
 import type { JobLocation, EventType } from '../../domain/types/queue';
+import { FailureReason } from '../../domain/types/dlq';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { RWLock } from '../../shared/lock';
@@ -31,6 +32,7 @@ export interface AckContext {
   completedJobs: SetLike<JobId>;
   jobResults: MapLike<JobId, unknown>;
   jobIndex: Map<JobId, JobLocation>;
+  customIdMap?: MapLike<string, JobId>;
   totalCompleted: { value: bigint };
   totalFailed: { value: bigint };
   broadcast: (event: {
@@ -70,6 +72,11 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
   await withWriteLock(ctx.shardLocks[idx], () => {
     ctx.shards[idx].releaseJobResources(job.queue, job.uniqueKey, job.groupId);
   });
+
+  // Release customId so it can be reused
+  if (job.customId && ctx.customIdMap) {
+    ctx.customIdMap.delete(job.customId);
+  }
 
   if (!job.removeOnComplete) {
     ctx.completedJobs.add(jobId);
@@ -143,11 +150,19 @@ export async function failJob(
       ctx.jobIndex.delete(jobId);
       ctx.storage?.deleteJob(jobId);
       ctx.totalFailed.value++;
+      // Release customId when job is removed on fail
+      if (job.customId && ctx.customIdMap) {
+        ctx.customIdMap.delete(job.customId);
+      }
     } else {
-      const entry = shard.addToDlq(job);
+      const entry = shard.addToDlq(job, FailureReason.MaxAttemptsExceeded, error ?? null);
       ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
       ctx.storage?.saveDlqEntry(entry);
       ctx.totalFailed.value++;
+      // Release customId when job goes to DLQ
+      if (job.customId && ctx.customIdMap) {
+        ctx.customIdMap.delete(job.customId);
+      }
     }
   });
 

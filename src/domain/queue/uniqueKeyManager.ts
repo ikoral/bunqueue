@@ -37,12 +37,12 @@ export class UniqueKeyManager {
   }
 
   /** Register unique key (legacy method without TTL) */
-  register(queue: string, key: string): void {
-    this.registerWithTtl(queue, key, undefined, undefined);
+  register(queue: string, key: string, jobId: JobId): void {
+    this.registerWithTtl(queue, key, jobId, undefined);
   }
 
   /** Register unique key with TTL support */
-  registerWithTtl(queue: string, key: string, jobId: JobId | undefined, ttl?: number): void {
+  registerWithTtl(queue: string, key: string, jobId: JobId, ttl?: number): void {
     let queueKeys = this.keys.get(queue);
     if (!queueKeys) {
       queueKeys = new Map();
@@ -50,7 +50,7 @@ export class UniqueKeyManager {
     }
     const now = Date.now();
     queueKeys.set(key, {
-      jobId: jobId ?? ('' as JobId),
+      jobId,
       expiresAt: calculateExpiration(ttl, now),
       registeredAt: now,
     });
