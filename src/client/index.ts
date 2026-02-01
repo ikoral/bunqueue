@@ -32,6 +32,8 @@ export { TcpConnectionPool, getSharedPool, closeAllSharedPools } from './tcpPool
 export type {
   Job,
   JobOptions,
+  JobJson,
+  JobJsonRaw,
   QueueOptions,
   WorkerOptions,
   Processor,
@@ -42,6 +44,12 @@ export type {
   DlqFilter,
   FailureReason,
   ConnectionOptions,
+  ParentOpts,
+  RateLimiterOptions,
+  ChangePriorityOpts,
+  GetDependenciesOpts,
+  JobDependencies,
+  JobDependenciesCount,
 } from './types';
-export type { FlowStep, FlowResult } from './flow';
+export type { FlowStep, FlowResult, FlowJob, JobNode, FlowProducerOptions } from './flow';
 export type { SandboxedWorkerOptions } from './sandboxedWorker';

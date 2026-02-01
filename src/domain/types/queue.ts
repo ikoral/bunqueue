@@ -115,6 +115,13 @@ export const enum EventType {
   Failed = 'failed',
   Progress = 'progress',
   Stalled = 'stalled',
+  // BullMQ v5 additional events
+  Removed = 'removed',
+  Delayed = 'delayed',
+  Duplicated = 'duplicated',
+  Retried = 'retried',
+  WaitingChildren = 'waiting-children',
+  Drained = 'drained',
 }
 
 /** Job event for subscribers */
@@ -126,6 +133,10 @@ export interface JobEvent {
   readonly data?: unknown;
   readonly error?: string;
   readonly progress?: number;
+  /** Previous state (for removed, retried events) */
+  readonly prev?: string;
+  /** Delay in ms (for delayed event) */
+  readonly delay?: number;
 }
 
 /** Webhook configuration */

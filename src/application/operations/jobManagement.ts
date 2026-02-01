@@ -4,7 +4,7 @@
  */
 
 import type { Job, JobId } from '../../domain/types/job';
-import type { JobLocation, EventType } from '../../domain/types/queue';
+import { type JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { WebhookManager } from '../webhookManager';
@@ -31,7 +31,7 @@ export async function cancelJob(jobId: JobId, ctx: JobManagementContext): Promis
   if (!location) return false;
 
   if (location.type === 'queue') {
-    return withWriteLock(ctx.shardLocks[location.shardIdx], () => {
+    const result = await withWriteLock(ctx.shardLocks[location.shardIdx], () => {
       const shard = ctx.shards[location.shardIdx];
       const job = shard.getQueue(location.queueName).remove(jobId);
       if (job) {
@@ -40,10 +40,22 @@ export async function cancelJob(jobId: JobId, ctx: JobManagementContext): Promis
         if (job.uniqueKey) shard.releaseUniqueKey(location.queueName, job.uniqueKey);
         ctx.jobIndex.delete(jobId);
         ctx.storage?.deleteJob(jobId);
-        return true;
+        return { success: true, queueName: location.queueName };
       }
-      return false;
+      return { success: false, queueName: location.queueName };
     });
+
+    if (result.success) {
+      // Emit removed event (BullMQ v5)
+      ctx.eventsManager.broadcast({
+        eventType: EventType.Removed,
+        jobId,
+        queue: result.queueName,
+        timestamp: Date.now(),
+        prev: 'waiting',
+      });
+    }
+    return result.success;
   }
   return false;
 }
@@ -178,6 +190,7 @@ export async function moveJobToDelayed(
   job.runAt = now + delay;
   job.startedAt = null;
   const idx = shardIndex(job.queue);
+  const queueName = job.queue;
 
   await withWriteLock(ctx.shardLocks[idx], () => {
     const shard = ctx.shards[idx];
@@ -186,6 +199,15 @@ export async function moveJobToDelayed(
     const isDelayed = job.runAt > now;
     shard.incrementQueued(jobId, isDelayed, job.createdAt, job.queue, job.runAt);
     ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
+  });
+
+  // Emit delayed event (BullMQ v5)
+  ctx.eventsManager.broadcast({
+    eventType: EventType.Delayed,
+    jobId,
+    queue: queueName,
+    timestamp: Date.now(),
+    delay,
   });
 
   return true;

@@ -4,7 +4,7 @@
  */
 
 import { type Job, type JobId, calculateBackoff, canRetry } from '../../domain/types/job';
-import type { JobLocation, EventType } from '../../domain/types/queue';
+import { type JobLocation, EventType } from '../../domain/types/queue';
 import { FailureReason } from '../../domain/types/dlq';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
@@ -42,6 +42,7 @@ export interface AckContext {
     timestamp: number;
     data?: unknown;
     error?: string;
+    prev?: string;
   }) => void;
   onJobCompleted: (jobId: JobId) => void;
   onJobsCompleted?: (jobIds: JobId[]) => void;
@@ -135,6 +136,7 @@ export async function failJob(
   job.attempts++;
 
   const idx = shardIndex(job.queue);
+  let wasRetried = false;
   await withWriteLock(ctx.shardLocks[idx], () => {
     const shard = ctx.shards[idx];
     shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
@@ -146,6 +148,7 @@ export async function failJob(
       shard.incrementQueued(jobId, true, job.createdAt, job.queue, job.runAt);
       ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
       ctx.storage?.updateForRetry(job);
+      wasRetried = true;
     } else if (job.removeOnFail) {
       ctx.jobIndex.delete(jobId);
       ctx.storage?.deleteJob(jobId);
@@ -173,6 +176,17 @@ export async function failJob(
     timestamp: Date.now(),
     error,
   });
+
+  // Emit retried event if job was requeued for retry (BullMQ v5)
+  if (wasRetried) {
+    ctx.broadcast({
+      eventType: EventType.Retried,
+      queue: job.queue,
+      jobId,
+      timestamp: Date.now(),
+      prev: 'failed',
+    });
+  }
 }
 
 /**

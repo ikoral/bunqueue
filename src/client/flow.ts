@@ -1,11 +1,12 @@
 /**
  * FlowProducer - Job chaining and pipelines
+ * BullMQ v5 compatible
  */
 
 import { getSharedManager } from './manager';
 import { TcpConnectionPool, getSharedPool, releaseSharedPool } from './tcpPool';
 import { jobId } from '../domain/types/job';
-import type { JobOptions, ConnectionOptions } from './types';
+import type { JobOptions, ConnectionOptions, Job } from './types';
 
 const FORCE_EMBEDDED = process.env.BUNQUEUE_EMBEDDED === '1';
 
@@ -17,7 +18,7 @@ export interface FlowProducerOptions {
   connection?: ConnectionOptions;
 }
 
-/** Step definition in a flow */
+/** Step definition in a flow (legacy bunqueue API) */
 export interface FlowStep<T = unknown> {
   /** Job name */
   name: string;
@@ -31,10 +32,42 @@ export interface FlowStep<T = unknown> {
   children?: FlowStep[];
 }
 
-/** Result of adding a flow */
+/** Result of adding a flow (legacy bunqueue API) */
 export interface FlowResult {
   /** Job IDs in order */
   jobIds: string[];
+}
+
+// ============================================================================
+// BullMQ v5 Compatible Types
+// ============================================================================
+
+/**
+ * FlowJob - BullMQ v5 compatible flow job definition.
+ * Children are processed BEFORE the parent.
+ */
+export interface FlowJob<T = unknown> {
+  /** Job name */
+  name: string;
+  /** Queue name */
+  queueName: string;
+  /** Job data */
+  data?: T;
+  /** Job options */
+  opts?: JobOptions;
+  /** Child jobs (processed BEFORE this job) */
+  children?: FlowJob[];
+}
+
+/**
+ * JobNode - BullMQ v5 compatible result from adding a flow.
+ * Contains the job and its children nodes.
+ */
+export interface JobNode<T = unknown> {
+  /** The job instance */
+  job: Job<T>;
+  /** Child nodes (if any) */
+  children?: JobNode[];
 }
 
 /**
@@ -100,6 +133,277 @@ export class FlowProducer {
     }
   }
 
+  /**
+   * Disconnect from the server (BullMQ v5 compatible).
+   * Alias for close().
+   */
+  disconnect(): Promise<void> {
+    this.close();
+    return Promise.resolve();
+  }
+
+  /**
+   * Wait until the FlowProducer is ready (BullMQ v5 compatible).
+   * In embedded mode, resolves immediately. In TCP mode, ensures connection.
+   */
+  async waitUntilReady(): Promise<void> {
+    if (this.embedded) {
+      // Embedded mode is always ready
+      return;
+    }
+    // TCP mode - ensure we can send a ping
+    if (this.tcp) {
+      await this.tcp.send({ cmd: 'Ping' });
+    }
+  }
+
+  // ============================================================================
+  // BullMQ v5 Compatible Methods
+  // ============================================================================
+
+  /**
+   * Add a flow (BullMQ v5 compatible).
+   *
+   * Children are processed BEFORE their parent. When all children complete,
+   * the parent becomes processable and can access children results via
+   * `job.getChildrenValues()`.
+   *
+   * @example
+   * ```typescript
+   * const flow = new FlowProducer();
+   *
+   * // Children execute first, then parent
+   * const { job, children } = await flow.add({
+   *   name: 'parent',
+   *   queueName: 'main',
+   *   data: { type: 'aggregate' },
+   *   children: [
+   *     { name: 'child1', queueName: 'main', data: { id: 1 } },
+   *     { name: 'child2', queueName: 'main', data: { id: 2 } },
+   *   ],
+   * });
+   * ```
+   */
+  async add<T = unknown>(flow: FlowJob<T>): Promise<JobNode<T>> {
+    return this.addFlowNode(flow, null);
+  }
+
+  /**
+   * Add multiple flows (BullMQ v5 compatible).
+   */
+  async addBulk<T = unknown>(flows: FlowJob<T>[]): Promise<JobNode<T>[]> {
+    const results: JobNode<T>[] = [];
+    for (const flow of flows) {
+      results.push(await this.add(flow));
+    }
+    return results;
+  }
+
+  /**
+   * Internal: Recursively add a flow node and its children.
+   * Children are created first with parent reference, then parent is created.
+   */
+  private async addFlowNode<T>(
+    node: FlowJob<T>,
+    parentRef: { id: string; queue: string } | null
+  ): Promise<JobNode<T>> {
+    // First, create all children recursively
+    const childNodes: JobNode[] = [];
+    const childIds: string[] = [];
+
+    if (node.children && node.children.length > 0) {
+      // Create a placeholder parent ID for children to reference
+      // In BullMQ, children reference the parent, not the other way around
+      const tempParentRef = { id: 'pending', queue: node.queueName };
+
+      for (const child of node.children) {
+        const childNode = await this.addFlowNode(child, tempParentRef);
+        childNodes.push(childNode);
+        childIds.push(childNode.job.id);
+      }
+    }
+
+    // Create the job data with parent info if this is a child
+    const jobData: Record<string, unknown> = {
+      name: node.name,
+      ...(node.data as object | undefined),
+    };
+
+    // Add parent reference if this job has a parent
+    if (parentRef) {
+      jobData.__parentId = parentRef.id;
+      jobData.__parentQueue = parentRef.queue;
+    }
+
+    // Add children IDs so parent knows its children
+    if (childIds.length > 0) {
+      jobData.__childrenIds = childIds;
+    }
+
+    // Push the job
+    const jobIdStr = await this.pushJobWithParent(
+      node.queueName,
+      jobData,
+      node.opts ?? {},
+      parentRef,
+      childIds
+    );
+
+    // Create the Job object
+    const job = this.createJobObject<T>(jobIdStr, node.name, node.data as T, node.queueName);
+
+    return {
+      job,
+      children: childNodes.length > 0 ? childNodes : undefined,
+    };
+  }
+
+  /** Push a job with parent/children tracking */
+  private async pushJobWithParent(
+    queueName: string,
+    data: unknown,
+    opts: JobOptions,
+    parentRef: { id: string; queue: string } | null,
+    childIds: string[]
+  ): Promise<string> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      // Parse removeOnComplete/removeOnFail (can be boolean, number, or KeepJobs)
+      const removeOnComplete =
+        typeof opts.removeOnComplete === 'boolean' ? opts.removeOnComplete : false;
+      const removeOnFail = typeof opts.removeOnFail === 'boolean' ? opts.removeOnFail : false;
+      const job = await manager.push(queueName, {
+        data,
+        priority: opts.priority,
+        delay: opts.delay,
+        maxAttempts: opts.attempts,
+        backoff: opts.backoff,
+        timeout: opts.timeout,
+        customId: opts.jobId,
+        removeOnComplete,
+        removeOnFail,
+        parentId: parentRef ? jobId(parentRef.id) : undefined,
+        // Note: childrenIds tracking happens via job.childrenIds field
+      });
+
+      // If this job has children, update the children's parent references
+      // with the actual parent ID (they were created with 'pending')
+      if (childIds.length > 0) {
+        for (const childIdStr of childIds) {
+          await manager.updateJobParent(jobId(childIdStr), job.id);
+        }
+      }
+
+      return String(job.id);
+    }
+
+    // TCP mode
+    if (!this.tcp) throw new Error('TCP connection not initialized');
+    const response = await this.tcp.send({
+      cmd: 'PUSH',
+      queue: queueName,
+      data,
+      priority: opts.priority,
+      delay: opts.delay,
+      maxAttempts: opts.attempts,
+      backoff: opts.backoff,
+      timeout: opts.timeout,
+      jobId: opts.jobId,
+      removeOnComplete: opts.removeOnComplete,
+      removeOnFail: opts.removeOnFail,
+      parentId: parentRef?.id,
+      childIds,
+    });
+
+    if (!response.ok) {
+      throw new Error((response.error as string | undefined) ?? 'Failed to add job');
+    }
+    return response.id as string;
+  }
+
+  /** Create a simple Job object */
+  private createJobObject<T>(id: string, name: string, data: T, queueName: string): Job<T> {
+    const ts = Date.now();
+    return {
+      id,
+      name,
+      data,
+      queueName,
+      attemptsMade: 0,
+      timestamp: ts,
+      progress: 0,
+      // BullMQ v5 properties
+      delay: 0,
+      processedOn: undefined,
+      finishedOn: undefined,
+      stacktrace: null,
+      stalledCounter: 0,
+      priority: 0,
+      parentKey: undefined,
+      opts: {},
+      token: undefined,
+      processedBy: undefined,
+      deduplicationId: undefined,
+      repeatJobKey: undefined,
+      attemptsStarted: 0,
+      // Methods
+      updateProgress: () => Promise.resolve(),
+      log: () => Promise.resolve(),
+      getState: () => Promise.resolve('waiting' as const),
+      remove: () => Promise.resolve(),
+      retry: () => Promise.resolve(),
+      getChildrenValues: () => Promise.resolve({}),
+      // BullMQ v5 state check methods
+      isWaiting: () => Promise.resolve(true),
+      isActive: () => Promise.resolve(false),
+      isDelayed: () => Promise.resolve(false),
+      isCompleted: () => Promise.resolve(false),
+      isFailed: () => Promise.resolve(false),
+      isWaitingChildren: () => Promise.resolve(false),
+      // BullMQ v5 mutation methods
+      updateData: () => Promise.resolve(),
+      promote: () => Promise.resolve(),
+      changeDelay: () => Promise.resolve(),
+      changePriority: () => Promise.resolve(),
+      extendLock: () => Promise.resolve(0),
+      clearLogs: () => Promise.resolve(),
+      // BullMQ v5 dependency methods
+      getDependencies: () => Promise.resolve({ processed: {}, unprocessed: [] }),
+      getDependenciesCount: () => Promise.resolve({ processed: 0, unprocessed: 0 }),
+      // BullMQ v5 serialization methods
+      toJSON: () => ({
+        id,
+        name,
+        data,
+        opts: {},
+        progress: 0,
+        delay: 0,
+        timestamp: ts,
+        attemptsMade: 0,
+        stacktrace: null,
+        queueQualifiedName: `bull:${queueName}`,
+      }),
+      asJSON: () => ({
+        id,
+        name,
+        data: JSON.stringify(data),
+        opts: '{}',
+        progress: '0',
+        delay: '0',
+        timestamp: String(ts),
+        attemptsMade: '0',
+        stacktrace: null,
+      }),
+      // BullMQ v5 move methods
+      moveToCompleted: () => Promise.resolve(null),
+      moveToFailed: () => Promise.resolve(),
+      moveToWait: () => Promise.resolve(false),
+      moveToDelayed: () => Promise.resolve(),
+      moveToWaitingChildren: () => Promise.resolve(false),
+      waitUntilFinished: () => Promise.resolve(undefined),
+    };
+  }
+
   /** Push a job via embedded manager or TCP */
   private async pushJob(
     queueName: string,
@@ -109,6 +413,10 @@ export class FlowProducer {
   ): Promise<string> {
     if (this.embedded) {
       const manager = getSharedManager();
+      // Parse removeOnComplete/removeOnFail (can be boolean, number, or KeepJobs)
+      const removeOnComplete =
+        typeof opts.removeOnComplete === 'boolean' ? opts.removeOnComplete : false;
+      const removeOnFail = typeof opts.removeOnFail === 'boolean' ? opts.removeOnFail : false;
       const job = await manager.push(queueName, {
         data,
         priority: opts.priority,
@@ -117,8 +425,8 @@ export class FlowProducer {
         backoff: opts.backoff,
         timeout: opts.timeout,
         customId: opts.jobId,
-        removeOnComplete: opts.removeOnComplete,
-        removeOnFail: opts.removeOnFail,
+        removeOnComplete,
+        removeOnFail,
         dependsOn: dependsOn?.map((id) => jobId(id)),
       });
       return String(job.id);

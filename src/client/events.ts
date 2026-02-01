@@ -9,11 +9,27 @@ import { EventType, type JobEvent } from '../domain/types/queue';
 /**
  * QueueEvents class for listening to queue events
  * Provides a way to listen to events without processing jobs
+ *
+ * BullMQ v5 compatible events:
+ * - waiting: job added to queue
+ * - active: job started processing
+ * - completed: job completed successfully
+ * - failed: job failed
+ * - progress: job progress updated
+ * - stalled: job stalled (no heartbeat)
+ * - removed: job removed from queue
+ * - delayed: job moved to delayed state
+ * - duplicated: duplicate job detected
+ * - retried: job retried
+ * - waiting-children: job waiting for children to complete
+ * - drained: queue has no more waiting jobs
+ * - error: error occurred
  */
 export class QueueEvents extends EventEmitter {
   readonly name: string;
   private running = false;
   private unsubscribe: (() => void) | null = null;
+  private ready = false;
 
   constructor(name: string) {
     super();
@@ -55,6 +71,25 @@ export class QueueEvents extends EventEmitter {
           case EventType.Stalled:
             this.emit('stalled', { jobId: event.jobId });
             break;
+          // BullMQ v5 additional events
+          case EventType.Removed:
+            this.emit('removed', { jobId: event.jobId, prev: event.prev ?? 'unknown' });
+            break;
+          case EventType.Delayed:
+            this.emit('delayed', { jobId: event.jobId, delay: event.delay ?? 0 });
+            break;
+          case EventType.Duplicated:
+            this.emit('duplicated', { jobId: event.jobId });
+            break;
+          case EventType.Retried:
+            this.emit('retried', { jobId: event.jobId, prev: event.prev ?? 'failed' });
+            break;
+          case EventType.WaitingChildren:
+            this.emit('waiting-children', { jobId: event.jobId });
+            break;
+          case EventType.Drained:
+            this.emit('drained', { id: event.jobId });
+            break;
         }
       } catch (err) {
         // Emit error event for any handler errors
@@ -63,6 +98,7 @@ export class QueueEvents extends EventEmitter {
     };
 
     this.unsubscribe = manager.subscribe(handler);
+    this.ready = true;
   }
 
   /** Emit an error event (can be called externally) */
@@ -70,9 +106,31 @@ export class QueueEvents extends EventEmitter {
     this.emit('error', error);
   }
 
+  /**
+   * Wait until the QueueEvents is ready to receive events.
+   * In embedded mode, this resolves immediately.
+   * BullMQ v5 compatible.
+   */
+  async waitUntilReady(): Promise<void> {
+    // In embedded mode, we're always ready after construction
+    if (this.ready) return;
+    // Wait a tick for the subscription to complete
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  /**
+   * Disconnect from the event stream.
+   * Alias for close() for BullMQ v5 compatibility.
+   */
+  disconnect(): Promise<void> {
+    this.close();
+    return Promise.resolve();
+  }
+
   /** Close the event listener */
   close(): void {
     this.running = false;
+    this.ready = false;
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;

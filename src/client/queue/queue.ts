@@ -16,6 +16,10 @@ import type {
   DlqFilter,
   FailureReason,
   ConnectionOptions,
+  ChangePriorityOpts,
+  GetDependenciesOpts,
+  JobDependencies,
+  JobDependenciesCount,
 } from '../types';
 import { toPublicJob } from '../types';
 import { jobId } from '../../domain/types/job';
@@ -67,29 +71,104 @@ export class Queue<T = unknown> {
   /** Add a job to the queue */
   async add(name: string, data: T, opts: JobOptions = {}): Promise<Job<T>> {
     const merged = { ...this.opts.defaultJobOptions, ...opts };
+
+    // Add parent info to data if specified (BullMQ v5 flow support)
+    const jobData: Record<string, unknown> = { name, ...(data as object) };
+    if (merged.parent) {
+      jobData.__parentId = merged.parent.id;
+      jobData.__parentQueue = merged.parent.queue;
+    }
+
     if (this.embedded) {
       const manager = getSharedManager();
+
+      // Parse removeOnComplete/removeOnFail (can be boolean, number, or KeepJobs)
+      const removeOnComplete =
+        typeof merged.removeOnComplete === 'boolean' ? merged.removeOnComplete : false;
+      const removeOnFail = typeof merged.removeOnFail === 'boolean' ? merged.removeOnFail : false;
+
+      // Parse repeat options with extended BullMQ v5 fields
+      const repeat = merged.repeat
+        ? {
+            every: merged.repeat.every,
+            limit: merged.repeat.limit,
+            pattern: merged.repeat.pattern,
+            count: merged.repeat.count,
+            startDate:
+              merged.repeat.startDate instanceof Date
+                ? merged.repeat.startDate.getTime()
+                : typeof merged.repeat.startDate === 'string'
+                  ? new Date(merged.repeat.startDate).getTime()
+                  : merged.repeat.startDate,
+            endDate:
+              merged.repeat.endDate instanceof Date
+                ? merged.repeat.endDate.getTime()
+                : typeof merged.repeat.endDate === 'string'
+                  ? new Date(merged.repeat.endDate).getTime()
+                  : merged.repeat.endDate,
+            tz: merged.repeat.tz,
+            immediately: merged.repeat.immediately,
+            prevMillis: merged.repeat.prevMillis,
+            offset: merged.repeat.offset,
+            jobId: merged.repeat.jobId,
+          }
+        : undefined;
+
       const job = await manager.push(this.name, {
-        data: { name, ...data },
+        data: jobData,
         priority: merged.priority,
         delay: merged.delay,
         maxAttempts: merged.attempts,
         backoff: merged.backoff,
         timeout: merged.timeout,
-        customId: merged.jobId,
-        removeOnComplete: merged.removeOnComplete,
-        removeOnFail: merged.removeOnFail,
-        repeat: merged.repeat,
+        customId: merged.jobId ?? merged.deduplication?.id,
+        removeOnComplete,
+        removeOnFail,
+        repeat,
         stallTimeout: merged.stallTimeout,
         durable: merged.durable,
+        parentId: merged.parent ? jobId(merged.parent.id) : undefined,
+        // BullMQ v5 options
+        lifo: merged.lifo,
+        stackTraceLimit: merged.stackTraceLimit,
+        keepLogs: merged.keepLogs,
+        sizeLimit: merged.sizeLimit,
+        failParentOnFailure: merged.failParentOnFailure,
+        removeDependencyOnFailure: merged.removeDependencyOnFailure,
+        dedup: merged.deduplication ? { ttl: merged.deduplication.ttl } : undefined,
+        debounceId: merged.debounce?.id,
+        debounceTtl: merged.debounce?.ttl,
       });
-      return toPublicJob<T>(job, name);
+      return toPublicJob<T>({
+        job,
+        name,
+        getState: (jid) => this.getJobState(jid),
+        remove: (jid) => this.removeAsync(jid),
+        retry: (jid) => this.retryJob(jid),
+        getChildrenValues: (jid) => this.getChildrenValues(jid),
+        updateData: (jid, data) => this.updateJobData(jid, data),
+        promote: (jid) => this.promoteJob(jid),
+        changeDelay: (jid, delay) => this.changeJobDelay(jid, delay),
+        changePriority: (jid, opts) => this.changeJobPriority(jid, opts),
+        extendLock: (jid, token, duration) => this.extendJobLock(jid, token, duration),
+        clearLogs: (jid, keepLogs) => this.clearJobLogs(jid, keepLogs),
+        getDependencies: (jid, opts) => this.getJobDependencies(jid, opts),
+        getDependenciesCount: (jid, opts) => this.getJobDependenciesCount(jid, opts),
+        moveToCompleted: (jid, result, token) => this.moveJobToCompleted(jid, result, token),
+        moveToFailed: (jid, error, token) => this.moveJobToFailed(jid, error, token),
+        moveToWait: (jid, token) => this.moveJobToWait(jid, token),
+        moveToDelayed: (jid, timestamp, token) => this.moveJobToDelayed(jid, timestamp, token),
+        moveToWaitingChildren: (jid, token, opts) =>
+          this.moveJobToWaitingChildren(jid, token, opts),
+        waitUntilFinished: (jid, queueEvents, ttl) =>
+          this.waitJobUntilFinished(jid, queueEvents, ttl),
+      });
     }
 
     const response = await this.tcp.send({
       cmd: 'PUSH',
       queue: this.name,
-      data: { name, ...data },
+      data: jobData,
       priority: merged.priority,
       delay: merged.delay,
       maxAttempts: merged.attempts,
@@ -101,6 +180,7 @@ export class Queue<T = unknown> {
       stallTimeout: merged.stallTimeout,
       durable: merged.durable,
       repeat: merged.repeat,
+      parentId: merged.parent?.id,
     });
 
     if (!response.ok) {
@@ -119,6 +199,10 @@ export class Queue<T = unknown> {
       const manager = getSharedManager();
       const inputs = jobs.map(({ name, data, opts }) => {
         const m = { ...this.opts.defaultJobOptions, ...opts };
+        // Parse removeOnComplete/removeOnFail (can be boolean, number, or KeepJobs)
+        const removeOnComplete =
+          typeof m.removeOnComplete === 'boolean' ? m.removeOnComplete : false;
+        const removeOnFail = typeof m.removeOnFail === 'boolean' ? m.removeOnFail : false;
         return {
           data: { name, ...data },
           priority: m.priority,
@@ -127,11 +211,45 @@ export class Queue<T = unknown> {
           backoff: m.backoff,
           timeout: m.timeout,
           customId: m.jobId,
-          removeOnComplete: m.removeOnComplete,
-          removeOnFail: m.removeOnFail,
-          repeat: m.repeat,
+          removeOnComplete,
+          removeOnFail,
+          repeat: m.repeat
+            ? {
+                every: m.repeat.every,
+                limit: m.repeat.limit,
+                pattern: m.repeat.pattern,
+                count: m.repeat.count,
+                startDate:
+                  m.repeat.startDate instanceof Date
+                    ? m.repeat.startDate.getTime()
+                    : typeof m.repeat.startDate === 'string'
+                      ? new Date(m.repeat.startDate).getTime()
+                      : m.repeat.startDate,
+                endDate:
+                  m.repeat.endDate instanceof Date
+                    ? m.repeat.endDate.getTime()
+                    : typeof m.repeat.endDate === 'string'
+                      ? new Date(m.repeat.endDate).getTime()
+                      : m.repeat.endDate,
+                tz: m.repeat.tz,
+                immediately: m.repeat.immediately,
+                prevMillis: m.repeat.prevMillis,
+                offset: m.repeat.offset,
+                jobId: m.repeat.jobId,
+              }
+            : undefined,
           stallTimeout: m.stallTimeout,
           durable: m.durable,
+          // BullMQ v5 options
+          lifo: m.lifo,
+          stackTraceLimit: m.stackTraceLimit,
+          keepLogs: m.keepLogs,
+          sizeLimit: m.sizeLimit,
+          failParentOnFailure: m.failParentOnFailure,
+          removeDependencyOnFailure: m.removeDependencyOnFailure,
+          dedup: m.deduplication ? { ttl: m.deduplication.ttl } : undefined,
+          debounceId: m.debounce?.id,
+          debounceTtl: m.debounce?.ttl,
         };
       });
       const ids = await manager.pushBatch(this.name, inputs);
@@ -171,13 +289,30 @@ export class Queue<T = unknown> {
       const job = await manager.getJob(jobId(id));
       if (!job) return null;
       const jobData = job.data as { name?: string } | null;
-      return toPublicJob<T>(
+      return toPublicJob<T>({
         job,
-        jobData?.name ?? 'default',
-        (jid) => this.getJobState(jid),
-        (jid) => this.removeAsync(jid),
-        (jid) => this.retryJob(jid)
-      );
+        name: jobData?.name ?? 'default',
+        getState: (jid) => this.getJobState(jid),
+        remove: (jid) => this.removeAsync(jid),
+        retry: (jid) => this.retryJob(jid),
+        getChildrenValues: (jid) => this.getChildrenValues(jid),
+        updateData: (jid, data) => this.updateJobData(jid, data),
+        promote: (jid) => this.promoteJob(jid),
+        changeDelay: (jid, delay) => this.changeJobDelay(jid, delay),
+        changePriority: (jid, opts) => this.changeJobPriority(jid, opts),
+        extendLock: (jid, token, duration) => this.extendJobLock(jid, token, duration),
+        clearLogs: (jid, keepLogs) => this.clearJobLogs(jid, keepLogs),
+        getDependencies: (jid, opts) => this.getJobDependencies(jid, opts),
+        getDependenciesCount: (jid, opts) => this.getJobDependenciesCount(jid, opts),
+        moveToCompleted: (jid, result, token) => this.moveJobToCompleted(jid, result, token),
+        moveToFailed: (jid, error, token) => this.moveJobToFailed(jid, error, token),
+        moveToWait: (jid, token) => this.moveJobToWait(jid, token),
+        moveToDelayed: (jid, timestamp, token) => this.moveJobToDelayed(jid, timestamp, token),
+        moveToWaitingChildren: (jid, token, opts) =>
+          this.moveJobToWaitingChildren(jid, token, opts),
+        waitUntilFinished: (jid, queueEvents, ttl) =>
+          this.waitJobUntilFinished(jid, queueEvents, ttl),
+      });
     }
 
     const response = await this.tcp.send({ cmd: 'GetJob', id });
@@ -185,19 +320,85 @@ export class Queue<T = unknown> {
     const jobData = response.job as Record<string, unknown>;
     const data = jobData.data as { name?: string } | null;
     const jobIdStr = String(jobData.id);
+    const ts = (jobData.createdAt as number | undefined) ?? Date.now();
+    const runAt = (jobData.runAt as number | undefined) ?? ts;
     return {
       id: jobIdStr,
       name: data?.name ?? 'default',
       data: jobData.data as T,
       queueName: this.name,
       attemptsMade: (jobData.attempts as number | undefined) ?? 0,
-      timestamp: (jobData.createdAt as number | undefined) ?? Date.now(),
+      timestamp: ts,
       progress: (jobData.progress as number | undefined) ?? 0,
+      // BullMQ v5 properties
+      delay: runAt > ts ? runAt - ts : 0,
+      processedOn: (jobData.startedAt as number | undefined) ?? undefined,
+      finishedOn: (jobData.completedAt as number | undefined) ?? undefined,
+      stacktrace: null,
+      stalledCounter: (jobData.stallCount as number | undefined) ?? 0,
+      priority: (jobData.priority as number | undefined) ?? 0,
+      parentKey: undefined,
+      opts: {},
+      token: undefined,
+      processedBy: undefined,
+      deduplicationId: (jobData.customId as string | undefined) ?? undefined,
+      repeatJobKey: undefined,
+      attemptsStarted: (jobData.attempts as number | undefined) ?? 0,
+      // Methods
       updateProgress: async () => {},
       log: async () => {},
       getState: () => this.getJobState(jobIdStr),
       remove: () => this.removeAsync(jobIdStr),
       retry: () => this.retryJob(jobIdStr),
+      getChildrenValues: () => this.getChildrenValues(jobIdStr),
+      // BullMQ v5 state check methods
+      isWaiting: async () => (await this.getJobState(jobIdStr)) === 'waiting',
+      isActive: async () => (await this.getJobState(jobIdStr)) === 'active',
+      isDelayed: async () => (await this.getJobState(jobIdStr)) === 'delayed',
+      isCompleted: async () => (await this.getJobState(jobIdStr)) === 'completed',
+      isFailed: async () => (await this.getJobState(jobIdStr)) === 'failed',
+      isWaitingChildren: () => Promise.resolve(false),
+      // BullMQ v5 mutation methods
+      updateData: async () => {},
+      promote: async () => {},
+      changeDelay: async () => {},
+      changePriority: async () => {},
+      extendLock: () => Promise.resolve(0),
+      clearLogs: async () => {},
+      // BullMQ v5 dependency methods
+      getDependencies: () => Promise.resolve({ processed: {}, unprocessed: [] }),
+      getDependenciesCount: () => Promise.resolve({ processed: 0, unprocessed: 0 }),
+      // BullMQ v5 serialization methods
+      toJSON: () => ({
+        id: jobIdStr,
+        name: data?.name ?? 'default',
+        data: jobData.data as T,
+        opts: {},
+        progress: (jobData.progress as number | undefined) ?? 0,
+        delay: runAt > ts ? runAt - ts : 0,
+        timestamp: ts,
+        attemptsMade: (jobData.attempts as number | undefined) ?? 0,
+        stacktrace: null,
+        queueQualifiedName: `bull:${this.name}`,
+      }),
+      asJSON: () => ({
+        id: jobIdStr,
+        name: data?.name ?? 'default',
+        data: JSON.stringify(jobData.data),
+        opts: '{}',
+        progress: String((jobData.progress as number | undefined) ?? 0),
+        delay: String(runAt > ts ? runAt - ts : 0),
+        timestamp: String(ts),
+        attemptsMade: String((jobData.attempts as number | undefined) ?? 0),
+        stacktrace: null,
+      }),
+      // BullMQ v5 move methods
+      moveToCompleted: () => Promise.resolve(null),
+      moveToFailed: () => Promise.resolve(),
+      moveToWait: () => Promise.resolve(false),
+      moveToDelayed: () => Promise.resolve(),
+      moveToWaitingChildren: () => Promise.resolve(false),
+      waitUntilFinished: () => Promise.resolve(undefined),
     };
   }
 
@@ -229,6 +430,20 @@ export class Queue<T = unknown> {
     } else {
       await this.tcp.send({ cmd: 'RetryJob', id });
     }
+  }
+
+  /**
+   * Get the return values of all children jobs (BullMQ v5 compatible).
+   * Returns a Record where keys are job keys (queueName:jobId) and values are return values.
+   */
+  getChildrenValues(id: string): Promise<Record<string, unknown>> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      return manager.getChildrenValues(jobId(id));
+    }
+    // TCP mode - would need server-side support
+    // For now, return empty object
+    return Promise.resolve({});
   }
 
   /** Get job state by ID (async, works with both embedded and TCP) */
@@ -652,13 +867,30 @@ export class Queue<T = unknown> {
       const jobs = getSharedManager().getJobs(this.name, options);
       return jobs.map((job) => {
         const jobData = job.data as { name?: string } | null;
-        return toPublicJob<T>(
+        return toPublicJob<T>({
           job,
-          jobData?.name ?? 'default',
-          (jid) => this.getJobState(jid),
-          (jid) => this.removeAsync(jid),
-          (jid) => this.retryJob(jid)
-        );
+          name: jobData?.name ?? 'default',
+          getState: (jid) => this.getJobState(jid),
+          remove: (jid) => this.removeAsync(jid),
+          retry: (jid) => this.retryJob(jid),
+          getChildrenValues: (jid) => this.getChildrenValues(jid),
+          updateData: (jid, data) => this.updateJobData(jid, data),
+          promote: (jid) => this.promoteJob(jid),
+          changeDelay: (jid, delay) => this.changeJobDelay(jid, delay),
+          changePriority: (jid, opts) => this.changeJobPriority(jid, opts),
+          extendLock: (jid, token, duration) => this.extendJobLock(jid, token, duration),
+          clearLogs: (jid, keepLogs) => this.clearJobLogs(jid, keepLogs),
+          getDependencies: (jid, opts) => this.getJobDependencies(jid, opts),
+          getDependenciesCount: (jid, opts) => this.getJobDependenciesCount(jid, opts),
+          moveToCompleted: (jid, result, token) => this.moveJobToCompleted(jid, result, token),
+          moveToFailed: (jid, error, token) => this.moveJobToFailed(jid, error, token),
+          moveToWait: (jid, token) => this.moveJobToWait(jid, token),
+          moveToDelayed: (jid, timestamp, token) => this.moveJobToDelayed(jid, timestamp, token),
+          moveToWaitingChildren: (jid, token, opts) =>
+            this.moveJobToWaitingChildren(jid, token, opts),
+          waitUntilFinished: (jid, queueEvents, ttl) =>
+            this.waitJobUntilFinished(jid, queueEvents, ttl),
+        });
       });
     }
     // Sync TCP version returns empty - use getJobsAsync
@@ -704,19 +936,84 @@ export class Queue<T = unknown> {
 
     return jobs.map((j) => {
       const jobData = j.data as { name?: string } | null;
+      const jobName = jobData?.name ?? 'default';
       return {
         id: j.id,
-        name: jobData?.name ?? 'default',
+        name: jobName,
         data: j.data as T,
         queueName: j.queue,
         attemptsMade: j.attempts,
         timestamp: j.createdAt,
         progress: j.progress ?? 0,
+        // BullMQ v5 properties
+        delay: 0,
+        processedOn: undefined,
+        finishedOn: undefined,
+        stacktrace: null,
+        stalledCounter: 0,
+        priority: j.priority,
+        parentKey: undefined,
+        opts: {},
+        token: undefined,
+        processedBy: undefined,
+        deduplicationId: undefined,
+        repeatJobKey: undefined,
+        attemptsStarted: j.attempts,
+        // Methods
         updateProgress: async () => {},
         log: async () => {},
         getState: () => this.getJobState(j.id),
         remove: () => this.removeAsync(j.id),
         retry: () => this.retryJob(j.id),
+        getChildrenValues: () => this.getChildrenValues(j.id),
+        // BullMQ v5 state check methods
+        isWaiting: async () => (await this.getJobState(j.id)) === 'waiting',
+        isActive: async () => (await this.getJobState(j.id)) === 'active',
+        isDelayed: async () => (await this.getJobState(j.id)) === 'delayed',
+        isCompleted: async () => (await this.getJobState(j.id)) === 'completed',
+        isFailed: async () => (await this.getJobState(j.id)) === 'failed',
+        isWaitingChildren: () => Promise.resolve(false),
+        // BullMQ v5 mutation methods
+        updateData: async () => {},
+        promote: async () => {},
+        changeDelay: async () => {},
+        changePriority: async () => {},
+        extendLock: () => Promise.resolve(0),
+        clearLogs: async () => {},
+        // BullMQ v5 dependency methods
+        getDependencies: () => Promise.resolve({ processed: {}, unprocessed: [] }),
+        getDependenciesCount: () => Promise.resolve({ processed: 0, unprocessed: 0 }),
+        // BullMQ v5 serialization methods
+        toJSON: () => ({
+          id: j.id,
+          name: jobName,
+          data: j.data as T,
+          opts: {},
+          progress: j.progress ?? 0,
+          delay: 0,
+          timestamp: j.createdAt,
+          attemptsMade: j.attempts,
+          stacktrace: null,
+          queueQualifiedName: `bull:${j.queue}`,
+        }),
+        asJSON: () => ({
+          id: j.id,
+          name: jobName,
+          data: JSON.stringify(j.data),
+          opts: '{}',
+          progress: String(j.progress ?? 0),
+          delay: '0',
+          timestamp: String(j.createdAt),
+          attemptsMade: String(j.attempts),
+          stacktrace: null,
+        }),
+        // BullMQ v5 move methods
+        moveToCompleted: () => Promise.resolve(null),
+        moveToFailed: () => Promise.resolve(),
+        moveToWait: () => Promise.resolve(false),
+        moveToDelayed: () => Promise.resolve(),
+        moveToWaitingChildren: () => Promise.resolve(false),
+        waitUntilFinished: () => Promise.resolve(undefined),
       };
     });
   }
@@ -852,13 +1149,22 @@ export class Queue<T = unknown> {
         })
         .map((job) => {
           const jobData = job.data as { name?: string } | null;
-          return toPublicJob<T>(
+          return toPublicJob<T>({
             job,
-            jobData?.name ?? 'default',
-            (jid) => this.getJobState(jid),
-            (jid) => this.removeAsync(jid),
-            (jid) => this.retryJob(jid)
-          );
+            name: jobData?.name ?? 'default',
+            getState: (jid) => this.getJobState(jid),
+            remove: (jid) => this.removeAsync(jid),
+            retry: (jid) => this.retryJob(jid),
+            getChildrenValues: (jid) => this.getChildrenValues(jid),
+            updateData: (jid, data) => this.updateJobData(jid, data),
+            promote: (jid) => this.promoteJob(jid),
+            changeDelay: (jid, delay) => this.changeJobDelay(jid, delay),
+            changePriority: (jid, opts) => this.changeJobPriority(jid, opts),
+            extendLock: (jid, token, duration) => this.extendJobLock(jid, token, duration),
+            clearLogs: (jid, keepLogs) => this.clearJobLogs(jid, keepLogs),
+            getDependencies: (jid, opts) => this.getJobDependencies(jid, opts),
+            getDependenciesCount: (jid, opts) => this.getJobDependenciesCount(jid, opts),
+          });
         });
       return Promise.resolve(result);
     }
@@ -1146,6 +1452,273 @@ export class Queue<T = unknown> {
     return Promise.resolve();
   }
 
+  // ============================================================================
+  // BullMQ v5 Job Mutation Methods (used by Job instances)
+  // ============================================================================
+
+  /** Update job data */
+  async updateJobData(id: string, data: unknown): Promise<void> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      await manager.updateJobData(jobId(id), data);
+    } else {
+      await this.tcp.send({ cmd: 'Update', id, data });
+    }
+  }
+
+  /** Promote a delayed job to waiting */
+  async promoteJob(id: string): Promise<void> {
+    if (this.embedded) {
+      await getSharedManager().promote(jobId(id));
+    } else {
+      await this.tcp.send({ cmd: 'Promote', id });
+    }
+  }
+
+  /** Change job delay */
+  async changeJobDelay(id: string, delay: number): Promise<void> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      await manager.changeDelay(jobId(id), delay);
+    } else {
+      await this.tcp.send({ cmd: 'ChangeDelay', id, delay });
+    }
+  }
+
+  /** Change job priority */
+  async changeJobPriority(id: string, opts: ChangePriorityOpts): Promise<void> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      await manager.changePriority(jobId(id), opts.priority);
+    } else {
+      await this.tcp.send({ cmd: 'ChangePriority', id, priority: opts.priority });
+    }
+  }
+
+  /** Extend job lock */
+  async extendJobLock(id: string, _token: string, duration: number): Promise<number> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      const extended = await manager.extendLock(jobId(id), duration);
+      return extended ? duration : 0;
+    } else {
+      const response = await this.tcp.send({ cmd: 'ExtendLock', id, duration });
+      return response.ok ? duration : 0;
+    }
+  }
+
+  /** Clear job logs */
+  async clearJobLogs(id: string, keepLogs?: number): Promise<void> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      manager.clearLogs(jobId(id), keepLogs);
+    } else {
+      await this.tcp.send({ cmd: 'ClearLogs', id, keepLogs });
+    }
+  }
+
+  /** Get job dependencies */
+  async getJobDependencies(id: string, _opts?: GetDependenciesOpts): Promise<JobDependencies> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      const job = await manager.getJob(jobId(id));
+      if (!job) return { processed: {}, unprocessed: [] };
+
+      const childIds = job.childrenIds;
+      const processed: Record<string, unknown> = {};
+      const unprocessed: string[] = [];
+
+      for (const childId of childIds) {
+        const result = manager.getResult(childId);
+        if (result !== undefined) {
+          const childJob = await manager.getJob(childId);
+          const key = childJob ? `${childJob.queue}:${childId}` : String(childId);
+          processed[key] = result;
+        } else {
+          unprocessed.push(String(childId));
+        }
+      }
+
+      return { processed, unprocessed };
+    }
+    // TCP mode
+    return { processed: {}, unprocessed: [] };
+  }
+
+  /** Get job dependencies count */
+  async getJobDependenciesCount(
+    id: string,
+    _opts?: GetDependenciesOpts
+  ): Promise<JobDependenciesCount> {
+    if (this.embedded) {
+      const deps = await this.getJobDependencies(id);
+      return {
+        processed: Object.keys(deps.processed).length,
+        unprocessed: deps.unprocessed.length,
+      };
+    }
+    return { processed: 0, unprocessed: 0 };
+  }
+
+  // ============================================================================
+  // BullMQ v5 Job Move Methods
+  // ============================================================================
+
+  /**
+   * Move job to completed state (BullMQ v5 compatible).
+   * Used internally by workers to mark jobs as complete.
+   */
+  async moveJobToCompleted(id: string, returnValue: unknown, _token?: string): Promise<unknown> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      await manager.ack(jobId(id), returnValue);
+      return null; // Could return next job if fetchNext was true
+    } else {
+      await this.tcp.send({ cmd: 'ACK', id, result: returnValue });
+      return null;
+    }
+  }
+
+  /**
+   * Move job to failed state (BullMQ v5 compatible).
+   * Used internally by workers to mark jobs as failed.
+   */
+  async moveJobToFailed(id: string, error: Error, _token?: string): Promise<void> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      await manager.fail(jobId(id), error.message);
+    } else {
+      await this.tcp.send({ cmd: 'FAIL', id, error: error.message });
+    }
+  }
+
+  /**
+   * Move job back to waiting state (BullMQ v5 compatible).
+   * Useful for re-queueing a job that needs to be processed again.
+   */
+  async moveJobToWait(id: string, _token?: string): Promise<boolean> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      const job = await manager.getJob(jobId(id));
+      if (!job) return false;
+
+      // Re-queue the job by pushing it again
+      await manager.push(job.queue, {
+        data: job.data,
+        priority: job.priority,
+        customId: job.customId ?? undefined,
+      });
+      return true;
+    } else {
+      const response = await this.tcp.send({ cmd: 'MoveToWait', id });
+      return response.ok === true;
+    }
+  }
+
+  /**
+   * Move job to delayed state (BullMQ v5 compatible).
+   * The job will become available for processing at the specified timestamp.
+   */
+  async moveJobToDelayed(id: string, timestamp: number, _token?: string): Promise<void> {
+    if (this.embedded) {
+      const manager = getSharedManager();
+      const delay = Math.max(0, timestamp - Date.now());
+      await manager.changeDelay(jobId(id), delay);
+    } else {
+      await this.tcp.send({ cmd: 'MoveToDelayed', id, timestamp });
+    }
+  }
+
+  /**
+   * Move job to waiting-children state (BullMQ v5 compatible).
+   * Job will wait for all children to complete before processing.
+   */
+  async moveJobToWaitingChildren(
+    id: string,
+    _token?: string,
+    _opts?: { child?: { id: string; queue: string } }
+  ): Promise<boolean> {
+    if (this.embedded) {
+      // In embedded mode, this is handled automatically by the dependency system
+      // The job is already in waiting-children state if it has pending children
+      const manager = getSharedManager();
+      const job = await manager.getJob(jobId(id));
+      if (!job) return false;
+
+      // Check if job has unprocessed children
+      const deps = await this.getJobDependencies(id);
+      return deps.unprocessed.length > 0;
+    }
+    return false;
+  }
+
+  /**
+   * Wait until job has finished (completed or failed).
+   * BullMQ v5 compatible method.
+   */
+  async waitJobUntilFinished(id: string, queueEvents: unknown, ttl?: number): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const timeout = ttl
+        ? setTimeout(() => {
+            cleanup();
+            reject(new Error(`Job ${id} timed out after ${ttl}ms`));
+          }, ttl)
+        : null;
+
+      // Cast queueEvents to expected interface
+      const events = queueEvents as {
+        on: (
+          event: string,
+          handler: (data: { jobId: string; returnvalue?: unknown; failedReason?: string }) => void
+        ) => void;
+        off: (
+          event: string,
+          handler: (data: { jobId: string; returnvalue?: unknown; failedReason?: string }) => void
+        ) => void;
+      };
+
+      const completedHandler = (data: { jobId: string; returnvalue?: unknown }) => {
+        if (data.jobId === id) {
+          cleanup();
+          resolve(data.returnvalue);
+        }
+      };
+
+      const failedHandler = (data: { jobId: string; failedReason?: string }) => {
+        if (data.jobId === id) {
+          cleanup();
+          reject(new Error(data.failedReason ?? 'Job failed'));
+        }
+      };
+
+      const cleanup = () => {
+        if (timeout) clearTimeout(timeout);
+        events.off('completed', completedHandler);
+        events.off('failed', failedHandler);
+      };
+
+      events.on('completed', completedHandler);
+      events.on('failed', failedHandler);
+
+      // Also check if job is already finished
+      void this.getJobState(id).then((state) => {
+        if (state === 'completed') {
+          cleanup();
+          // Get the result
+          if (this.embedded) {
+            const result = getSharedManager().getResult(jobId(id));
+            resolve(result);
+          } else {
+            resolve(undefined);
+          }
+        } else if (state === 'failed') {
+          cleanup();
+          reject(new Error('Job already failed'));
+        }
+      });
+    });
+  }
+
   close(): void {
     if (this.tcpPool) {
       if (this.useSharedPool) releaseSharedPool(this.tcpPool);
@@ -1155,14 +1728,30 @@ export class Queue<T = unknown> {
 
   private createJobProxy(id: string, name: string, data: T): Job<T> {
     const tcp = this.tcp;
+    const ts = Date.now();
     return {
       id,
       name,
       data,
       queueName: this.name,
       attemptsMade: 0,
-      timestamp: Date.now(),
+      timestamp: ts,
       progress: 0,
+      // BullMQ v5 properties
+      delay: 0,
+      processedOn: undefined,
+      finishedOn: undefined,
+      stacktrace: null,
+      stalledCounter: 0,
+      priority: 0,
+      parentKey: undefined,
+      opts: {},
+      token: undefined,
+      processedBy: undefined,
+      deduplicationId: undefined,
+      repeatJobKey: undefined,
+      attemptsStarted: 0,
+      // Methods
       updateProgress: async (progress: number, message?: string) => {
         await tcp.send({ cmd: 'Progress', id, progress, message });
       },
@@ -1172,6 +1761,78 @@ export class Queue<T = unknown> {
       getState: () => this.getJobState(id),
       remove: () => this.removeAsync(id),
       retry: () => this.retryJob(id),
+      getChildrenValues: () => this.getChildrenValues(id),
+      // BullMQ v5 state check methods
+      isWaiting: async () => (await this.getJobState(id)) === 'waiting',
+      isActive: async () => (await this.getJobState(id)) === 'active',
+      isDelayed: async () => (await this.getJobState(id)) === 'delayed',
+      isCompleted: async () => (await this.getJobState(id)) === 'completed',
+      isFailed: async () => (await this.getJobState(id)) === 'failed',
+      isWaitingChildren: () => Promise.resolve(false),
+      // BullMQ v5 mutation methods
+      updateData: async (newData) => {
+        await tcp.send({ cmd: 'Update', id, data: newData });
+      },
+      promote: async () => {
+        await tcp.send({ cmd: 'Promote', id });
+      },
+      changeDelay: async (delay) => {
+        await tcp.send({ cmd: 'ChangeDelay', id, delay });
+      },
+      changePriority: async (opts) => {
+        await tcp.send({ cmd: 'ChangePriority', id, priority: opts.priority });
+      },
+      extendLock: async (_token, duration) => {
+        const res = await tcp.send({ cmd: 'ExtendLock', id, duration });
+        return res.ok ? duration : 0;
+      },
+      clearLogs: async () => {
+        await tcp.send({ cmd: 'ClearLogs', id });
+      },
+      // BullMQ v5 dependency methods
+      getDependencies: () => Promise.resolve({ processed: {}, unprocessed: [] }),
+      getDependenciesCount: () => Promise.resolve({ processed: 0, unprocessed: 0 }),
+      // BullMQ v5 serialization methods
+      toJSON: () => ({
+        id,
+        name,
+        data,
+        opts: {},
+        progress: 0,
+        delay: 0,
+        timestamp: ts,
+        attemptsMade: 0,
+        stacktrace: null,
+        queueQualifiedName: `bull:${this.name}`,
+      }),
+      asJSON: () => ({
+        id,
+        name,
+        data: JSON.stringify(data),
+        opts: '{}',
+        progress: '0',
+        delay: '0',
+        timestamp: String(ts),
+        attemptsMade: '0',
+        stacktrace: null,
+      }),
+      // BullMQ v5 move methods
+      moveToCompleted: async (returnValue) => {
+        await tcp.send({ cmd: 'ACK', id, result: returnValue });
+        return null;
+      },
+      moveToFailed: async (error) => {
+        await tcp.send({ cmd: 'FAIL', id, error: error.message });
+      },
+      moveToWait: async () => {
+        const res = await tcp.send({ cmd: 'MoveToWait', id });
+        return res.ok === true;
+      },
+      moveToDelayed: async (timestamp) => {
+        await tcp.send({ cmd: 'MoveToDelayed', id, timestamp });
+      },
+      moveToWaitingChildren: () => Promise.resolve(false),
+      waitUntilFinished: () => Promise.resolve(undefined),
     };
   }
 
@@ -1184,11 +1845,75 @@ export class Queue<T = unknown> {
       attemptsMade: 0,
       timestamp,
       progress: 0,
+      // BullMQ v5 properties
+      delay: 0,
+      processedOn: undefined,
+      finishedOn: undefined,
+      stacktrace: null,
+      stalledCounter: 0,
+      priority: 0,
+      parentKey: undefined,
+      opts: {},
+      token: undefined,
+      processedBy: undefined,
+      deduplicationId: undefined,
+      repeatJobKey: undefined,
+      attemptsStarted: 0,
+      // Methods
       updateProgress: async () => {},
       log: async () => {},
       getState: () => this.getJobState(id),
       remove: () => this.removeAsync(id),
       retry: () => this.retryJob(id),
+      getChildrenValues: () => this.getChildrenValues(id),
+      // BullMQ v5 state check methods
+      isWaiting: async () => (await this.getJobState(id)) === 'waiting',
+      isActive: async () => (await this.getJobState(id)) === 'active',
+      isDelayed: async () => (await this.getJobState(id)) === 'delayed',
+      isCompleted: async () => (await this.getJobState(id)) === 'completed',
+      isFailed: async () => (await this.getJobState(id)) === 'failed',
+      isWaitingChildren: () => Promise.resolve(false),
+      // BullMQ v5 mutation methods
+      updateData: async () => {},
+      promote: async () => {},
+      changeDelay: async () => {},
+      changePriority: async () => {},
+      extendLock: () => Promise.resolve(0),
+      clearLogs: async () => {},
+      // BullMQ v5 dependency methods
+      getDependencies: () => Promise.resolve({ processed: {}, unprocessed: [] }),
+      getDependenciesCount: () => Promise.resolve({ processed: 0, unprocessed: 0 }),
+      // BullMQ v5 serialization methods
+      toJSON: () => ({
+        id,
+        name,
+        data,
+        opts: {},
+        progress: 0,
+        delay: 0,
+        timestamp,
+        attemptsMade: 0,
+        stacktrace: null,
+        queueQualifiedName: `bull:${this.name}`,
+      }),
+      asJSON: () => ({
+        id,
+        name,
+        data: JSON.stringify(data),
+        opts: '{}',
+        progress: '0',
+        delay: '0',
+        timestamp: String(timestamp),
+        attemptsMade: '0',
+        stacktrace: null,
+      }),
+      // BullMQ v5 move methods
+      moveToCompleted: () => Promise.resolve(null),
+      moveToFailed: () => Promise.resolve(),
+      moveToWait: () => Promise.resolve(false),
+      moveToDelayed: () => Promise.resolve(),
+      moveToWaitingChildren: () => Promise.resolve(false),
+      waitUntilFinished: () => Promise.resolve(undefined),
     };
   }
 }

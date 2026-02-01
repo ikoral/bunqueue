@@ -6,7 +6,8 @@
 import { EventEmitter } from 'events';
 import { getSharedManager } from '../manager';
 import { TcpConnectionPool } from '../tcpPool';
-import type { WorkerOptions, Processor, ConnectionOptions } from '../types';
+import { EventType } from '../../domain/types/queue';
+import type { WorkerOptions, Processor, ConnectionOptions, RateLimiterOptions } from '../types';
 import type { Job as InternalJob } from '../../domain/types/job';
 import type { TcpConnection, ExtendedWorkerOptions } from './types';
 import { FORCE_EMBEDDED, WORKER_CONSTANTS } from './types';
@@ -27,7 +28,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private readonly ackBatcher: AckBatcher;
 
   private running = false;
+  private paused = false;
   private closing = false;
+  private closed = false;
   private activeJobs = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
   private consecutiveErrors = 0;
@@ -37,6 +40,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private readonly activeJobIds: Set<string> = new Set();
   private readonly pulledJobIds: Set<string> = new Set(); // All pulled jobs (for heartbeat)
   private readonly jobTokens: Map<string, string> = new Map(); // jobId -> lockToken
+  private readonly cancelledJobs: Set<string> = new Set(); // Jobs marked for cancellation
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   // Unique worker ID for lock ownership
@@ -46,6 +50,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private pendingJobs: Array<{ job: InternalJob; token: string | null }> = [];
   private pendingJobsHead = 0;
   private processingScheduled = false; // Prevent multiple setImmediate calls
+
+  // Rate limiter state (BullMQ v5 compatible)
+  private readonly limiter: RateLimiterOptions | null;
+  private limiterTokens: number[] = []; // Timestamps of recent job completions
+
+  // Drained event tracking
+  private lastDrainedEmit = 0;
+
+  // Stalled event subscription (BullMQ v5 compatible)
+  private stalledUnsubscribe: (() => void) | null = null;
 
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
@@ -67,6 +81,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       // Lock-based ownership: disable for high-throughput scenarios where stall detection is sufficient
       useLocks: opts.useLocks ?? true,
     };
+
+    // Initialize rate limiter if provided
+    this.limiter = opts.limiter ?? null;
 
     this.ackBatcher = new AckBatcher({
       batchSize: opts.batchSize ?? 10,
@@ -96,10 +113,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   /** Start processing */
   run(): void {
-    if (this.running) return;
+    if (this.running || this.closed) return;
     this.running = true;
+    this.paused = false;
     this.closing = false;
     this.emit('ready');
+
+    // Subscribe to stalled events in embedded mode (BullMQ v5)
+    if (this.embedded && !this.stalledUnsubscribe) {
+      this.subscribeToStalledEvents();
+    }
 
     if (!this.embedded && this.opts.heartbeatInterval > 0) {
       this.startHeartbeat();
@@ -107,9 +130,25 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.poll();
   }
 
+  /** Subscribe to stalled events from QueueManager (BullMQ v5 compatible) */
+  private subscribeToStalledEvents(): void {
+    if (!this.embedded) return;
+
+    const manager = getSharedManager();
+    this.stalledUnsubscribe = manager.subscribe((event) => {
+      if (event.queue !== this.name) return;
+      if (event.eventType === EventType.Stalled) {
+        // Emit stalled event (BullMQ v5 format: jobId, prev)
+        this.emit('stalled', event.jobId, 'active');
+      }
+    });
+  }
+
   /** Pause processing */
   pause(): void {
+    if (!this.running) return;
     this.running = false;
+    this.paused = true;
     if (this.pollTimer) {
       clearTimeout(this.pollTimer);
       this.pollTimer = null;
@@ -118,13 +157,144 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   /** Resume processing */
   resume(): void {
+    if (this.closed) return;
+    this.paused = false;
     this.run();
+  }
+
+  /** Check if worker is currently running */
+  isRunning(): boolean {
+    return this.running;
+  }
+
+  /** Check if worker is paused */
+  isPaused(): boolean {
+    return this.paused && !this.closed;
+  }
+
+  /** Check if worker is closed */
+  isClosed(): boolean {
+    return this.closed;
+  }
+
+  /**
+   * Wait until the worker is ready (BullMQ v5 compatible).
+   * In embedded mode, resolves immediately.
+   * In TCP mode, waits for connection to be established.
+   */
+  async waitUntilReady(): Promise<void> {
+    if (this.embedded) {
+      // Embedded mode is always ready
+      return;
+    }
+    if (this.tcpPool) {
+      // Wait for TCP connection by sending a ping
+      await this.tcpPool.send({ cmd: 'Ping' });
+    }
+  }
+
+  /**
+   * Mark a job for cancellation (BullMQ v5 compatible).
+   * The job will be failed with the given reason when it completes processing.
+   * Returns true if the job was found and marked for cancellation.
+   */
+  cancelJob(jobId: string, reason?: string): boolean {
+    if (this.activeJobIds.has(jobId)) {
+      this.cancelledJobs.add(jobId);
+      this.emit('cancelled', { jobId, reason: reason ?? 'Job cancelled by worker' });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Mark all active jobs for cancellation (BullMQ v5 compatible).
+   */
+  cancelAllJobs(reason?: string): void {
+    for (const jobId of this.activeJobIds) {
+      this.cancelledJobs.add(jobId);
+      this.emit('cancelled', { jobId, reason: reason ?? 'All jobs cancelled' });
+    }
+  }
+
+  /**
+   * Check if a job has been marked for cancellation.
+   * Can be called from within a processor to check if the job should stop.
+   */
+  isJobCancelled(jobId: string): boolean {
+    return this.cancelledJobs.has(jobId);
+  }
+
+  /**
+   * Check if rate limiter allows processing another job.
+   * Returns true if we can process, false if rate limited.
+   */
+  private canProcessWithinLimit(): boolean {
+    if (!this.limiter) return true;
+
+    const now = Date.now();
+    const windowStart = now - this.limiter.duration;
+
+    // Remove expired tokens
+    this.limiterTokens = this.limiterTokens.filter((t) => t > windowStart);
+
+    // Check if we have capacity
+    return this.limiterTokens.length < this.limiter.max;
+  }
+
+  /**
+   * Record a job completion for rate limiting.
+   */
+  private recordJobForLimiter(): void {
+    if (!this.limiter) return;
+    this.limiterTokens.push(Date.now());
+  }
+
+  /**
+   * Get time until rate limiter allows next job (ms).
+   * Returns 0 if not rate limited.
+   */
+  private getTimeUntilNextSlot(): number {
+    if (!this.limiter) return 0;
+
+    const now = Date.now();
+    const windowStart = now - this.limiter.duration;
+
+    // Remove expired tokens
+    this.limiterTokens = this.limiterTokens.filter((t) => t > windowStart);
+
+    if (this.limiterTokens.length < this.limiter.max) {
+      return 0;
+    }
+
+    // Find oldest token and calculate when it expires
+    const oldestToken = Math.min(...this.limiterTokens);
+    return oldestToken + this.limiter.duration - now;
+  }
+
+  /**
+   * Get rate limiter info (for debugging/monitoring).
+   */
+  getRateLimiterInfo(): { current: number; max: number; duration: number } | null {
+    if (!this.limiter) return null;
+
+    const now = Date.now();
+    const windowStart = now - this.limiter.duration;
+    const currentTokens = this.limiterTokens.filter((t) => t > windowStart).length;
+
+    return {
+      current: currentTokens,
+      max: this.limiter.max,
+      duration: this.limiter.duration,
+    };
   }
 
   /** Close worker gracefully */
   async close(force = false): Promise<void> {
+    if (this.closed) return;
     this.closing = true;
     this.running = false;
+    this.paused = false;
     if (this.pollTimer) {
       clearTimeout(this.pollTimer);
       this.pollTimer = null;
@@ -151,14 +321,23 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     // Small delay to ensure TCP responses are processed
     await new Promise((r) => setTimeout(r, 100));
 
+    // Unsubscribe from stalled events
+    if (this.stalledUnsubscribe) {
+      this.stalledUnsubscribe();
+      this.stalledUnsubscribe = null;
+    }
+
     // Clear tracking sets
     this.activeJobIds.clear();
     this.pulledJobIds.clear();
     this.jobTokens.clear();
+    this.cancelledJobs.clear();
     this.pendingJobs = [];
     this.pendingJobsHead = 0;
 
     if (this.tcpPool) this.tcpPool.close();
+    this.closed = true;
+    this.closing = false;
     this.emit('closed');
   }
 
@@ -208,6 +387,19 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       }, 10);
       return;
     }
+
+    // Check rate limiter
+    if (!this.canProcessWithinLimit()) {
+      const waitTime = this.getTimeUntilNextSlot();
+      this.pollTimer = setTimeout(
+        () => {
+          this.poll();
+        },
+        Math.max(waitTime, 10)
+      );
+      return;
+    }
+
     void this.tryProcess();
   }
 
@@ -235,6 +427,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         this.consecutiveErrors = 0;
         this.startJob(item.job, item.token);
       } else {
+        // Emit drained event when queue is empty (throttled to avoid spam)
+        const now = Date.now();
+        if (now - this.lastDrainedEmit > 1000) {
+          this.lastDrainedEmit = now;
+          this.emit('drained');
+        }
         const waitTime = this.opts.pollTimeout > 0 ? 10 : 50;
         this.pollTimer = setTimeout(() => {
           this.poll();
@@ -374,9 +572,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.activeJobs--;
       this.activeJobIds.delete(jobIdStr);
       this.pulledJobIds.delete(jobIdStr); // Remove from heartbeat tracking
+      this.cancelledJobs.delete(jobIdStr); // Clean up cancellation flag
       if (this.opts.useLocks) {
         this.jobTokens.delete(jobIdStr); // Clean up token
       }
+      // Record job completion for rate limiter
+      this.recordJobForLimiter();
       if (this.running && !this.closing) this.poll();
     });
 

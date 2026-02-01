@@ -7,8 +7,72 @@ import type { Job as InternalJob } from '../domain/types/job';
 /** Job state type */
 export type JobStateType = 'waiting' | 'delayed' | 'active' | 'completed' | 'failed' | 'unknown';
 
+/** Job JSON representation (BullMQ v5 compatible) */
+export interface JobJson<T = unknown> {
+  id: string;
+  name: string;
+  data: T;
+  opts: JobOptions;
+  progress: number;
+  delay: number;
+  timestamp: number;
+  attemptsMade: number;
+  stacktrace: string[] | null;
+  returnvalue?: unknown;
+  failedReason?: string;
+  finishedOn?: number;
+  processedOn?: number;
+  queueQualifiedName: string;
+  parentKey?: string;
+}
+
+/** Job JSON raw representation (BullMQ v5 compatible) */
+export interface JobJsonRaw {
+  id: string;
+  name: string;
+  data: string; // JSON stringified
+  opts: string; // JSON stringified
+  progress: string; // JSON stringified
+  delay: string;
+  timestamp: string;
+  attemptsMade: string;
+  stacktrace: string | null; // JSON stringified
+  returnvalue?: string; // JSON stringified
+  failedReason?: string;
+  finishedOn?: string;
+  processedOn?: string;
+  parentKey?: string;
+}
+
+/** Options for changePriority (BullMQ v5 compatible) */
+export interface ChangePriorityOpts {
+  priority: number;
+  lifo?: boolean;
+}
+
+/** Options for getDependencies (BullMQ v5 compatible) */
+export interface GetDependenciesOpts {
+  processed?: { cursor?: number; count?: number };
+  unprocessed?: { cursor?: number; count?: number };
+}
+
+/** Dependencies result (BullMQ v5 compatible) */
+export interface JobDependencies {
+  processed: Record<string, unknown>;
+  unprocessed: string[];
+  nextProcessedCursor?: number;
+  nextUnprocessedCursor?: number;
+}
+
+/** Dependencies count result (BullMQ v5 compatible) */
+export interface JobDependenciesCount {
+  processed: number;
+  unprocessed: number;
+}
+
 /** Job interface exposed to users */
 export interface Job<T = unknown> {
+  // Core properties (existing)
   id: string;
   name: string;
   data: T;
@@ -18,6 +82,38 @@ export interface Job<T = unknown> {
   progress: number;
   returnvalue?: unknown;
   failedReason?: string;
+  /** Parent job reference (if this job is part of a flow) */
+  parent?: { id: string; queueQualifiedName: string };
+
+  // BullMQ v5 properties
+  /** Delay in ms before job becomes available for processing */
+  delay: number;
+  /** Timestamp when job started processing */
+  processedOn?: number;
+  /** Timestamp when job finished (completed or failed) */
+  finishedOn?: number;
+  /** Stack traces from failed attempts */
+  stacktrace: string[] | null;
+  /** Number of times this job has been stalled */
+  stalledCounter: number;
+  /** Job priority (higher = processed sooner) */
+  priority: number;
+  /** Parent key in format queueName:jobId */
+  parentKey?: string;
+  /** Original job options */
+  opts: JobOptions;
+  /** Lock token for this job (if processing) */
+  token?: string;
+  /** Worker/client identifier processing this job */
+  processedBy?: string;
+  /** Deduplication ID (if set via jobId) */
+  deduplicationId?: string;
+  /** Repeat job key (for repeatable jobs) */
+  repeatJobKey?: string;
+  /** Number of times job processing has been started (includes retries) */
+  attemptsStarted: number;
+
+  // Core methods (existing)
   /** Update job progress (0-100) */
   updateProgress(progress: number, message?: string): Promise<void>;
   /** Log a message to the job */
@@ -28,35 +124,219 @@ export interface Job<T = unknown> {
   remove(): Promise<void>;
   /** Retry this job */
   retry(): Promise<void>;
+  /**
+   * Get the return values of all children jobs (BullMQ v5 compatible).
+   * Returns a Record where keys are job keys (queueName:jobId) and values are return values.
+   */
+  getChildrenValues(): Promise<Record<string, unknown>>;
+
+  // BullMQ v5 state check methods
+  /** Check if job is in waiting state */
+  isWaiting(): Promise<boolean>;
+  /** Check if job is currently active/processing */
+  isActive(): Promise<boolean>;
+  /** Check if job is delayed */
+  isDelayed(): Promise<boolean>;
+  /** Check if job has completed successfully */
+  isCompleted(): Promise<boolean>;
+  /** Check if job has failed */
+  isFailed(): Promise<boolean>;
+  /** Check if job is waiting for children to complete */
+  isWaitingChildren(): Promise<boolean>;
+
+  // BullMQ v5 mutation methods
+  /** Update job data */
+  updateData(data: T): Promise<void>;
+  /** Promote delayed job to waiting */
+  promote(): Promise<void>;
+  /** Change job delay */
+  changeDelay(delay: number): Promise<void>;
+  /** Change job priority */
+  changePriority(opts: ChangePriorityOpts): Promise<void>;
+  /** Extend job lock duration */
+  extendLock(token: string, duration: number): Promise<number>;
+  /** Clear job logs */
+  clearLogs(keepLogs?: number): Promise<void>;
+
+  // BullMQ v5 dependency methods
+  /** Get job dependencies (children) */
+  getDependencies(opts?: GetDependenciesOpts): Promise<JobDependencies>;
+  /** Get count of job dependencies */
+  getDependenciesCount(opts?: GetDependenciesOpts): Promise<JobDependenciesCount>;
+
+  // BullMQ v5 serialization methods
+  /** Get job as JSON object */
+  toJSON(): JobJson<T>;
+  /** Get job as raw JSON (stringified values) */
+  asJSON(): JobJsonRaw;
+
+  // BullMQ v5 move methods
+  /**
+   * Move job to completed state.
+   * @param returnValue - The return value of the job
+   * @param token - Lock token (optional in embedded mode)
+   * @param fetchNext - Whether to fetch the next job (default: true)
+   * @returns The next job data or null
+   */
+  moveToCompleted(returnValue: unknown, token?: string, fetchNext?: boolean): Promise<unknown>;
+  /**
+   * Move job to failed state.
+   * @param error - The error that caused the failure
+   * @param token - Lock token (optional in embedded mode)
+   * @param fetchNext - Whether to fetch the next job (default: true)
+   */
+  moveToFailed(error: Error, token?: string, fetchNext?: boolean): Promise<void>;
+  /**
+   * Move job back to waiting state.
+   * @param token - Lock token (optional in embedded mode)
+   * @returns true if job was moved
+   */
+  moveToWait(token?: string): Promise<boolean>;
+  /**
+   * Move job to delayed state.
+   * @param timestamp - When the job should become available
+   * @param token - Lock token (optional in embedded mode)
+   */
+  moveToDelayed(timestamp: number, token?: string): Promise<void>;
+  /**
+   * Move job to waiting-children state.
+   * Job will wait for all children to complete before processing.
+   * @param token - Lock token (optional in embedded mode)
+   * @param opts - Options for the operation
+   * @returns true if job was moved
+   */
+  moveToWaitingChildren(
+    token?: string,
+    opts?: { child?: { id: string; queue: string } }
+  ): Promise<boolean>;
+  /**
+   * Wait until the job has finished (completed or failed).
+   * @param queueEvents - QueueEvents instance to listen on
+   * @param ttl - Maximum time to wait in ms (optional)
+   * @returns The job's return value
+   * @throws Error if job fails or times out
+   */
+  waitUntilFinished(queueEvents: unknown, ttl?: number): Promise<unknown>;
+}
+
+/** Parent job reference for flow dependencies */
+export interface ParentOpts {
+  /** Parent job ID */
+  id: string;
+  /** Parent job queue name */
+  queue: string;
+}
+
+/** Backoff configuration (BullMQ v5 compatible) */
+export interface BackoffOptions {
+  /** Backoff strategy type */
+  type: 'fixed' | 'exponential';
+  /** Base delay in milliseconds */
+  delay: number;
+}
+
+/** Keep jobs configuration (BullMQ v5 compatible) */
+export interface KeepJobs {
+  /** Maximum age in milliseconds */
+  age?: number;
+  /** Maximum count of jobs to keep */
+  count?: number;
+}
+
+/** Deduplication options (BullMQ v5 compatible) */
+export interface DeduplicationOptions {
+  /** Unique deduplication ID */
+  id: string;
+  /** TTL in milliseconds for the deduplication key */
+  ttl?: number;
+}
+
+/** Debounce options (BullMQ v5 compatible) */
+export interface DebounceOptions {
+  /** Unique debounce ID */
+  id: string;
+  /** TTL in milliseconds for the debounce window */
+  ttl: number;
+}
+
+/** Repeat configuration (BullMQ v5 compatible) */
+export interface RepeatOptions {
+  /** Repeat every N milliseconds */
+  every?: number;
+  /** Maximum repetitions (omit for infinite) */
+  limit?: number;
+  /** Cron pattern (alternative to every) */
+  pattern?: string;
+  /** Start date for repeat jobs */
+  startDate?: Date | string | number;
+  /** End date for repeat jobs */
+  endDate?: Date | string | number;
+  /** Timezone for cron pattern */
+  tz?: string;
+  /** Execute immediately on start */
+  immediately?: boolean;
+  /** Current repeat count (internal) */
+  count?: number;
+  /** Previous execution timestamp (internal) */
+  prevMillis?: number;
+  /** Offset in milliseconds */
+  offset?: number;
+  /** Custom job ID for repeat jobs */
+  jobId?: string;
 }
 
 /** Job options when adding to queue */
 export interface JobOptions {
+  /** Job priority (higher = processed sooner) */
   priority?: number;
+  /** Delay in milliseconds before job becomes available */
   delay?: number;
+  /** Maximum number of attempts */
   attempts?: number;
-  backoff?: number;
+  /** Backoff delay or configuration between retries */
+  backoff?: number | BackoffOptions;
+  /** Processing timeout in milliseconds */
   timeout?: number;
+  /** Custom job ID (for idempotent/deduplication) */
   jobId?: string;
-  removeOnComplete?: boolean;
-  removeOnFail?: boolean;
+  /** Remove job on completion (can be boolean, max age in ms, or KeepJobs config) */
+  removeOnComplete?: boolean | number | KeepJobs;
+  /** Remove job on failure (can be boolean, max age in ms, or KeepJobs config) */
+  removeOnFail?: boolean | number | KeepJobs;
   /** Stall timeout in ms - job is stalled if no heartbeat after this time */
   stallTimeout?: number;
   /** Repeat configuration for recurring jobs */
-  repeat?: {
-    /** Repeat every N milliseconds */
-    every?: number;
-    /** Maximum repetitions (omit for infinite) */
-    limit?: number;
-    /** Cron pattern (alternative to every) */
-    pattern?: string;
-  };
+  repeat?: RepeatOptions;
   /**
    * Force immediate persistence to disk (bypass write buffer).
    * Use for critical jobs where data loss is unacceptable.
    * Default: false (uses buffered writes for better throughput)
    */
   durable?: boolean;
+  /**
+   * Parent job reference for flow dependencies (BullMQ v5 compatible).
+   * When set, this job becomes a child of the specified parent.
+   * The parent will wait for all children to complete before processing.
+   */
+  parent?: ParentOpts;
+
+  // BullMQ v5 additional options
+  /** Process jobs in LIFO order (newest first) */
+  lifo?: boolean;
+  /** Maximum stack trace lines to store on failure */
+  stackTraceLimit?: number;
+  /** Maximum number of log entries to keep */
+  keepLogs?: number;
+  /** Maximum job data size in bytes */
+  sizeLimit?: number;
+  /** Fail parent job if this child job fails */
+  failParentOnFailure?: boolean;
+  /** Remove dependency relationship if this job fails */
+  removeDependencyOnFailure?: boolean;
+  /** Deduplication configuration */
+  deduplication?: DeduplicationOptions;
+  /** Debounce configuration */
+  debounce?: DebounceOptions;
 }
 
 /** Connection options for TCP mode */
@@ -82,6 +362,16 @@ export interface QueueOptions {
   embedded?: boolean;
 }
 
+/** Rate limiter configuration for Worker (BullMQ v5 compatible) */
+export interface RateLimiterOptions {
+  /** Maximum number of jobs to process in the duration window */
+  max: number;
+  /** Duration window in milliseconds */
+  duration: number;
+  /** Optional group key for per-group rate limiting */
+  groupKey?: string;
+}
+
 /** Worker options */
 export interface WorkerOptions {
   concurrency?: number;
@@ -103,6 +393,25 @@ export interface WorkerOptions {
    * Default: true
    */
   useLocks?: boolean;
+  /**
+   * Rate limiter for controlling job processing rate (BullMQ v5 compatible).
+   * When set, limits the number of jobs processed within the duration window.
+   */
+  limiter?: RateLimiterOptions;
+  /** Lock duration in ms (default: 30000) - how long a job lock lasts before expiring */
+  lockDuration?: number;
+  /** Maximum number of times a job can be stalled before being moved to failed (default: 1) */
+  maxStalledCount?: number;
+  /** Skip stalled job check (default: false) */
+  skipStalledCheck?: boolean;
+  /** Skip lock renewal via heartbeat (default: false) */
+  skipLockRenewal?: boolean;
+  /** Delay in ms when draining queue (default: 5000) */
+  drainDelay?: number;
+  /** Remove jobs on complete (can be boolean or max age/count) */
+  removeOnComplete?: boolean | number | { age?: number; count?: number };
+  /** Remove jobs on fail (can be boolean or max age/count) */
+  removeOnFail?: boolean | number | { age?: number; count?: number };
 }
 
 /** Stall configuration for a queue */
@@ -213,13 +522,179 @@ export interface CreatePublicJobOptions {
   getState?: (id: string) => Promise<JobStateType>;
   remove?: (id: string) => Promise<void>;
   retry?: (id: string) => Promise<void>;
+  getChildrenValues?: (id: string) => Promise<Record<string, unknown>>;
+  // BullMQ v5 additional callbacks
+  updateData?: (id: string, data: unknown) => Promise<void>;
+  promote?: (id: string) => Promise<void>;
+  changeDelay?: (id: string, delay: number) => Promise<void>;
+  changePriority?: (id: string, opts: ChangePriorityOpts) => Promise<void>;
+  extendLock?: (id: string, token: string, duration: number) => Promise<number>;
+  clearLogs?: (id: string, keepLogs?: number) => Promise<void>;
+  getDependencies?: (id: string, opts?: GetDependenciesOpts) => Promise<JobDependencies>;
+  getDependenciesCount?: (id: string, opts?: GetDependenciesOpts) => Promise<JobDependenciesCount>;
+  // BullMQ v5 move method callbacks
+  moveToCompleted?: (id: string, returnValue: unknown, token?: string) => Promise<unknown>;
+  moveToFailed?: (id: string, error: Error, token?: string) => Promise<void>;
+  moveToWait?: (id: string, token?: string) => Promise<boolean>;
+  moveToDelayed?: (id: string, timestamp: number, token?: string) => Promise<void>;
+  moveToWaitingChildren?: (
+    id: string,
+    token?: string,
+    opts?: { child?: { id: string; queue: string } }
+  ) => Promise<boolean>;
+  waitUntilFinished?: (id: string, queueEvents: unknown, ttl?: number) => Promise<unknown>;
+  // Additional job metadata
+  token?: string;
+  processedBy?: string;
+  stacktrace?: string[] | null;
+}
+
+/** Extract parent info from job data if present */
+function extractParent(jobData: unknown): { id: string; queueQualifiedName: string } | undefined {
+  if (typeof jobData === 'object' && jobData !== null) {
+    const data = jobData as Record<string, unknown>;
+    const parentId = data.__parentId;
+    const parentQueue = data.__parentQueue;
+    if (
+      parentId !== undefined &&
+      parentQueue !== undefined &&
+      (typeof parentId === 'string' || typeof parentId === 'number') &&
+      (typeof parentQueue === 'string' || typeof parentQueue === 'number')
+    ) {
+      return {
+        id: String(parentId),
+        queueQualifiedName: String(parentQueue),
+      };
+    }
+  }
+  return undefined;
+}
+
+/** Build repeat options from internal job repeat config */
+function buildRepeatOpts(repeat: InternalJob['repeat']): RepeatOptions | undefined {
+  if (!repeat) return undefined;
+  return {
+    every: repeat.every,
+    limit: repeat.limit,
+    pattern: repeat.pattern,
+    count: repeat.count,
+    startDate: repeat.startDate,
+    endDate: repeat.endDate,
+    tz: repeat.tz,
+    immediately: repeat.immediately,
+    prevMillis: repeat.prevMillis,
+    offset: repeat.offset,
+    jobId: repeat.jobId,
+  };
+}
+
+/** Build parent reference from job data */
+function buildParentOpts(job: InternalJob): { id: string; queue: string } | undefined {
+  const data = job.data as Record<string, unknown> | null;
+  const rawParentId = job.parentId ?? data?.__parentId;
+  const rawParentQueue = data?.__parentQueue;
+  // Only create parent if both values are string-coercible
+  const isStringLike = (v: unknown): v is string | number =>
+    typeof v === 'string' || typeof v === 'number';
+  if (isStringLike(rawParentId) && isStringLike(rawParentQueue)) {
+    return { id: String(rawParentId), queue: String(rawParentQueue) };
+  }
+  return undefined;
+}
+
+/** Build JobOptions from internal job */
+function buildJobOpts(job: InternalJob): JobOptions {
+  const backoff = job.backoffConfig
+    ? { type: job.backoffConfig.type, delay: job.backoffConfig.delay }
+    : job.backoff;
+
+  return {
+    priority: job.priority,
+    delay: job.runAt > job.createdAt ? job.runAt - job.createdAt : 0,
+    attempts: job.maxAttempts,
+    backoff,
+    timeout: job.timeout ?? undefined,
+    jobId: job.customId ?? undefined,
+    removeOnComplete: job.removeOnComplete,
+    removeOnFail: job.removeOnFail,
+    stallTimeout: job.stallTimeout ?? undefined,
+    repeat: buildRepeatOpts(job.repeat),
+    parent: buildParentOpts(job),
+    lifo: job.lifo,
+    stackTraceLimit: job.stackTraceLimit,
+    keepLogs: job.keepLogs ?? undefined,
+    sizeLimit: job.sizeLimit ?? undefined,
+    failParentOnFailure: job.failParentOnFailure,
+    removeDependencyOnFailure: job.removeDependencyOnFailure,
+    deduplication:
+      job.deduplicationTtl !== null
+        ? { id: job.customId ?? '', ttl: job.deduplicationTtl }
+        : undefined,
+    debounce:
+      job.debounceId && job.debounceTtl !== null
+        ? { id: job.debounceId, ttl: job.debounceTtl }
+        : undefined,
+  };
+}
+
+/** Build parent key from job */
+function buildParentKey(job: InternalJob): string | undefined {
+  if (job.parentId) {
+    // Try to get parent queue from job data
+    const data = job.data as Record<string, unknown> | null;
+    const parentQueue = data?.__parentQueue;
+    if (parentQueue && (typeof parentQueue === 'string' || typeof parentQueue === 'number')) {
+      return `${String(parentQueue)}:${job.parentId}`;
+    }
+    return `unknown:${job.parentId}`;
+  }
+  return undefined;
+}
+
+/** Build repeat job key from job */
+function buildRepeatJobKey(job: InternalJob): string | undefined {
+  if (job.repeat) {
+    const pattern = job.repeat.pattern ?? (job.repeat.every ? `every:${job.repeat.every}` : '');
+    return `${job.queue}:${job.id}:${pattern}`;
+  }
+  return undefined;
 }
 
 /** Convert internal job to public job (with methods) */
 export function createPublicJob<T>(opts: CreatePublicJobOptions): Job<T> {
-  const { job, name, updateProgress, log, getState, remove, retry } = opts;
+  const {
+    job,
+    name,
+    updateProgress,
+    log,
+    getState,
+    remove,
+    retry,
+    getChildrenValues,
+    updateData,
+    promote,
+    changeDelay,
+    changePriority,
+    extendLock,
+    clearLogs,
+    getDependencies,
+    getDependenciesCount,
+    moveToCompleted,
+    moveToFailed,
+    moveToWait,
+    moveToDelayed,
+    moveToWaitingChildren,
+    waitUntilFinished,
+    token,
+    processedBy,
+    stacktrace,
+  } = opts;
   const id = String(job.id);
-  return {
+  const parent = extractParent(job.data);
+  const jobOpts = buildJobOpts(job);
+
+  const publicJob: Job<T> = {
+    // Core properties
     id,
     name,
     data: extractUserData(job.data) as T,
@@ -227,24 +702,203 @@ export function createPublicJob<T>(opts: CreatePublicJobOptions): Job<T> {
     attemptsMade: job.attempts,
     timestamp: job.createdAt,
     progress: job.progress,
+    parent,
+
+    // BullMQ v5 properties
+    delay: job.runAt > job.createdAt ? job.runAt - job.createdAt : 0,
+    processedOn: job.startedAt ?? undefined,
+    finishedOn: job.completedAt ?? undefined,
+    stacktrace: stacktrace ?? null,
+    stalledCounter: job.stallCount,
+    priority: job.priority,
+    parentKey: buildParentKey(job),
+    opts: jobOpts,
+    token,
+    processedBy,
+    deduplicationId: job.customId ?? undefined,
+    repeatJobKey: buildRepeatJobKey(job),
+    attemptsStarted: job.attempts,
+
+    // Core methods
     updateProgress: (progress: number, message?: string) => updateProgress(id, progress, message),
     log: (message: string) => log(id, message),
     getState: () => (getState ? getState(id) : Promise.resolve('unknown' as JobStateType)),
     remove: () => (remove ? remove(id) : Promise.resolve()),
     retry: () => (retry ? retry(id) : Promise.resolve()),
+    getChildrenValues: () =>
+      getChildrenValues ? getChildrenValues(id) : Promise.resolve({} as Record<string, unknown>),
+
+    // BullMQ v5 state check methods
+    isWaiting: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'waiting';
+    },
+    isActive: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'active';
+    },
+    isDelayed: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'delayed';
+    },
+    isCompleted: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'completed';
+    },
+    isFailed: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'failed';
+    },
+    isWaitingChildren: async () => {
+      // Check if job has pending children
+      if (getDependenciesCount) {
+        const counts = await getDependenciesCount(id);
+        return counts.unprocessed > 0;
+      }
+      return false;
+    },
+
+    // BullMQ v5 mutation methods
+    updateData: (data: T) => (updateData ? updateData(id, data) : Promise.resolve()),
+    promote: () => (promote ? promote(id) : Promise.resolve()),
+    changeDelay: (delay: number) => (changeDelay ? changeDelay(id, delay) : Promise.resolve()),
+    changePriority: (prioOpts: ChangePriorityOpts) =>
+      changePriority ? changePriority(id, prioOpts) : Promise.resolve(),
+    extendLock: (lockToken: string, duration: number) =>
+      extendLock ? extendLock(id, lockToken, duration) : Promise.resolve(0),
+    clearLogs: (keepLogs?: number) => (clearLogs ? clearLogs(id, keepLogs) : Promise.resolve()),
+
+    // BullMQ v5 dependency methods
+    getDependencies: (depOpts?: GetDependenciesOpts) =>
+      getDependencies
+        ? getDependencies(id, depOpts)
+        : Promise.resolve({ processed: {}, unprocessed: [] }),
+    getDependenciesCount: (depOpts?: GetDependenciesOpts) =>
+      getDependenciesCount
+        ? getDependenciesCount(id, depOpts)
+        : Promise.resolve({ processed: 0, unprocessed: 0 }),
+
+    // BullMQ v5 serialization methods
+    toJSON: () => ({
+      id,
+      name,
+      data: extractUserData(job.data) as T,
+      opts: jobOpts,
+      progress: job.progress,
+      delay: job.runAt > job.createdAt ? job.runAt - job.createdAt : 0,
+      timestamp: job.createdAt,
+      attemptsMade: job.attempts,
+      stacktrace: stacktrace ?? null,
+      returnvalue: undefined,
+      failedReason: undefined,
+      finishedOn: job.completedAt ?? undefined,
+      processedOn: job.startedAt ?? undefined,
+      queueQualifiedName: `bull:${job.queue}`,
+      parentKey: buildParentKey(job),
+    }),
+    asJSON: () => ({
+      id,
+      name,
+      data: JSON.stringify(extractUserData(job.data)),
+      opts: JSON.stringify(jobOpts),
+      progress: JSON.stringify(job.progress),
+      delay: String(job.runAt > job.createdAt ? job.runAt - job.createdAt : 0),
+      timestamp: String(job.createdAt),
+      attemptsMade: String(job.attempts),
+      stacktrace: stacktrace ? JSON.stringify(stacktrace) : null,
+      returnvalue: undefined,
+      failedReason: undefined,
+      finishedOn: job.completedAt ? String(job.completedAt) : undefined,
+      processedOn: job.startedAt ? String(job.startedAt) : undefined,
+      parentKey: buildParentKey(job),
+    }),
+
+    // BullMQ v5 move methods
+    moveToCompleted: (returnValue: unknown, lockToken?: string, _fetchNext?: boolean) =>
+      moveToCompleted ? moveToCompleted(id, returnValue, lockToken) : Promise.resolve(null),
+    moveToFailed: (error: Error, lockToken?: string, _fetchNext?: boolean) =>
+      moveToFailed ? moveToFailed(id, error, lockToken) : Promise.resolve(),
+    moveToWait: (lockToken?: string) =>
+      moveToWait ? moveToWait(id, lockToken) : Promise.resolve(false),
+    moveToDelayed: (timestamp: number, lockToken?: string) =>
+      moveToDelayed ? moveToDelayed(id, timestamp, lockToken) : Promise.resolve(),
+    moveToWaitingChildren: (
+      lockToken?: string,
+      moveOpts?: { child?: { id: string; queue: string } }
+    ) =>
+      moveToWaitingChildren
+        ? moveToWaitingChildren(id, lockToken, moveOpts)
+        : Promise.resolve(false),
+    waitUntilFinished: (queueEvents: unknown, ttl?: number) =>
+      waitUntilFinished ? waitUntilFinished(id, queueEvents, ttl) : Promise.resolve(undefined),
   };
+
+  return publicJob;
+}
+
+/** Options for creating a simple public job */
+export interface ToPublicJobOptions {
+  job: InternalJob;
+  name: string;
+  getState?: (id: string) => Promise<JobStateType>;
+  remove?: (id: string) => Promise<void>;
+  retry?: (id: string) => Promise<void>;
+  getChildrenValues?: (id: string) => Promise<Record<string, unknown>>;
+  // BullMQ v5 additional callbacks
+  updateData?: (id: string, data: unknown) => Promise<void>;
+  promote?: (id: string) => Promise<void>;
+  changeDelay?: (id: string, delay: number) => Promise<void>;
+  changePriority?: (id: string, opts: ChangePriorityOpts) => Promise<void>;
+  extendLock?: (id: string, token: string, duration: number) => Promise<number>;
+  clearLogs?: (id: string, keepLogs?: number) => Promise<void>;
+  getDependencies?: (id: string, opts?: GetDependenciesOpts) => Promise<JobDependencies>;
+  getDependenciesCount?: (id: string, opts?: GetDependenciesOpts) => Promise<JobDependenciesCount>;
+  // BullMQ v5 move method callbacks
+  moveToCompleted?: (id: string, returnValue: unknown, token?: string) => Promise<unknown>;
+  moveToFailed?: (id: string, error: Error, token?: string) => Promise<void>;
+  moveToWait?: (id: string, token?: string) => Promise<boolean>;
+  moveToDelayed?: (id: string, timestamp: number, token?: string) => Promise<void>;
+  moveToWaitingChildren?: (
+    id: string,
+    token?: string,
+    opts?: { child?: { id: string; queue: string } }
+  ) => Promise<boolean>;
+  waitUntilFinished?: (id: string, queueEvents: unknown, ttl?: number) => Promise<unknown>;
+  // Additional job metadata
+  stacktrace?: string[] | null;
 }
 
 /** Simple public job without methods (for Queue.getJob) */
-export function toPublicJob<T>(
-  job: InternalJob,
-  name: string,
-  getState?: (id: string) => Promise<JobStateType>,
-  remove?: (id: string) => Promise<void>,
-  retry?: (id: string) => Promise<void>
-): Job<T> {
+export function toPublicJob<T>(opts: ToPublicJobOptions): Job<T> {
+  const {
+    job,
+    name,
+    getState,
+    remove,
+    retry,
+    getChildrenValues,
+    updateData,
+    promote,
+    changeDelay,
+    changePriority,
+    extendLock,
+    clearLogs,
+    getDependencies,
+    getDependenciesCount,
+    moveToCompleted,
+    moveToFailed,
+    moveToWait,
+    moveToDelayed,
+    moveToWaitingChildren,
+    waitUntilFinished,
+    stacktrace,
+  } = opts;
   const id = String(job.id);
-  return {
+  const parent = extractParent(job.data);
+  const jobOpts = buildJobOpts(job);
+
+  const publicJob: Job<T> = {
+    // Core properties
     id,
     name,
     data: extractUserData(job.data) as T,
@@ -252,12 +906,137 @@ export function toPublicJob<T>(
     attemptsMade: job.attempts,
     timestamp: job.createdAt,
     progress: job.progress,
+    parent,
+
+    // BullMQ v5 properties
+    delay: job.runAt > job.createdAt ? job.runAt - job.createdAt : 0,
+    processedOn: job.startedAt ?? undefined,
+    finishedOn: job.completedAt ?? undefined,
+    stacktrace: stacktrace ?? null,
+    stalledCounter: job.stallCount,
+    priority: job.priority,
+    parentKey: buildParentKey(job),
+    opts: jobOpts,
+    token: undefined,
+    processedBy: undefined,
+    deduplicationId: job.customId ?? undefined,
+    repeatJobKey: buildRepeatJobKey(job),
+    attemptsStarted: job.attempts,
+
+    // Core methods (no-op for simple jobs)
     updateProgress: async () => {},
     log: async () => {},
     getState: () => (getState ? getState(id) : Promise.resolve('unknown' as JobStateType)),
     remove: () => (remove ? remove(id) : Promise.resolve()),
     retry: () => (retry ? retry(id) : Promise.resolve()),
+    getChildrenValues: () =>
+      getChildrenValues ? getChildrenValues(id) : Promise.resolve({} as Record<string, unknown>),
+
+    // BullMQ v5 state check methods
+    isWaiting: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'waiting';
+    },
+    isActive: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'active';
+    },
+    isDelayed: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'delayed';
+    },
+    isCompleted: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'completed';
+    },
+    isFailed: async () => {
+      const state = await (getState ? getState(id) : Promise.resolve('unknown'));
+      return state === 'failed';
+    },
+    isWaitingChildren: async () => {
+      if (getDependenciesCount) {
+        const counts = await getDependenciesCount(id);
+        return counts.unprocessed > 0;
+      }
+      return false;
+    },
+
+    // BullMQ v5 mutation methods
+    updateData: (data: T) => (updateData ? updateData(id, data) : Promise.resolve()),
+    promote: () => (promote ? promote(id) : Promise.resolve()),
+    changeDelay: (delay: number) => (changeDelay ? changeDelay(id, delay) : Promise.resolve()),
+    changePriority: (prioOpts: ChangePriorityOpts) =>
+      changePriority ? changePriority(id, prioOpts) : Promise.resolve(),
+    extendLock: (lockToken: string, duration: number) =>
+      extendLock ? extendLock(id, lockToken, duration) : Promise.resolve(0),
+    clearLogs: (keepLogs?: number) => (clearLogs ? clearLogs(id, keepLogs) : Promise.resolve()),
+
+    // BullMQ v5 dependency methods
+    getDependencies: (depOpts?: GetDependenciesOpts) =>
+      getDependencies
+        ? getDependencies(id, depOpts)
+        : Promise.resolve({ processed: {}, unprocessed: [] }),
+    getDependenciesCount: (depOpts?: GetDependenciesOpts) =>
+      getDependenciesCount
+        ? getDependenciesCount(id, depOpts)
+        : Promise.resolve({ processed: 0, unprocessed: 0 }),
+
+    // BullMQ v5 serialization methods
+    toJSON: () => ({
+      id,
+      name,
+      data: extractUserData(job.data) as T,
+      opts: jobOpts,
+      progress: job.progress,
+      delay: job.runAt > job.createdAt ? job.runAt - job.createdAt : 0,
+      timestamp: job.createdAt,
+      attemptsMade: job.attempts,
+      stacktrace: stacktrace ?? null,
+      returnvalue: undefined,
+      failedReason: undefined,
+      finishedOn: job.completedAt ?? undefined,
+      processedOn: job.startedAt ?? undefined,
+      queueQualifiedName: `bull:${job.queue}`,
+      parentKey: buildParentKey(job),
+    }),
+    asJSON: () => ({
+      id,
+      name,
+      data: JSON.stringify(extractUserData(job.data)),
+      opts: JSON.stringify(jobOpts),
+      progress: JSON.stringify(job.progress),
+      delay: String(job.runAt > job.createdAt ? job.runAt - job.createdAt : 0),
+      timestamp: String(job.createdAt),
+      attemptsMade: String(job.attempts),
+      stacktrace: stacktrace ? JSON.stringify(stacktrace) : null,
+      returnvalue: undefined,
+      failedReason: undefined,
+      finishedOn: job.completedAt ? String(job.completedAt) : undefined,
+      processedOn: job.startedAt ? String(job.startedAt) : undefined,
+      parentKey: buildParentKey(job),
+    }),
+
+    // BullMQ v5 move methods
+    moveToCompleted: (returnValue: unknown, lockToken?: string, _fetchNext?: boolean) =>
+      moveToCompleted ? moveToCompleted(id, returnValue, lockToken) : Promise.resolve(null),
+    moveToFailed: (error: Error, lockToken?: string, _fetchNext?: boolean) =>
+      moveToFailed ? moveToFailed(id, error, lockToken) : Promise.resolve(),
+    moveToWait: (lockToken?: string) =>
+      moveToWait ? moveToWait(id, lockToken) : Promise.resolve(false),
+    moveToDelayed: (timestamp: number, lockToken?: string) =>
+      moveToDelayed ? moveToDelayed(id, timestamp, lockToken) : Promise.resolve(),
+    moveToWaitingChildren: (
+      lockToken?: string,
+      moveOpts?: { child?: { id: string; queue: string } }
+    ) =>
+      moveToWaitingChildren
+        ? moveToWaitingChildren(id, lockToken, moveOpts)
+        : Promise.resolve(false),
+    waitUntilFinished: (queueEvents: unknown, ttl?: number) =>
+      waitUntilFinished ? waitUntilFinished(id, queueEvents, ttl) : Promise.resolve(undefined),
   };
+
+  return publicJob;
 }
 
 import type { DlqEntry as InternalDlqEntry } from '../domain/types/dlq';
@@ -266,7 +1045,7 @@ import type { DlqEntry as InternalDlqEntry } from '../domain/types/dlq';
 export function toDlqEntry<T>(entry: InternalDlqEntry): DlqEntry<T> {
   const jobData = entry.job.data as { name?: string } | null;
   return {
-    job: toPublicJob<T>(entry.job, jobData?.name ?? 'default'),
+    job: toPublicJob<T>({ job: entry.job, name: jobData?.name ?? 'default' }),
     enteredAt: entry.enteredAt,
     reason: entry.reason as FailureReason,
     error: entry.error,

@@ -49,6 +49,7 @@ export function rowToJob(row: DbJob): Job {
     attempts: row.attempts,
     maxAttempts: row.max_attempts,
     backoff: row.backoff,
+    backoffConfig: null, // BullMQ v5: not persisted in DB, use default
     ttl: row.ttl,
     timeout: row.timeout,
     uniqueKey: row.unique_key,
@@ -68,6 +69,15 @@ export function rowToJob(row: DbJob): Job {
     lastHeartbeat: row.last_heartbeat ?? row.created_at,
     stallTimeout: row.stall_timeout,
     stallCount: 0,
+    // BullMQ v5 additional fields (not persisted in DB, use defaults)
+    stackTraceLimit: 10,
+    keepLogs: null,
+    sizeLimit: null,
+    failParentOnFailure: false,
+    removeDependencyOnFailure: false,
+    deduplicationTtl: null,
+    debounceId: null,
+    debounceTtl: null,
   };
 }
 

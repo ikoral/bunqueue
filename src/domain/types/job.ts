@@ -35,6 +35,28 @@ export interface RepeatConfig {
   readonly pattern?: string;
   /** Current repeat count */
   count: number;
+  /** Start date timestamp */
+  readonly startDate?: number;
+  /** End date timestamp */
+  readonly endDate?: number;
+  /** Timezone for cron pattern */
+  readonly tz?: string;
+  /** Execute immediately on start */
+  readonly immediately?: boolean;
+  /** Previous execution timestamp */
+  prevMillis?: number;
+  /** Offset in milliseconds */
+  readonly offset?: number;
+  /** Custom job ID for repeat jobs */
+  readonly jobId?: string;
+}
+
+/** Backoff configuration */
+export interface BackoffConfig {
+  /** Backoff strategy type */
+  readonly type: 'fixed' | 'exponential';
+  /** Base delay in milliseconds */
+  readonly delay: number;
 }
 
 /** Core job structure */
@@ -54,7 +76,10 @@ export interface Job {
   // Retry config
   attempts: number;
   readonly maxAttempts: number;
+  /** Backoff delay in ms or backoff configuration */
   readonly backoff: number;
+  /** Backoff configuration (if using object-based backoff) */
+  readonly backoffConfig: BackoffConfig | null;
 
   // Timeouts
   readonly ttl: number | null;
@@ -89,6 +114,24 @@ export interface Job {
   lastHeartbeat: number;
   readonly stallTimeout: number | null;
   stallCount: number;
+
+  // BullMQ v5 additional options
+  /** Maximum stack trace lines to store */
+  readonly stackTraceLimit: number;
+  /** Maximum number of log entries to keep */
+  readonly keepLogs: number | null;
+  /** Maximum job data size in bytes */
+  readonly sizeLimit: number | null;
+  /** Fail parent job if this child job fails */
+  readonly failParentOnFailure: boolean;
+  /** Remove dependency relationship if this job fails */
+  readonly removeDependencyOnFailure: boolean;
+  /** Deduplication TTL in milliseconds */
+  readonly deduplicationTtl: number | null;
+  /** Debounce ID */
+  readonly debounceId: string | null;
+  /** Debounce TTL in milliseconds */
+  readonly debounceTtl: number | null;
 }
 
 /** Input for creating a new job */
@@ -97,7 +140,8 @@ export interface JobInput {
   priority?: number;
   delay?: number;
   maxAttempts?: number;
-  backoff?: number;
+  /** Backoff delay in ms or backoff configuration */
+  backoff?: number | { type: 'fixed' | 'exponential'; delay: number };
   ttl?: number;
   timeout?: number;
   uniqueKey?: string;
@@ -116,6 +160,20 @@ export interface JobInput {
     pattern?: string;
     /** Current count (for internal use when re-queueing) */
     count?: number;
+    /** Start date timestamp */
+    startDate?: number;
+    /** End date timestamp */
+    endDate?: number;
+    /** Timezone for cron pattern */
+    tz?: string;
+    /** Execute immediately on start */
+    immediately?: boolean;
+    /** Previous execution timestamp */
+    prevMillis?: number;
+    /** Offset in milliseconds */
+    offset?: number;
+    /** Custom job ID for repeat jobs */
+    jobId?: string;
   };
   /** Advanced deduplication options */
   dedup?: {
@@ -132,6 +190,21 @@ export interface JobInput {
    * Default: false (uses buffered writes for better throughput)
    */
   durable?: boolean;
+  // BullMQ v5 additional options
+  /** Maximum stack trace lines to store */
+  stackTraceLimit?: number;
+  /** Maximum number of log entries to keep */
+  keepLogs?: number;
+  /** Maximum job data size in bytes */
+  sizeLimit?: number;
+  /** Fail parent job if this child job fails */
+  failParentOnFailure?: boolean;
+  /** Remove dependency relationship if this job fails */
+  removeDependencyOnFailure?: boolean;
+  /** Debounce ID */
+  debounceId?: string;
+  /** Debounce TTL in milliseconds */
+  debounceTtl?: number;
 }
 
 /** Job creation defaults */
@@ -142,7 +215,100 @@ export const JOB_DEFAULTS = {
   lifo: false,
   removeOnComplete: false,
   removeOnFail: false,
+  stackTraceLimit: 10,
 } as const;
+
+/** Parse backoff from input (can be number or object) */
+function parseBackoff(
+  input: number | { type: 'fixed' | 'exponential'; delay: number } | undefined
+): { backoff: number; backoffConfig: BackoffConfig | null } {
+  if (typeof input === 'object') {
+    return {
+      backoff: input.delay,
+      backoffConfig: { type: input.type, delay: input.delay },
+    };
+  }
+  return { backoff: input ?? JOB_DEFAULTS.backoff, backoffConfig: null };
+}
+
+/** Parse repeat config from input */
+function parseRepeatConfig(repeat: JobInput['repeat']): RepeatConfig | null {
+  if (!repeat) return null;
+  return {
+    every: repeat.every,
+    limit: repeat.limit,
+    pattern: repeat.pattern,
+    count: repeat.count ?? 0,
+    startDate: repeat.startDate,
+    endDate: repeat.endDate,
+    tz: repeat.tz,
+    immediately: repeat.immediately,
+    prevMillis: repeat.prevMillis,
+    offset: repeat.offset,
+    jobId: repeat.jobId,
+  };
+}
+
+/** Parse core job options with defaults */
+function parseCoreOptions(input: JobInput): {
+  priority: number;
+  lifo: boolean;
+  maxAttempts: number;
+  removeOnComplete: boolean;
+  removeOnFail: boolean;
+} {
+  return {
+    priority: input.priority ?? JOB_DEFAULTS.priority,
+    lifo: input.lifo ?? JOB_DEFAULTS.lifo,
+    maxAttempts: input.maxAttempts ?? JOB_DEFAULTS.maxAttempts,
+    removeOnComplete: input.removeOnComplete ?? JOB_DEFAULTS.removeOnComplete,
+    removeOnFail: input.removeOnFail ?? JOB_DEFAULTS.removeOnFail,
+  };
+}
+
+/** Parse optional fields (nullable) */
+function parseOptionalFields(input: JobInput): {
+  ttl: number | null;
+  timeout: number | null;
+  uniqueKey: string | null;
+  customId: string | null;
+  parentId: JobId | null;
+  groupId: string | null;
+  stallTimeout: number | null;
+} {
+  return {
+    ttl: input.ttl ?? null,
+    timeout: input.timeout ?? null,
+    uniqueKey: input.uniqueKey ?? null,
+    customId: input.customId ?? null,
+    parentId: input.parentId ?? null,
+    groupId: input.groupId ?? null,
+    stallTimeout: input.stallTimeout ?? null,
+  };
+}
+
+/** Parse BullMQ v5 specific options */
+function parseBullMQV5Options(input: JobInput): {
+  stackTraceLimit: number;
+  keepLogs: number | null;
+  sizeLimit: number | null;
+  failParentOnFailure: boolean;
+  removeDependencyOnFailure: boolean;
+  deduplicationTtl: number | null;
+  debounceId: string | null;
+  debounceTtl: number | null;
+} {
+  return {
+    stackTraceLimit: input.stackTraceLimit ?? JOB_DEFAULTS.stackTraceLimit,
+    keepLogs: input.keepLogs ?? null,
+    sizeLimit: input.sizeLimit ?? null,
+    failParentOnFailure: input.failParentOnFailure ?? false,
+    removeDependencyOnFailure: input.removeDependencyOnFailure ?? false,
+    deduplicationTtl: input.dedup?.ttl ?? null,
+    debounceId: input.debounceId ?? null,
+    debounceTtl: input.debounceTtl ?? null,
+  };
+}
 
 /** Create a new job from input */
 export function createJob(
@@ -151,56 +317,34 @@ export function createJob(
   input: JobInput,
   now: number = Date.now()
 ): Job {
-  const delay = input.delay ?? 0;
+  const { backoff, backoffConfig } = parseBackoff(input.backoff);
+  const coreOpts = parseCoreOptions(input);
+  const optionalFields = parseOptionalFields(input);
+  const v5Opts = parseBullMQV5Options(input);
 
   return {
     id,
     queue,
     data: input.data,
-    priority: input.priority ?? JOB_DEFAULTS.priority,
     createdAt: now,
-    lifo: input.lifo ?? JOB_DEFAULTS.lifo,
-
-    runAt: now + delay,
+    runAt: now + (input.delay ?? 0),
     startedAt: null,
     completedAt: null,
-
     attempts: 0,
-    maxAttempts: input.maxAttempts ?? JOB_DEFAULTS.maxAttempts,
-    backoff: input.backoff ?? JOB_DEFAULTS.backoff,
-
-    ttl: input.ttl ?? null,
-    timeout: input.timeout ?? null,
-
-    uniqueKey: input.uniqueKey ?? null,
-    customId: input.customId ?? null,
-
+    backoff,
+    backoffConfig,
     dependsOn: input.dependsOn ?? [],
-    parentId: input.parentId ?? null,
     childrenIds: [],
     childrenCompleted: 0,
-
     tags: input.tags ?? [],
-    groupId: input.groupId ?? null,
-
     progress: 0,
     progressMessage: null,
-
-    removeOnComplete: input.removeOnComplete ?? JOB_DEFAULTS.removeOnComplete,
-    removeOnFail: input.removeOnFail ?? JOB_DEFAULTS.removeOnFail,
-
-    repeat: input.repeat
-      ? {
-          every: input.repeat.every,
-          limit: input.repeat.limit,
-          pattern: input.repeat.pattern,
-          count: input.repeat.count ?? 0,
-        }
-      : null,
-
+    repeat: parseRepeatConfig(input.repeat),
     lastHeartbeat: now,
-    stallTimeout: input.stallTimeout ?? null,
     stallCount: 0,
+    ...coreOpts,
+    ...optionalFields,
+    ...v5Opts,
   };
 }
 
@@ -226,8 +370,18 @@ export function isTimedOut(job: Job, now: number = Date.now()): boolean {
   return now > job.startedAt + job.timeout;
 }
 
-/** Calculate next retry delay with exponential backoff */
+/** Calculate next retry delay with backoff strategy */
 export function calculateBackoff(job: Job): number {
+  if (job.backoffConfig) {
+    // Use configured backoff strategy
+    if (job.backoffConfig.type === 'fixed') {
+      return job.backoffConfig.delay;
+    } else {
+      // Exponential backoff
+      return job.backoffConfig.delay * Math.pow(2, job.attempts);
+    }
+  }
+  // Default: exponential backoff with base delay
   return job.backoff * Math.pow(2, job.attempts);
 }
 

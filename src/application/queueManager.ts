@@ -397,6 +397,58 @@ export class QueueManager {
     return queryOps.getJobResult(jobId, this.contextFactory.getQueryContext());
   }
 
+  /**
+   * Get return values from all children of a parent job.
+   * Returns a Record where keys are job keys (queueName:jobId) and values are return values.
+   * BullMQ v5 compatible.
+   */
+  async getChildrenValues(parentJobId: JobId): Promise<Record<string, unknown>> {
+    const job = await this.getJob(parentJobId);
+    if (!job?.childrenIds || job.childrenIds.length === 0) {
+      return {};
+    }
+
+    const ctx = this.contextFactory.getQueryContext();
+    const results: Record<string, unknown> = {};
+
+    for (const childId of job.childrenIds) {
+      const result = queryOps.getJobResult(childId, ctx);
+      if (result !== undefined) {
+        // Get child job to find its queue name
+        const childJob = await this.getJob(childId);
+        const key = childJob ? `${childJob.queue}:${childId}` : childId;
+        results[key] = result;
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Update a job's parent reference.
+   * Used by FlowProducer when creating flows where children need to reference parent.
+   */
+  async updateJobParent(childJobId: JobId, parentJobId: JobId): Promise<void> {
+    const childJob = await this.getJob(childJobId);
+    if (!childJob) return;
+
+    // Update the job's data to include parent reference
+    const jobData = childJob.data as Record<string, unknown>;
+    jobData.__parentId = parentJobId;
+    jobData.__parentQueue = childJob.queue;
+
+    // Also add this child to parent's childrenIds
+    const parentJob = await this.getJob(parentJobId);
+    if (parentJob) {
+      if (!parentJob.childrenIds) {
+        parentJob.childrenIds = [];
+      }
+      if (!parentJob.childrenIds.includes(childJobId)) {
+        parentJob.childrenIds.push(childJobId);
+      }
+    }
+  }
+
   getJobByCustomId(customId: string): Job | null {
     return queryOps.getJobByCustomId(customId, this.contextFactory.getQueryContext());
   }
@@ -543,6 +595,26 @@ export class QueueManager {
     return jobMgmt.moveJobToDelayed(jobId, delay, this.contextFactory.getJobMgmtContext());
   }
 
+  async changeDelay(jobId: JobId, delay: number): Promise<boolean> {
+    // Change delay is essentially moving to delayed with new delay
+    return jobMgmt.moveJobToDelayed(jobId, delay, this.contextFactory.getJobMgmtContext());
+  }
+
+  async extendLock(jobId: JobId, duration: number): Promise<boolean> {
+    const lockInfo = lockMgr.getLockInfo(jobId, this.contextFactory.getLockContext());
+    if (lockInfo) {
+      // Renew the lock with a new TTL
+      const renewed = lockMgr.renewJobLock(
+        jobId,
+        lockInfo.token,
+        this.contextFactory.getLockContext(),
+        duration
+      );
+      return renewed;
+    }
+    return false;
+  }
+
   async discard(jobId: JobId): Promise<boolean> {
     return jobMgmt.discardJob(jobId, this.contextFactory.getJobMgmtContext());
   }
@@ -557,8 +629,8 @@ export class QueueManager {
     return logsOps.getJobLogs(jobId, this.contextFactory.getLogsContext());
   }
 
-  clearLogs(jobId: JobId): void {
-    logsOps.clearJobLogs(jobId, this.contextFactory.getLogsContext());
+  clearLogs(jobId: JobId, keepLogs?: number): void {
+    logsOps.clearJobLogs(jobId, this.contextFactory.getLogsContext(), keepLogs);
   }
 
   // ============ Metrics ============

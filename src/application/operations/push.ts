@@ -10,7 +10,7 @@ import {
   createJob,
   generateJobId,
 } from '../../domain/types/job';
-import type { JobLocation, EventType } from '../../domain/types/queue';
+import { type JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import type { RWLock } from '../../shared/lock';
@@ -118,6 +118,13 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
           }
           const existingJob = shard.getQueue(queue).find(existingEntry.jobId);
           if (existingJob) {
+            // Emit duplicated event (BullMQ v5)
+            ctx.broadcast({
+              eventType: EventType.Duplicated,
+              queue,
+              jobId: existingEntry.jobId,
+              timestamp: Date.now(),
+            });
             returnedJob = existingJob;
             return; // Exit early, return existing job
           }

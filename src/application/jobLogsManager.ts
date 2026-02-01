@@ -42,7 +42,16 @@ export function getJobLogs(jobId: JobId, ctx: JobLogsContext): JobLogEntry[] {
   return ctx.jobLogs.get(jobId) ?? [];
 }
 
-/** Clear logs for a job */
-export function clearJobLogs(jobId: JobId, ctx: JobLogsContext): void {
-  ctx.jobLogs.delete(jobId);
+/** Clear logs for a job, optionally keeping the most recent N entries */
+export function clearJobLogs(jobId: JobId, ctx: JobLogsContext, keepLogs?: number): void {
+  if (keepLogs === undefined || keepLogs <= 0) {
+    ctx.jobLogs.delete(jobId);
+  } else {
+    const logs = ctx.jobLogs.get(jobId);
+    if (logs && logs.length > keepLogs) {
+      // Keep only the most recent keepLogs entries
+      const trimmed = logs.slice(-keepLogs);
+      ctx.jobLogs.set(jobId, trimmed);
+    }
+  }
 }

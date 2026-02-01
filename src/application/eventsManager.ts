@@ -176,7 +176,13 @@ export class EventsManager {
         return 'job.failed';
       case EventType.Progress:
       case EventType.Stalled:
-        // These events don't have webhook mappings
+      case EventType.Removed:
+      case EventType.Delayed:
+      case EventType.Duplicated:
+      case EventType.Retried:
+      case EventType.WaitingChildren:
+      case EventType.Drained:
+        // These events don't have webhook mappings yet
         return null;
     }
   }
