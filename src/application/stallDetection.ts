@@ -24,7 +24,7 @@ export function checkStalledJobs(ctx: BackgroundContext): void {
 
   // Phase 1: Check jobs that were candidates from previous cycle
   for (const jobId of ctx.stalledCandidates) {
-    const procIdx = processingShardIndex(String(jobId));
+    const procIdx = processingShardIndex(jobId);
     const job = ctx.processingShards[procIdx].get(jobId);
 
     if (!job) {
@@ -82,25 +82,14 @@ async function handleStalledJob(
   ctx: BackgroundContext
 ): Promise<void> {
   const idx = shardIndex(job.queue);
-  const procIdx = processingShardIndex(String(job.id));
-
-  // Broadcast events before acquiring locks (non-blocking)
-  ctx.eventsManager.broadcast({
-    eventType: EventType.Stalled,
-    queue: job.queue,
-    jobId: job.id,
-    timestamp: Date.now(),
-    data: { stallCount: job.stallCount + 1, action },
-  });
-  void ctx.webhookManager.trigger('stalled' as WebhookEvent, String(job.id), job.queue, {
-    data: { stallCount: job.stallCount + 1, action },
-  });
+  const procIdx = processingShardIndex(job.id);
 
   // Acquire processing lock first, then shard lock
+  // Broadcast events AFTER verifying job is still stalled to avoid false positives
   await withWriteLock(ctx.processingLocks[procIdx], async () => {
     // Verify job is still in processing (might have been handled already)
     if (!ctx.processingShards[procIdx].has(job.id)) {
-      return;
+      return; // Job already completed, don't broadcast stalled event
     }
 
     await withWriteLock(ctx.shardLocks[idx], () => {
@@ -111,6 +100,18 @@ async function handleStalledJob(
       } else {
         retryStalliedJob(job, ctx, shard, procIdx, idx);
       }
+    });
+
+    // Broadcast events AFTER confirming job is actually stalled and handled
+    ctx.eventsManager.broadcast({
+      eventType: EventType.Stalled,
+      queue: job.queue,
+      jobId: job.id,
+      timestamp: Date.now(),
+      data: { stallCount: job.stallCount + 1, action },
+    });
+    void ctx.webhookManager.trigger('stalled' as WebhookEvent, String(job.id), job.queue, {
+      data: { stallCount: job.stallCount + 1, action },
     });
   });
 }

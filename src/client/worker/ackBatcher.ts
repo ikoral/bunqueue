@@ -23,6 +23,7 @@ const DEFAULT_RETRY_DELAY_MS = 100;
  * Batches ACK operations for efficient processing
  */
 export class AckBatcher {
+  private readonly MAX_PENDING_ACKS = 10000;
   private readonly pendingAcks: PendingAck[] = [];
   private ackTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly config: AckBatcherConfig;
@@ -43,6 +44,15 @@ export class AckBatcher {
   /** Queue ACK for batch processing (with optional lock token) */
   queue(id: string, result: unknown, token?: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
+      // Prevent unbounded memory growth during server outages
+      if (this.pendingAcks.length >= this.MAX_PENDING_ACKS) {
+        // Drop oldest entries (10%) and reject their promises
+        const dropped = this.pendingAcks.splice(0, Math.floor(this.MAX_PENDING_ACKS * 0.1));
+        for (const ack of dropped) {
+          ack.reject(new Error('Ack buffer overflow - oldest entries dropped'));
+        }
+      }
+
       this.pendingAcks.push({
         id,
         result,

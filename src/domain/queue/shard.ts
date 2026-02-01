@@ -73,6 +73,9 @@ export class Shard {
   /** Waiter entry with cancellation flag for O(1) cleanup */
   private readonly waiters: Array<{ resolve: () => void; cancelled: boolean }> = [];
 
+  /** Threshold for triggering full waiters cleanup */
+  private static readonly WAITERS_CLEANUP_THRESHOLD = 1000;
+
   constructor() {
     this.dlqManager = new DlqShard({
       incrementDlq: () => {
@@ -86,13 +89,28 @@ export class Shard {
 
   /** Notify that jobs are available - wakes first non-cancelled waiter */
   notify(): void {
-    while (this.waiters.length > 0) {
-      const waiter = this.waiters.shift()!;
-      if (!waiter.cancelled) {
-        waiter.resolve();
-        break;
-      }
+    // Clean up leading cancelled waiters first
+    while (this.waiters.length > 0 && this.waiters[0].cancelled) {
+      this.waiters.shift();
     }
+
+    // Wake the first active waiter
+    const waiter = this.waiters.shift();
+    if (waiter && !waiter.cancelled) {
+      waiter.resolve();
+    }
+
+    // Periodic full cleanup when array grows too large
+    if (this.waiters.length > Shard.WAITERS_CLEANUP_THRESHOLD) {
+      this.cleanupWaiters();
+    }
+  }
+
+  /** Remove all cancelled waiters from the array */
+  private cleanupWaiters(): void {
+    const active = this.waiters.filter((w) => !w.cancelled);
+    this.waiters.length = 0;
+    this.waiters.push(...active);
   }
 
   /** Wait for a job to become available (with timeout) */

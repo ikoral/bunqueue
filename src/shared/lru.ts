@@ -456,6 +456,21 @@ export class BoundedMap<K, V> implements MapLike<K, V> {
  * TTL Map - entries expire after timeout
  * Optimized with MinHeap for O(log n) insert and O(k) cleanup
  *
+ * IMPORTANT: You MUST call stop() when done with this instance to prevent memory leaks.
+ * The cleanup interval will keep running until stop() is called, preventing the instance
+ * from being garbage collected.
+ *
+ * @example
+ * ```typescript
+ * const map = new TTLMap<string, number>(60_000); // 60s TTL
+ * try {
+ *   map.set('key', 123);
+ *   // use map...
+ * } finally {
+ *   map.stop(); // REQUIRED: stops cleanup interval
+ * }
+ * ```
+ *
  * Memory leak prevention:
  * - Each heap entry stores (expiresAt, key)
  * - During cleanup, we verify the key still exists in cache AND has matching expiresAt
@@ -484,6 +499,14 @@ export class TTLMap<K, V> {
   /** Minimum heap size before considering compaction (avoid frequent rebuilds for small heaps) */
   private static readonly MIN_COMPACTION_SIZE = 100;
 
+  /**
+   * Create a new TTLMap instance.
+   *
+   * @param ttlMs - Default time-to-live for entries in milliseconds
+   * @param cleanupIntervalMs - Interval between cleanup runs (default: 60000ms / 1 minute).
+   *                           Lower values = more frequent cleanup but higher CPU usage.
+   *                           Set based on expected entry volume and TTL duration.
+   */
   constructor(ttlMs: number, cleanupIntervalMs: number = 60_000) {
     this.ttlMs = ttlMs;
     this.startCleanup(cleanupIntervalMs);
@@ -592,6 +615,11 @@ export class TTLMap<K, V> {
     this.staleCount = 0;
   }
 
+  /**
+   * Stop the cleanup interval. MUST be called when done with this instance
+   * to prevent memory leaks. The interval keeps a reference to the instance,
+   * preventing garbage collection until stop() is called.
+   */
   stop(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);

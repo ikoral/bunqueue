@@ -13,6 +13,66 @@ import { processPendingDependencies } from './dependencyProcessor';
 import type { BackgroundContext, LockContext } from './types';
 import type { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
 
+// ============ Error Tracking ============
+
+/** Maximum consecutive failures before critical warning */
+const MAX_CONSECUTIVE_FAILURES = 5;
+
+/** Track consecutive failures per task type */
+interface TaskErrorState {
+  consecutiveFailures: number;
+  lastError?: string;
+  lastFailureAt?: number;
+}
+
+const taskErrors: Record<string, TaskErrorState> = {
+  cleanup: { consecutiveFailures: 0 },
+  dependency: { consecutiveFailures: 0 },
+  lockExpiration: { consecutiveFailures: 0 },
+};
+
+/**
+ * Handle task error with tracking and circuit breaker pattern
+ */
+function handleTaskError(taskName: string, err: unknown): void {
+  const state = taskErrors[taskName];
+  if (!state) return;
+
+  state.consecutiveFailures++;
+  state.lastError = String(err);
+  state.lastFailureAt = Date.now();
+
+  queueLog.error(`${taskName} task failed`, {
+    error: state.lastError,
+    consecutiveFailures: state.consecutiveFailures,
+    willRetry: state.consecutiveFailures < MAX_CONSECUTIVE_FAILURES,
+  });
+
+  if (state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+    queueLog.error(`CRITICAL: Background ${taskName} repeatedly failing`, {
+      consecutiveFailures: state.consecutiveFailures,
+      lastError: state.lastError,
+    });
+  }
+}
+
+/**
+ * Reset error state on successful task completion
+ */
+function handleTaskSuccess(taskName: string): void {
+  const state = taskErrors[taskName];
+  if (state) {
+    state.consecutiveFailures = 0;
+  }
+}
+
+/**
+ * Get error statistics for monitoring
+ */
+export function getTaskErrorStats(): Record<string, TaskErrorState> {
+  return { ...taskErrors };
+}
+
 /** Background task handles for cleanup */
 export interface BackgroundTaskHandles {
   cleanupInterval: ReturnType<typeof setInterval>;
@@ -33,9 +93,13 @@ export function startBackgroundTasks(
   cronScheduler: CronScheduler
 ): BackgroundTaskHandles {
   const cleanupInterval = setInterval(() => {
-    cleanup(ctx).catch((err: unknown) => {
-      queueLog.error('Cleanup task failed', { error: String(err) });
-    });
+    cleanup(ctx)
+      .then(() => {
+        handleTaskSuccess('cleanup');
+      })
+      .catch((err: unknown) => {
+        handleTaskError('cleanup', err);
+      });
   }, ctx.config.cleanupIntervalMs);
 
   const timeoutInterval = setInterval(() => {
@@ -43,9 +107,13 @@ export function startBackgroundTasks(
   }, ctx.config.jobTimeoutCheckMs);
 
   const depCheckInterval = setInterval(() => {
-    processPendingDependencies(ctx).catch((err: unknown) => {
-      queueLog.error('Dependency check failed', { error: String(err) });
-    });
+    processPendingDependencies(ctx)
+      .then(() => {
+        handleTaskSuccess('dependency');
+      })
+      .catch((err: unknown) => {
+        handleTaskError('dependency', err);
+      });
   }, ctx.config.dependencyCheckMs);
 
   const stallCheckInterval = setInterval(() => {
@@ -58,9 +126,13 @@ export function startBackgroundTasks(
 
   // Lock expiration check runs at same interval as stall check
   const lockCheckInterval = setInterval(() => {
-    checkExpiredLocks(getLockContext(ctx)).catch((err: unknown) => {
-      queueLog.error('Lock expiration check failed', { error: String(err) });
-    });
+    checkExpiredLocks(getLockContext(ctx))
+      .then(() => {
+        handleTaskSuccess('lockExpiration');
+      })
+      .catch((err: unknown) => {
+        handleTaskError('lockExpiration', err);
+      });
   }, ctx.config.stallCheckMs);
 
   cronScheduler.start();

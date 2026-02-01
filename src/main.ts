@@ -63,6 +63,10 @@ interface ServerConfig {
   s3BackupEnabled: boolean;
 }
 
+/** Configurable timeouts from environment */
+const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? '30000', 10);
+const STATS_INTERVAL_MS = parseInt(process.env.STATS_INTERVAL_MS ?? '30000', 10);
+
 /** Load configuration from environment variables */
 function loadConfig(): ServerConfig {
   return {
@@ -170,7 +174,7 @@ function startServer(): void {
     tcpServer.stop();
     httpServer.stop();
 
-    const shutdownTimeout = 30_000;
+    const shutdownTimeout = SHUTDOWN_TIMEOUT_MS;
     const start = Date.now();
     while (Date.now() - start < shutdownTimeout) {
       const stats = queueManager.getStats();
@@ -216,7 +220,7 @@ function startServer(): void {
       locks: memStats.jobLocks,
       clients: memStats.clientJobsTotal,
     });
-  }, 30_000);
+  }, STATS_INTERVAL_MS);
 }
 
 // Enable JSON logging if requested

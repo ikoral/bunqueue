@@ -153,7 +153,7 @@ async function cleanOrphanedJobIndex(ctx: BackgroundContext): Promise<void> {
 
   for (const [jobId, loc] of ctx.jobIndex) {
     if (loc.type === 'processing') {
-      const procIdx = processingShardIndex(String(jobId));
+      const procIdx = processingShardIndex(jobId);
       let list = processingCandidates.get(procIdx);
       if (!list) {
         list = [];

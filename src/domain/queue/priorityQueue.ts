@@ -12,7 +12,7 @@ interface HeapEntry {
   priority: number;
   runAt: number;
   lifo: boolean;
-  generation: number;
+  generation: bigint;
 }
 
 /**
@@ -62,9 +62,9 @@ export class IndexedPriorityQueue {
   /** Branching factor - 4 provides optimal cache performance */
   private static readonly D = 4;
   private heap: HeapEntry[] = [];
-  private readonly index: Map<JobId, { job: Job; generation: number }> = new Map();
-  // Use Number instead of BigInt - 2^53 operations is enough for 285 years at 1M ops/sec
-  private generation = 0;
+  private readonly index: Map<JobId, { job: Job; generation: bigint }> = new Map();
+  // Use BigInt to prevent overflow at extreme throughput
+  private generation = 0n;
 
   /** Get current size */
   get size(): number {
@@ -157,19 +157,23 @@ export class IndexedPriorityQueue {
     const indexed = this.index.get(jobId);
     if (!indexed) return false;
 
-    // Update job
-    const job = indexed.job;
-    (job as { priority: number }).priority = newPriority;
+    // Create new job with updated priority (immutable pattern)
+    const updatedJob: Job = {
+      ...indexed.job,
+      priority: newPriority,
+    } as Job;
 
     // Create new heap entry with new generation
     const gen = this.generation++;
-    indexed.generation = gen;
+
+    // Update index with new job and generation
+    this.index.set(jobId, { job: updatedJob, generation: gen });
 
     const entry: HeapEntry = {
-      jobId: job.id,
+      jobId: updatedJob.id,
       priority: newPriority,
-      runAt: job.runAt,
-      lifo: job.lifo,
+      runAt: updatedJob.runAt,
+      lifo: updatedJob.lifo,
       generation: gen,
     };
     this.heap.push(entry);
@@ -183,19 +187,23 @@ export class IndexedPriorityQueue {
     const indexed = this.index.get(jobId);
     if (!indexed) return false;
 
-    // Update job
-    const job = indexed.job;
-    job.runAt = newRunAt;
+    // Create new job with updated runAt (immutable pattern)
+    const updatedJob: Job = {
+      ...indexed.job,
+      runAt: newRunAt,
+    };
 
-    // Create new heap entry
+    // Create new heap entry with new generation
     const gen = this.generation++;
-    indexed.generation = gen;
+
+    // Update index with new job and generation
+    this.index.set(jobId, { job: updatedJob, generation: gen });
 
     const entry: HeapEntry = {
-      jobId: job.id,
-      priority: job.priority,
+      jobId: updatedJob.id,
+      priority: updatedJob.priority,
       runAt: newRunAt,
-      lifo: job.lifo,
+      lifo: updatedJob.lifo,
       generation: gen,
     };
     this.heap.push(entry);
@@ -213,7 +221,7 @@ export class IndexedPriorityQueue {
   clear(): void {
     this.heap = [];
     this.index.clear();
-    this.generation = 0;
+    this.generation = 0n;
   }
 
   /**

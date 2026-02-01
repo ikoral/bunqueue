@@ -19,6 +19,39 @@ import { tcpLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
 import { pack, unpack } from 'msgpackr';
 
+/**
+ * Release client jobs with retry logic and exponential backoff.
+ * Ensures jobs are not left in an inconsistent state if release fails.
+ */
+async function releaseClientJobsWithRetry(
+  queueManager: QueueManager,
+  clientId: string,
+  maxRetries = 3
+): Promise<number> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await queueManager.releaseClientJobs(clientId);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      tcpLog.warn('Release client jobs failed, retrying', {
+        clientId,
+        attempt: attempt + 1,
+        error: lastError.message,
+      });
+      // Exponential backoff: 100ms, 200ms, 400ms
+      await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempt)));
+    }
+  }
+
+  tcpLog.error('Failed to release client jobs after retries', {
+    clientId,
+    error: lastError?.message,
+  });
+  throw lastError ?? new Error('Failed to release client jobs after retries');
+}
+
 /** TCP Server configuration */
 export interface TcpServerConfig {
   /** TCP port */
@@ -134,9 +167,8 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
       connections.delete(clientId);
       getRateLimiter().removeClient(clientId);
 
-      // Release all jobs owned by this client back to queue (async with proper locking)
-      queueManager
-        .releaseClientJobs(clientId)
+      // Release all jobs owned by this client back to queue with retry logic
+      releaseClientJobsWithRetry(queueManager, clientId)
         .then((released) => {
           if (released > 0) {
             tcpLog.info('Client disconnected, released jobs', { clientId, released });
@@ -145,7 +177,13 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
           }
         })
         .catch((err: unknown) => {
-          tcpLog.error('Failed to release client jobs', { clientId, error: String(err) });
+          // After all retries failed, log the final error
+          // Jobs may be left in inconsistent state - manual intervention may be needed
+          tcpLog.error('Client jobs may be in inconsistent state', {
+            clientId,
+            error: String(err),
+            action: 'Manual cleanup may be required',
+          });
         });
     },
 

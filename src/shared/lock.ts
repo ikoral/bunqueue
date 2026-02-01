@@ -4,6 +4,9 @@
  * Optimized with O(1) queue operations using wrapped resolvers
  */
 
+/** Default lock timeout in milliseconds */
+const DEFAULT_LOCK_TIMEOUT_MS = parseInt(process.env.LOCK_TIMEOUT_MS ?? '5000', 10);
+
 /** Lock acquisition result */
 export interface LockGuard {
   release(): void;
@@ -34,9 +37,9 @@ export class AsyncLock {
 
   /**
    * Acquire the lock
-   * @param timeoutMs - Maximum time to wait (default: 5000ms)
+   * @param timeoutMs - Maximum time to wait (default: DEFAULT_LOCK_TIMEOUT_MS)
    */
-  async acquire(timeoutMs: number = 5000): Promise<LockGuard> {
+  async acquire(timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS): Promise<LockGuard> {
     const start = Date.now();
 
     while (this.locked) {
@@ -109,7 +112,7 @@ export class RWLock {
    * Acquire read lock
    * Multiple readers can hold simultaneously
    */
-  async acquireRead(timeoutMs: number = 5000): Promise<LockGuard> {
+  async acquireRead(timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS): Promise<LockGuard> {
     const start = Date.now();
 
     // Wait if writer is active or writers are waiting (writer priority)
@@ -162,7 +165,7 @@ export class RWLock {
    * Exclusive access, no readers or other writers
    * Optimized: synchronous fast path when uncontested
    */
-  async acquireWrite(timeoutMs: number = 5000): Promise<LockGuard> {
+  async acquireWrite(timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS): Promise<LockGuard> {
     // Fast path: uncontested - acquire synchronously without Promise overhead
     if (!this.writer && this.readers === 0) {
       this.writer = true;

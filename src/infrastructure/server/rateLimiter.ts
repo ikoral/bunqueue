@@ -11,9 +11,11 @@ export interface RateLimiterConfig {
 }
 
 const DEFAULT_CONFIG: RateLimiterConfig = {
-  windowMs: 60_000,
-  maxRequests: Infinity,
-  cleanupIntervalMs: 60_000,
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? '60000', 10),
+  maxRequests: process.env.RATE_LIMIT_MAX_REQUESTS
+    ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10)
+    : Infinity,
+  cleanupIntervalMs: parseInt(process.env.RATE_LIMIT_CLEANUP_MS ?? '60000', 10),
 };
 
 /**

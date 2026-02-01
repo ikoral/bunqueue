@@ -212,12 +212,22 @@ function getPoolKey(options?: PoolOptions): string {
 export function getSharedPool(options?: PoolOptions): TcpConnectionPool {
   const key = getPoolKey(options);
   let pool = sharedPools.get(key);
-  // Also check if existing pool is closed (defensive check)
-  if (!pool || pool.isClosed()) {
-    pool = new TcpConnectionPool(options);
-    pool.setPoolKey(key); // Track key for cleanup on close
-    sharedPools.set(key, pool);
+
+  // Check if pool exists and is healthy (not just not closed)
+  if (pool && !pool.isClosed()) {
+    pool.addRef();
+    return pool;
   }
+
+  // If pool exists but is closed/errored, remove it first
+  if (pool) {
+    sharedPools.delete(key);
+  }
+
+  // Create new pool
+  pool = new TcpConnectionPool(options);
+  pool.setPoolKey(key); // Track key for cleanup on close
+  sharedPools.set(key, pool);
   pool.addRef();
   return pool;
 }

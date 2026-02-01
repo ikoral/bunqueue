@@ -15,6 +15,15 @@ import { webhookLog } from '../shared/logger';
 /** Singleton TextEncoder for HMAC operations */
 const textEncoder = new TextEncoder();
 
+/** Maximum webhook delivery retries (configurable via WEBHOOK_MAX_RETRIES env var) */
+const WEBHOOK_MAX_RETRIES = parseInt(process.env.WEBHOOK_MAX_RETRIES ?? '3', 10);
+
+/** Delay between webhook retries in ms (configurable via WEBHOOK_RETRY_DELAY_MS env var) */
+const WEBHOOK_RETRY_DELAY_MS = parseInt(process.env.WEBHOOK_RETRY_DELAY_MS ?? '1000', 10);
+
+/** Maximum number of cached crypto keys to prevent unbounded growth */
+const MAX_KEY_CACHE_SIZE = 100;
+
 /** Cache for imported crypto keys - avoids expensive importKey per request */
 const keyCache = new Map<string, CryptoKey>();
 
@@ -23,6 +32,11 @@ async function signPayload(payload: string, secret: string): Promise<string> {
   // Get cached key or import new one
   let key = keyCache.get(secret);
   if (!key) {
+    // Evict oldest entry if cache is full (LRU-style using Map insertion order)
+    if (keyCache.size >= MAX_KEY_CACHE_SIZE) {
+      const firstKey = keyCache.keys().next().value;
+      if (firstKey) keyCache.delete(firstKey);
+    }
     key = await crypto.subtle.importKey(
       'raw',
       textEncoder.encode(secret),
@@ -44,8 +58,8 @@ async function signPayload(payload: string, secret: string): Promise<string> {
  */
 export class WebhookManager {
   private readonly webhooks = new Map<WebhookId, Webhook>();
-  private readonly maxRetries = 3;
-  private readonly retryDelay = 1000;
+  private readonly maxRetries = WEBHOOK_MAX_RETRIES;
+  private readonly retryDelay = WEBHOOK_RETRY_DELAY_MS;
 
   /** Running counter for enabled webhooks - avoids O(n) filter in getStats */
   private enabledCount = 0;
@@ -66,6 +80,10 @@ export class WebhookManager {
     const webhook = this.webhooks.get(id);
     if (webhook?.enabled) {
       this.enabledCount--;
+    }
+    // Clean up cached crypto key for this webhook's secret
+    if (webhook?.secret) {
+      keyCache.delete(webhook.secret);
     }
     const removed = this.webhooks.delete(id);
     if (removed) {

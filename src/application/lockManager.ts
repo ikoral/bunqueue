@@ -48,7 +48,7 @@ export async function checkExpiredLocks(ctx: LockContext): Promise<void> {
 
   for (const [jobId, lock] of ctx.jobLocks) {
     if (isLockExpired(lock, now)) {
-      const procIdx = processingShardIndex(String(jobId));
+      const procIdx = processingShardIndex(jobId);
       const job = ctx.processingShards[procIdx].get(jobId);
       if (job) {
         const shardIdx = shardIndex(job.queue);

@@ -221,28 +221,41 @@ export class CronScheduler {
           priority: cron.priority,
         });
 
-        // Update execution count
-        cron.executions++;
-
-        // Calculate next run using actual execution time to prevent timing drift
+        // Calculate new state (but don't apply yet)
+        const newExecutions = cron.executions + 1;
         const executionTime = Date.now();
+        let newNextRun: number;
         if (cron.schedule) {
           const expanded = expandCronShortcut(cron.schedule);
-          cron.nextRun = getNextCronRun(expanded, executionTime, cron.timezone ?? undefined);
+          newNextRun = getNextCronRun(expanded, executionTime, cron.timezone ?? undefined);
         } else if (cron.repeatEvery) {
-          cron.nextRun = getNextIntervalRun(cron.repeatEvery, executionTime);
+          newNextRun = getNextIntervalRun(cron.repeatEvery, executionTime);
+        } else {
+          newNextRun = executionTime;
         }
 
-        // Persist updated cron state to database
+        // Persist state to database first
         if (this.persistCron) {
           try {
-            this.persistCron(cron.name, cron.executions, cron.nextRun);
+            this.persistCron(cron.name, newExecutions, newNextRun);
+            // Only update in-memory state after successful persist
+            cron.executions = newExecutions;
+            cron.nextRun = newNextRun;
           } catch (persistErr) {
+            // Log but don't update in-memory state
+            // Next tick will retry with same execution count
             cronLog.error('Failed to persist cron state', {
               name: cron.name,
               error: String(persistErr),
             });
+            // Re-insert with original state to retry on next tick
+            toReinsert.push(entry);
+            continue;
           }
+        } else {
+          // No persistence callback, just update in-memory
+          cron.executions = newExecutions;
+          cron.nextRun = newNextRun;
         }
 
         // Re-insert with same generation (not stale)
