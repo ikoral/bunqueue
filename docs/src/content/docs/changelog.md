@@ -10,6 +10,33 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [1.9.9] - 2026-02-01
+
+### Added
+- **Comprehensive Functional Test Suite** - 28 new test files covering all major features
+  - 14 embedded mode tests + 14 TCP mode tests
+  - Tests for: advanced DLQ, job management, monitoring, rate limiting, stall detection, webhooks, queue groups, and more
+  - All 24 embedded test suites pass (143/143 individual tests)
+
+### Changed
+- **BullMQ-Style Idempotency** - `jobId` option now returns existing job instead of throwing error
+  - Duplicate job submissions are idempotent (same behavior as BullMQ)
+  - Cleaner handling of retry scenarios without error handling
+- Improved documentation for `jobId` deduplication behavior
+
+### Fixed
+- Embedded test suite now properly uses embedded mode (was incorrectly trying TCP)
+- Fixed `getJobCounts()` in tests to use queue-specific `getJobs()` method
+- Fixed async `getJob()` calls in job management tests
+- Fixed PROMOTE, CHANGE PRIORITY, and MOVE TO DELAYED test logic
+
+## [1.9.8] - 2026-01-31
+
+### Changed
+- **msgpackr Binary Protocol** - Switched TCP protocol from JSON to msgpackr binary
+  - ~30% faster serialization/deserialization
+  - Smaller message sizes
+
 ## [1.9.6] - 2026-01-31
 
 ### Added
