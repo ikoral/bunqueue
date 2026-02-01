@@ -51,7 +51,7 @@ import VersionBadges from '@components/VersionBadges.astro';
     import { Queue, Worker } from 'bunqueue/client';
 
     // Create a queue
-    const queue = new Queue('emails');
+    const queue = new Queue('emails', { embedded: true });
 
     // Add jobs
     await queue.add('welcome', {
@@ -63,7 +63,7 @@ import VersionBadges from '@components/VersionBadges.astro';
     const worker = new Worker('emails', async (job) => {
       await sendEmail(job.data);
       return { sent: true };
-    });
+    }, { embedded: true });
 
     worker.on('completed', (job) => console.log(`✓ ${job.id}`));
     ```

@@ -296,7 +296,7 @@ new Worker('emails', async (job) => {
   await job.log('Email sent successfully');
 
   return { sent: true, timestamp: Date.now() };
-});
+}, { embedded: true });
 
 console.log('Worker started, processing emails queue...');
 ```

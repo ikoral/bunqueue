@@ -155,6 +155,12 @@ Use `durable: true` for:
 Use `jobId` to prevent duplicate jobs. When a job with the same `jobId` already exists, **the existing job is returned** instead of creating a duplicate. This is BullMQ-compatible idempotent behavior.
 
 ```typescript
+// Basic deduplication with jobId (BullMQ-style idempotency)
+// If job with same jobId exists, returns existing job instead of creating duplicate
+const job = await queue.add('send-email', { to: 'user@test.com' }, {
+  jobId: 'email-user-123'
+});
+
 // First call: creates the job
 const job1 = await queue.add('process', { orderId: 123 }, {
   jobId: 'order-123'
@@ -186,6 +192,89 @@ async function restoreJobs(jobsToRestore: SavedJob[]) {
   }
 }
 ```
+
+### Advanced Deduplication
+
+For more control over deduplication behavior, use the `dedup` option with TTL-based unique keys and strategies.
+
+#### TTL-Based Deduplication
+
+By default, `jobId` deduplication is permanent (until the job is completed or removed). Use `dedup.ttl` to make the unique key expire after a specified time:
+
+```typescript
+// TTL-based deduplication - unique key expires after 1 hour
+await queue.add('notification', { userId: '123' }, {
+  jobId: 'notify-123',
+  dedup: {
+    ttl: 3600000  // 1 hour in ms
+  }
+});
+
+// After TTL expires, the same jobId can create a new job
+// This is useful for rate-limiting or time-windowed deduplication
+```
+
+#### Extend Strategy
+
+The `extend` strategy resets the TTL of an existing job when a duplicate is detected. The existing job is returned (not replaced), but its deduplication window is extended:
+
+```typescript
+// Extend strategy - reset TTL if duplicate, return existing job
+await queue.add('rate-limited-task', { action: 'sync' }, {
+  jobId: 'sync-task',
+  dedup: {
+    ttl: 60000,
+    extend: true  // Extend TTL on duplicate
+  }
+});
+```
+
+:::tip[When to use extend]
+- **Rate limiting**: Prevent action spam while keeping the dedup window active
+- **Debouncing**: Extend the quiet period on each trigger
+- **Session activity**: Keep deduplication active while user is active
+:::
+
+#### Replace Strategy
+
+The `replace` strategy removes the existing job and inserts a new one with the updated data. This is useful when you always want the latest data to be processed:
+
+```typescript
+// Replace strategy - remove old job, insert new one
+await queue.add('latest-data', { data: newData }, {
+  jobId: 'data-job',
+  dedup: {
+    ttl: 300000,
+    replace: true  // Replace existing job with new data
+  }
+});
+```
+
+:::caution[Replace behavior]
+When using `replace: true`:
+- The old job is **removed** from the queue
+- A **new job** is created with the new data
+- The new job gets a **new internal ID**
+- Jobs that are already being processed (active state) will **not** be replaced
+:::
+
+:::tip[When to use replace]
+- **Latest state sync**: Always process the most recent data
+- **Configuration updates**: Replace pending config changes with latest
+- **Aggregated events**: Collapse multiple events into one with latest payload
+:::
+
+#### Dedup Options Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `ttl` | `number` | - | Time in ms before unique key expires |
+| `extend` | `boolean` | `false` | Reset TTL on duplicate (returns existing job) |
+| `replace` | `boolean` | `false` | Remove old job and create new one |
+
+:::note[Strategy precedence]
+If both `extend` and `replace` are set to `true`, `replace` takes precedence.
+:::
 
 ## Query Operations
 
@@ -290,6 +379,29 @@ queue.purgeDlq();
 
 See [Dead Letter Queue](/bunqueue/guide/dlq/) for more details.
 
+## Retry Completed Jobs
+
+The `retryCompleted()` method allows re-queuing completed jobs for reprocessing. This is useful when you need to re-run a job that completed successfully, for example when business logic changes or you need to regenerate outputs.
+
+```typescript
+// Retry a specific completed job
+const success = queue.retryCompleted('job-id-123');
+if (success) {
+  console.log('Job re-queued for processing');
+}
+
+// Retry all completed jobs (use with caution!)
+const count = queue.retryCompleted();
+console.log(`Re-queued ${count} completed jobs`);
+
+// Async version for TCP mode
+const count = await queue.retryCompletedAsync();
+```
+
+:::caution[Use with care]
+Retrying all completed jobs can re-queue a large number of jobs at once. Consider filtering or limiting the scope when dealing with high-volume queues.
+:::
+
 ## Job Options Reference
 
 | Option | Type | Default | Description |
@@ -300,6 +412,7 @@ See [Dead Letter Queue](/bunqueue/guide/dlq/) for more details.
 | `backoff` | `number` | `1000` | Backoff base in ms (exponential) |
 | `timeout` | `number` | - | Processing timeout in ms |
 | `jobId` | `string` | - | Custom ID for deduplication (BullMQ-style idempotent) |
+| `dedup` | `object` | - | Advanced deduplication config (`ttl`, `extend`, `replace`) |
 | `removeOnComplete` | `boolean` | `false` | Auto-delete after completion |
 | `removeOnFail` | `boolean` | `false` | Auto-delete after failure |
 | `stallTimeout` | `number` | - | Per-job stall timeout override |

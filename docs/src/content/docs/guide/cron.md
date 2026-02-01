@@ -45,6 +45,36 @@ Examples:
 - `0 0 * * MON` - Every Monday at midnight
 - `0 0 1 * *` - First day of every month
 
+## Timezone Support
+
+bunqueue supports IANA timezones for cron jobs (added in v1.9.4). This allows you to schedule jobs based on specific local times rather than the server's timezone.
+
+Common timezone examples:
+- `Europe/Rome`
+- `America/New_York`
+- `Asia/Tokyo`
+- `UTC`
+
+```typescript
+// Schedule job at 9 AM Rome time every day
+await queue.add('daily-report', { type: 'sales' }, {
+  repeat: {
+    pattern: '0 9 * * *',
+    tz: 'Europe/Rome'
+  }
+});
+
+// Schedule job at 6 PM New York time on weekdays
+await queue.add('end-of-day', { type: 'summary' }, {
+  repeat: {
+    pattern: '0 18 * * 1-5',
+    tz: 'America/New_York'
+  }
+});
+```
+
+When a timezone is specified, the cron expression is evaluated in that timezone, automatically handling daylight saving time transitions.
+
 ## Interval-Based
 
 ```bash

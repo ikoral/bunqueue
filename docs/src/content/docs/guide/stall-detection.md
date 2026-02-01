@@ -68,8 +68,8 @@ import { QueueEvents } from 'bunqueue/client';
 
 const events = new QueueEvents('my-queue');
 
-events.on('stalled', (job) => {
-  console.log(`Job ${job.id} stalled`);
+events.on('stalled', ({ jobId }) => {
+  console.log(`Job ${jobId} stalled`);
 });
 ```
 

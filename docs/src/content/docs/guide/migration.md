@@ -108,8 +108,8 @@ const worker = new Worker('emails', async (job) => {
   // Rate limiting is set on queue via server mode, not worker
 });
 
-// Set rate limit separately
-queue.setRateLimit(100); // 100 jobs/sec
+// Rate limiting is configured via CLI or TCP server
+// bunqueue rate-limit set emails 100
 ```
 
 ## Step 5: Update Events
@@ -208,7 +208,6 @@ new Worker('queue', './processor.js', { connection });
 import { SandboxedWorker } from 'bunqueue/client';
 
 const worker = new SandboxedWorker('queue', {
-  embedded: true,
   processor: './processor.ts',
   concurrency: 4,
   timeout: 30000,

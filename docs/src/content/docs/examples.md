@@ -79,7 +79,7 @@ const thumbnailQueue = new Queue('thumbnails', { embedded: true });
 const flow = new FlowProducer();
 
 // Add image processing flow
-await flow.add({
+await flow.addTree({
   name: 'process-image',
   queueName: 'uploads',
   data: { imageId: 'img-123', path: '/uploads/photo.jpg' },
@@ -109,15 +109,14 @@ new Worker('uploads', async (job) => {
   // Validate image
   const metadata = await getImageMetadata(path);
 
-  // Wait for all resizes to complete
-  const childResults = await job.getChildrenValues();
+  // Note: getChildrenValues() is not yet implemented
+  // For now, handle child results through events or polling
+  // const childResults = await job.getChildrenValues();
 
-  // Update database with all sizes
+  // Update database with original path
   await db.images.update(imageId, {
     original: path,
-    large: childResults['resize-large'],
-    medium: childResults['resize-medium'],
-    thumbnail: childResults['thumbnail']
+    metadata
   });
 
   return { processed: true };
@@ -125,9 +124,9 @@ new Worker('uploads', async (job) => {
 
 // Resize workers
 new Worker('resize', async (job) => {
-  const { size, width, height } = job.data;
-  const parent = await job.getParent();
-  const { path } = parent.data;
+  const { size, width, height, path } = job.data;
+  // Note: getParent() is not yet implemented
+  // Pass path in job data or use a shared storage key
 
   const resized = await resizeImage(path, width, height);
   const outputPath = `/processed/${size}/${Date.now()}.jpg`;
@@ -138,9 +137,9 @@ new Worker('resize', async (job) => {
 
 // Thumbnail worker
 new Worker('thumbnails', async (job) => {
-  const { width, height } = job.data;
-  const parent = await job.getParent();
-  const { path } = parent.data;
+  const { width, height, path } = job.data;
+  // Note: getParent() is not yet implemented
+  // Pass path in job data or use a shared storage key
 
   const thumb = await createThumbnail(path, width, height);
   const outputPath = `/thumbnails/${Date.now()}.jpg`;
@@ -238,8 +237,8 @@ async function deliverWebhook(url: string, event: string, payload: any) {
   });
 }
 
-// Webhook worker
-new Worker('webhooks', async (job) => {
+// Webhook worker with failure tracking
+const webhookWorker = new Worker('webhooks', async (job) => {
   const { url, event, payload, timestamp } = job.data;
 
   const response = await fetch(url, {
@@ -264,9 +263,8 @@ new Worker('webhooks', async (job) => {
   };
 }, { embedded: true, concurrency: 10 });
 
-// Track failed webhooks
-webhookQueue.on('failed', async (job, error) => {
-  if (job.attemptsMade >= job.opts.attempts) {
+webhookWorker.on('failed', async (job, error) => {
+  if (job.attemptsMade >= 5) { // Use hardcoded max attempts
     // Max retries reached, notify admin
     await notifyAdmin({
       type: 'webhook_failed',
@@ -429,6 +427,10 @@ Handle shutdown properly.
 import { Queue, Worker } from 'bunqueue/client';
 
 const queue = new Queue('tasks');
+
+// Track paused state locally
+let isShuttingDown = false;
+
 const worker = new Worker('tasks', async (job) => {
   // Long-running task
   for (let i = 0; i < 100; i++) {
@@ -436,7 +438,7 @@ const worker = new Worker('tasks', async (job) => {
     await job.updateProgress(i);
 
     // Check if we should stop
-    if (worker.isPaused()) {
+    if (isShuttingDown) {
       throw new Error('Worker shutting down');
     }
   }
@@ -447,8 +449,11 @@ const worker = new Worker('tasks', async (job) => {
 async function shutdown(signal: string) {
   console.log(`Received ${signal}, shutting down...`);
 
-  // Stop accepting new jobs
-  await worker.pause();
+  // Mark as shutting down
+  isShuttingDown = true;
+
+  // Stop accepting new jobs (pause() returns void, not Promise)
+  worker.pause();
 
   // Wait for current jobs to complete (max 30s)
   const timeout = setTimeout(() => {
@@ -491,9 +496,10 @@ await queue.add('long-task', {
 // Worker with timeout handling
 new Worker('processing', async (job) => {
   const controller = new AbortController();
+  const timeoutMs = 60000; // Use hardcoded timeout or pass in job.data
   const timeoutId = setTimeout(() => {
     controller.abort();
-  }, job.opts.timeout || 60000);
+  }, timeoutMs);
 
   try {
     await processData(job.data, { signal: controller.signal });
@@ -550,22 +556,24 @@ Group related queues together.
 import { Queue, Worker, QueueGroup } from 'bunqueue/client';
 
 // Create group for email-related queues
-const emailGroup = new QueueGroup('email');
+const emailGroup = new QueueGroup(['welcome', 'notifications', 'digest']);
 
-// Add queues to group
-const welcomeQueue = emailGroup.createQueue('welcome');
-const notificationQueue = emailGroup.createQueue('notifications');
-const digestQueue = emailGroup.createQueue('digest');
+// Get queues from group
+const welcomeQueue = emailGroup.getQueue('welcome');
+const notificationQueue = emailGroup.getQueue('notifications');
+const digestQueue = emailGroup.getQueue('digest');
 
 // Pause all email queues at once
-await emailGroup.pauseAll();
+emailGroup.pauseAll();
 
 // Resume all
-await emailGroup.resumeAll();
+emailGroup.resumeAll();
 
-// Get stats for all queues in group
-const stats = await emailGroup.getStats();
-console.log('Total pending:', stats.totalPending);
+// Get individual queue stats
+const welcomeCounts = welcomeQueue.getJobCounts();
+const notificationCounts = notificationQueue.getJobCounts();
+console.log('Welcome pending:', welcomeCounts.waiting);
+console.log('Notification pending:', notificationCounts.waiting);
 ```
 
 ## Monitoring with Events
@@ -579,8 +587,8 @@ const queue = new Queue('tasks');
 const events = new QueueEvents('tasks');
 
 // Job lifecycle events
-events.on('added', ({ jobId, name }) => {
-  console.log(`Job ${jobId} (${name}) added to queue`);
+events.on('waiting', ({ jobId }) => {
+  console.log(`Job ${jobId} added to queue`);
 });
 
 events.on('active', ({ jobId }) => {
@@ -591,12 +599,12 @@ events.on('progress', ({ jobId, progress }) => {
   console.log(`Job ${jobId}: ${progress}%`);
 });
 
-events.on('completed', ({ jobId, result }) => {
-  console.log(`Job ${jobId} completed:`, result);
+events.on('completed', ({ jobId, returnvalue }) => {
+  console.log(`Job ${jobId} completed:`, returnvalue);
 });
 
-events.on('failed', ({ jobId, error }) => {
-  console.error(`Job ${jobId} failed:`, error);
+events.on('failed', ({ jobId, failedReason }) => {
+  console.error(`Job ${jobId} failed:`, failedReason);
 });
 
 events.on('stalled', ({ jobId }) => {
