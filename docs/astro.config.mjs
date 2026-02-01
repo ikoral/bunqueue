@@ -80,7 +80,20 @@ export default defineConfig({
             { label: 'Introduction', link: '/guide/introduction/' },
             { label: 'Installation', link: '/guide/installation/' },
             { label: 'Quick Start', link: '/guide/quickstart/' },
-            { label: 'Architecture', link: '/architecture/' },
+          ],
+        },
+        {
+          label: 'Architecture',
+          collapsed: true,
+          items: [
+            { label: 'Overview', link: '/architecture/' },
+            { label: 'Client SDK', link: '/architecture/client-sdk/' },
+            { label: 'Domain Layer', link: '/architecture/domain-layer/' },
+            { label: 'Application Layer', link: '/architecture/application-layer/' },
+            { label: 'TCP Protocol', link: '/architecture/tcp-protocol/' },
+            { label: 'Persistence', link: '/architecture/persistence/' },
+            { label: 'Data Structures', link: '/architecture/data-structures/' },
+            { label: 'Cron Scheduler', link: '/architecture/cron-scheduler/' },
           ],
         },
         {

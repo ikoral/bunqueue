@@ -1,0 +1,150 @@
+---
+title: Architecture Overview
+description: High-level architecture and design decisions of bunqueue
+---
+
+# Architecture Overview
+
+bunqueue is a high-performance job queue built for Bun with SQLite persistence. This section covers the internal architecture, data flows, and design decisions.
+
+## System Overview
+
+```
+                            ┌─────────────────────────────────────┐
+                            │            CLIENT LAYER              │
+                            │  Queue.add() ──────► Worker.process()│
+                            │       │                    ▲         │
+                            │       ▼                    │         │
+                            │   TcpPool ◄── msgpack ──► TcpPool   │
+                            └───────┬────────────────────┬─────────┘
+                                    │ TCP :6789          │
+                            ┌───────▼────────────────────▼─────────┐
+                            │            SERVER LAYER              │
+                            │                                      │
+                            │  ┌────────────────────────────────┐  │
+                            │  │         QueueManager           │  │
+                            │  │                                │  │
+                            │  │  ┌──────────────────────────┐  │  │
+                            │  │  │      32 Shards           │  │  │
+                            │  │  │  ┌──────┬──────┬──────┐  │  │  │
+                            │  │  │  │Shard0│Shard1│ ...  │  │  │  │
+                            │  │  │  └──────┴──────┴──────┘  │  │  │
+                            │  │  └──────────────────────────┘  │  │
+                            │  │                                │  │
+                            │  │  jobIndex │ completedJobs      │  │
+                            │  │  customIdMap │ jobResults      │  │
+                            │  └────────────────────────────────┘  │
+                            │                  │                   │
+                            │  ┌───────────────▼───────────────┐   │
+                            │  │      PERSISTENCE LAYER        │   │
+                            │  │  WriteBuffer ──► SQLite (WAL) │   │
+                            │  └───────────────────────────────┘   │
+                            │                                      │
+                            │  ┌────────────────────────────────┐  │
+                            │  │     BACKGROUND TASKS           │  │
+                            │  │  Scheduler │ Stall Detection   │  │
+                            │  │  DLQ Maint │ Cleanup           │  │
+                            │  └────────────────────────────────┘  │
+                            └──────────────────────────────────────┘
+```
+
+## Layered Architecture
+
+| Layer | Purpose | Key Components |
+|-------|---------|----------------|
+| **Client** | SDK for applications | Queue, Worker, FlowProducer, TcpPool |
+| **Server** | Request handling | TcpServer, HttpServer, Handlers |
+| **Application** | Orchestration | QueueManager, Operations, Managers |
+| **Domain** | Business logic | Shard, PriorityQueue, DLQ |
+| **Infrastructure** | External systems | SQLite, S3 Backup, Scheduler |
+| **Shared** | Utilities | Hash, Lock, LRU, MinHeap |
+
+## Architecture Sections
+
+| Section | Description |
+|---------|-------------|
+| [Client SDK](/architecture/client-sdk/) | TCP connection, job submission, worker processing |
+| [Domain Layer](/architecture/domain-layer/) | Sharding, priority queues, DLQ logic |
+| [Application Layer](/architecture/application-layer/) | Operations flow, background tasks |
+| [Infrastructure](/architecture/infrastructure/) | Persistence, servers, scheduling |
+| [Data Structures](/architecture/data-structures/) | Core algorithms and complexities |
+| [TCP Protocol](/architecture/tcp-protocol/) | Wire format and commands |
+| [Persistence](/architecture/persistence/) | SQLite configuration, write buffering |
+
+## Key Design Decisions
+
+### 32-Shard Architecture
+
+Jobs are distributed across 32 independent shards using FNV-1a hash:
+
+```
+shardIndex = fnv1aHash(queueName) & 0x1f
+```
+
+**Benefits:**
+- Parallel operations on different queues
+- Reduced lock contention
+- Bitwise AND faster than modulo
+
+### 4-ary Priority Queue
+
+Each shard contains a 4-ary heap instead of binary:
+
+- Better cache locality (children fit in cache line)
+- Fewer tree levels (8 vs 15 for 65k items)
+- O(log₄ n) operations
+
+### Write Buffer
+
+Jobs batch before SQLite write:
+
+```
+┌─────────┐   10ms or    ┌───────────────────┐
+│ Buffer  │ ──────────►  │ Multi-row INSERT  │
+│ (100)   │   100 jobs   │ ~100k jobs/sec    │
+└─────────┘              └───────────────────┘
+```
+
+- **Buffered**: ~100k jobs/sec, up to 10ms loss risk
+- **Durable**: ~10k jobs/sec, immediate persistence
+
+### Lazy Deletion
+
+Heap entries use generation tracking:
+
+```
+Remove: Delete from index (O(1)), mark heap entry stale
+Pop: Skip entries where generation != current
+Compact: Rebuild when >20% stale
+```
+
+## Lock Hierarchy
+
+Acquire in order to prevent deadlocks:
+
+```
+1. jobIndex (read-only)
+2. completedJobs (check before lock)
+3. shardLocks[N]
+4. processingLocks[N]
+```
+
+## Memory Bounds
+
+| Collection | Limit | Eviction |
+|------------|-------|----------|
+| completedJobs | 50,000 | FIFO batch |
+| jobResults | 5,000 | LRU |
+| customIdMap | 50,000 | LRU |
+| DLQ per queue | 10,000 | FIFO |
+
+## Performance Summary
+
+| Operation | Complexity |
+|-----------|-----------|
+| PUSH | O(log₄ n) |
+| PULL | O(log₄ n) |
+| ACK | O(1) |
+| ACK batch | O(shards) |
+| Job lookup | O(1) |
+| Stats | O(1) |
