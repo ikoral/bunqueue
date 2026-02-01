@@ -5,12 +5,15 @@
 
 import { Queue, Worker } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-concurrency';
 
 async function main() {
   console.log('=== Test Concurrency Control ===\n');
 
-  const queue = new Queue<{ index: number }>(QUEUE_NAME);
+  const queue = new Queue<{ index: number }>(QUEUE_NAME, { embedded: true });
   let passed = 0;
   let failed = 0;
 
@@ -34,7 +37,7 @@ async function main() {
       await new Promise(r => setTimeout(r, 100));
       currentConcurrent--;
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 600));
     await worker.close();
@@ -72,7 +75,7 @@ async function main() {
       await new Promise(r => setTimeout(r, 200));
       currentConcurrent--;
       return {};
-    }, { concurrency: 5 });
+    }, { concurrency: 5, embedded: true });
 
     await new Promise(r => setTimeout(r, 800));
     await worker.close();
@@ -112,7 +115,7 @@ async function main() {
       currentConcurrent--;
       processed++;
       return {};
-    }, { concurrency: 20 });
+    }, { concurrency: 20, embedded: true });
 
     await new Promise(r => setTimeout(r, 1000));
     await worker.close();
@@ -147,13 +150,13 @@ async function main() {
       processedBy.set('worker1', (processedBy.get('worker1') ?? 0) + 1);
       await new Promise(r => setTimeout(r, 50));
       return {};
-    }, { concurrency: 2 });
+    }, { concurrency: 2, embedded: true });
 
     const worker2 = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       processedBy.set('worker2', (processedBy.get('worker2') ?? 0) + 1);
       await new Promise(r => setTimeout(r, 50));
       return {};
-    }, { concurrency: 2 });
+    }, { concurrency: 2, embedded: true });
 
     await new Promise(r => setTimeout(r, 1000));
     await worker1.close();
@@ -191,7 +194,7 @@ async function main() {
       processed++;
       await new Promise(r => setTimeout(r, 50));
       return {};
-    }, { concurrency: 1, autorun: false });
+    }, { concurrency: 1, autorun: false, embedded: true });
 
     // Process first batch
     worker.run();
@@ -238,7 +241,7 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       processed++;
       return {};
-    }, { concurrency: 3 });
+    }, { concurrency: 3, embedded: true });
 
     // Wait while paused
     await new Promise(r => setTimeout(r, 300));

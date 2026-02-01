@@ -72,7 +72,8 @@ interface JobOptions {
   /** Job timeout (ms) */
   timeout?: number;
 
-  /** Custom job ID (must be unique) */
+  /** Custom job ID for deduplication (BullMQ-style idempotent).
+   * If a job with this ID exists, returns existing job instead of creating duplicate. */
   jobId?: string;
 
   /** Remove job after completion */

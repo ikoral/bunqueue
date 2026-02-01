@@ -5,12 +5,15 @@
 
 import { Queue, Worker } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-cron';
 
 async function main() {
   console.log('=== Test Cron/Scheduled Jobs ===\n');
 
-  const queue = new Queue<{ type: string }>(QUEUE_NAME);
+  const queue = new Queue<{ type: string }>(QUEUE_NAME, { embedded: true });
   let passed = 0;
   let failed = 0;
 
@@ -30,7 +33,7 @@ async function main() {
     const worker = new Worker<{ type: string }>(QUEUE_NAME, async () => {
       executions++;
       return { executed: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     // Wait for multiple executions
     await new Promise(r => setTimeout(r, 1500));
@@ -61,7 +64,7 @@ async function main() {
     const worker = new Worker<{ type: string }>(QUEUE_NAME, async () => {
       executions++;
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 1000));
     await worker.close();
@@ -93,7 +96,7 @@ async function main() {
     const worker = new Worker<{ type: string }>(QUEUE_NAME, async (job) => {
       order.push((job.data as { type: string }).type);
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -124,7 +127,7 @@ async function main() {
     const worker = new Worker<{ type: string }>(QUEUE_NAME, async () => {
       if (firstExecution === 0) firstExecution = Date.now();
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 600));
     await worker.close();
@@ -161,7 +164,7 @@ async function main() {
     const worker = new Worker<{ type: string }>(QUEUE_NAME, async () => {
       processed++;
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 300));
     await worker.close();

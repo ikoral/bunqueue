@@ -5,12 +5,15 @@
 
 import { Queue, Worker } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-basic-ops';
 
 async function main() {
   console.log('=== Test Basic Operations ===\n');
 
-  const queue = new Queue<{ message: string }>(QUEUE_NAME);
+  const queue = new Queue<{ message: string }>(QUEUE_NAME, { embedded: true });
   let passed = 0;
   let failed = 0;
 
@@ -43,7 +46,7 @@ async function main() {
       processed = true;
       processedMessage = (job.data as { message: string }).message;
       return { success: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     // Wait for job to be processed
     await new Promise(r => setTimeout(r, 500));
@@ -71,7 +74,7 @@ async function main() {
     const worker = new Worker<{ message: string }>(QUEUE_NAME, async () => {
       failedJob = true;
       throw new Error('Intentional failure');
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -99,7 +102,7 @@ async function main() {
     const worker = new Worker<{ message: string }>(QUEUE_NAME, async (job) => {
       jobs.push((job.data as { message: string }).message);
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -127,7 +130,7 @@ async function main() {
     const worker = new Worker<{ message: string }>(QUEUE_NAME, async () => {
       processedAt = Date.now();
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 600));
     await worker.close();

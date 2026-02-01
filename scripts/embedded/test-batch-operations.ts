@@ -5,12 +5,15 @@
 
 import { Queue, Worker } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-batch-ops';
 
 async function main() {
   console.log('=== Test Batch Operations ===\n');
 
-  const queue = new Queue<{ index: number }>(QUEUE_NAME);
+  const queue = new Queue<{ index: number }>(QUEUE_NAME, { embedded: true });
   let passed = 0;
   let failed = 0;
 
@@ -59,7 +62,7 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async (job) => {
       processed.add(job.data.index);
       return { processed: job.data.index };
-    }, { concurrency: 10 });
+    }, { concurrency: 10, embedded: true });
 
     // Wait for all jobs to be processed
     const start = Date.now();
@@ -95,7 +98,7 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async (job) => {
       order.push(job.data.index);
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();

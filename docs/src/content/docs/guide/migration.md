@@ -21,6 +21,7 @@ bunqueue provides a BullMQ-compatible API, making migration straightforward for 
 | `new Worker()` | `new Worker()` | ✅ Same API |
 | `QueueEvents` | `QueueEvents` | ✅ Same API |
 | `FlowProducer` | `FlowProducer` | ✅ Same API |
+| `jobId` deduplication | `jobId` deduplication | ✅ Same behavior (idempotent) |
 | Redis connection | Not needed | ✅ Simpler |
 
 ## Step 1: Install bunqueue

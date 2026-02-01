@@ -5,12 +5,15 @@
 
 import { Queue, Worker, QueueEvents } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-progress';
 
 async function main() {
   console.log('=== Test Job Progress & Logs ===\n');
 
-  const queue = new Queue<{ task: string }>(QUEUE_NAME);
+  const queue = new Queue<{ task: string }>(QUEUE_NAME, { embedded: true });
   let passed = 0;
   let failed = 0;
 
@@ -37,7 +40,7 @@ async function main() {
       progressUpdates.push(100);
 
       return { completed: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -64,7 +67,7 @@ async function main() {
       await j.updateProgress(50, 'Halfway there!');
       lastMessage = 'Halfway there!';
       return { done: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 300));
     await worker.close();
@@ -93,7 +96,7 @@ async function main() {
       await new Promise(r => setTimeout(r, 50));
       await j.log('Finishing up...');
       return { logged: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -117,7 +120,7 @@ async function main() {
 
     const worker = new Worker<{ task: string }>(QUEUE_NAME, async () => {
       return { processed: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 300));
     await worker.close();
@@ -153,7 +156,7 @@ async function main() {
       await j.updateProgress(66);
       await j.updateProgress(100);
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -186,7 +189,7 @@ async function main() {
 
     const worker = new Worker<{ task: string }>(QUEUE_NAME, async () => {
       return { result: 'done' };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();

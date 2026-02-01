@@ -19,15 +19,16 @@ describe('Advanced Deduplication', () => {
   });
 
   describe('Basic unique key (default behavior)', () => {
-    test('rejects duplicate unique key', async () => {
+    test('returns existing job on duplicate jobId (BullMQ-style)', async () => {
       const queue = new Queue<{ msg: string }>(QUEUE_NAME, { embedded: true });
 
-      await queue.add('job1', { msg: 'first' }, { jobId: 'unique-1' });
+      const job1 = await queue.add('job1', { msg: 'first' }, { jobId: 'unique-1' });
 
-      // Second add with same key should fail
-      await expect(
-        queue.add('job2', { msg: 'second' }, { jobId: 'unique-1' })
-      ).rejects.toThrow(/already exists/);
+      // Second add with same key returns existing job (BullMQ-style idempotency)
+      const job2 = await queue.add('job2', { msg: 'second' }, { jobId: 'unique-1' });
+
+      // Same job ID returned
+      expect(job2.id).toBe(job1.id);
     });
 
     test('allows different unique keys', async () => {

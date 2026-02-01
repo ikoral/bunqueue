@@ -5,12 +5,15 @@
 
 import { Queue, Worker, FlowProducer } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-dependencies';
 
 async function main() {
   console.log('=== Test Job Dependencies ===\n');
 
-  const queue = new Queue<{ step: string }>(QUEUE_NAME);
+  const queue = new Queue<{ step: string }>(QUEUE_NAME, { embedded: true });
   const flow = new FlowProducer();
   let passed = 0;
   let failed = 0;
@@ -44,7 +47,7 @@ async function main() {
       executed.push((job.data as { step: string }).step);
       await new Promise(r => setTimeout(r, 50)); // Simulate work
       return { completed: (job.data as { step: string }).step };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     // Wait for all jobs (longer timeout for dependency resolution)
     await new Promise(r => setTimeout(r, 3000));
@@ -100,7 +103,7 @@ async function main() {
         finalExecuted = true;
       }
       return { done: job.data.step };
-    }, { concurrency: 5 });
+    }, { concurrency: 5, embedded: true });
 
     await new Promise(r => setTimeout(r, 1000));
     await worker.close();
@@ -156,7 +159,7 @@ async function main() {
     const worker = new Worker<{ step: string }>(QUEUE_NAME, async (job) => {
       executed.push((job.data as { step: string }).step);
       return { done: (job.data as { step: string }).step };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 2000));
     await worker.close();

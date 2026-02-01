@@ -127,6 +127,25 @@ Common causes:
 
 ## Job Processing
 
+### How does job deduplication work?
+
+bunqueue uses BullMQ-style idempotent job creation with `jobId`:
+
+```typescript
+// First call creates the job
+const job1 = await queue.add('task', data, { jobId: 'unique-123' });
+
+// Second call with same jobId returns existing job
+const job2 = await queue.add('task', data, { jobId: 'unique-123' });
+
+console.log(job1.id === job2.id); // true
+```
+
+This is useful for:
+- **Service restart recovery**: Restore jobs without duplicates
+- **Webhook deduplication**: Safe handling of retried webhooks
+- **Idempotent operations**: Multiple calls have the same effect as one
+
 ### What happens if a worker crashes?
 
 With stall detection enabled:

@@ -7,34 +7,33 @@ import { Queue, Worker } from '../../src/client';
 
 const QUEUE_NAME = 'test-unique';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 async function main() {
   console.log('=== Test Unique Jobs / Deduplication ===\n');
 
-  const queue = new Queue<{ value: number }>(QUEUE_NAME);
+  const queue = new Queue<{ value: number }>(QUEUE_NAME, { embedded: true });
   let passed = 0;
   let failed = 0;
 
   // Clean up
   queue.obliterate();
 
-  // Test 1: Reject duplicate unique key
-  console.log('1. Testing REJECT DUPLICATE...');
+  // Test 1: Duplicate returns same job (BullMQ-style idempotency)
+  console.log('1. Testing DUPLICATE RETURNS SAME JOB...');
   try {
     const job1 = await queue.add('unique-1', { value: 1 }, { jobId: 'unique-key-1' });
 
-    // Try to add another with same unique key - should throw
-    let duplicate = false;
-    try {
-      await queue.add('unique-1', { value: 2 }, { jobId: 'unique-key-1' });
-    } catch (e) {
-      duplicate = true;
-    }
+    // Try to add another with same jobId - BullMQ returns existing job (idempotent)
+    const job2 = await queue.add('unique-1', { value: 2 }, { jobId: 'unique-key-1' });
 
-    if (job1.id && duplicate) {
-      console.log('   ✅ Duplicate rejected correctly');
+    // Both should return the same job ID (idempotent behavior)
+    if (job1.id && job2.id && job1.id === job2.id) {
+      console.log('   ✅ Duplicate returns same job (idempotent)');
       passed++;
     } else {
-      console.log(`   ❌ Duplicate not rejected: job1=${job1.id}, duplicate=${duplicate}`);
+      console.log(`   ❌ Expected same job ID, got job1=${job1.id}, job2=${job2.id}`);
       failed++;
     }
   } catch (e) {
@@ -75,7 +74,7 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       processed = true;
       return { done: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -126,7 +125,7 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async (job) => {
       processed = true;
       return { value: (job.data as { value: number }).value * 2 };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();

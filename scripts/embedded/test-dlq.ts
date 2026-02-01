@@ -32,7 +32,7 @@ async function main() {
     const worker = new Worker<{ attempt: number }>(QUEUE_NAME, async () => {
       attempts++;
       throw new Error(`Attempt ${attempts} failed`);
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 1000));
     await worker.close();
@@ -86,6 +86,9 @@ async function main() {
   }
 
   // Test 4: Retry from DLQ
+
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
   console.log('\n4. Testing RETRY DLQ...');
   try {
     // First add a job that will fail
@@ -96,7 +99,7 @@ async function main() {
 
     const worker1 = new Worker<{ attempt: number }>(QUEUE_NAME, async () => {
       throw new Error('First failure');
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker1.close();
@@ -111,7 +114,7 @@ async function main() {
     const worker2 = new Worker<{ attempt: number }>(QUEUE_NAME, async () => {
       retrySucceeded = true;
       return { success: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker2.close();
@@ -139,7 +142,7 @@ async function main() {
 
     const worker = new Worker<{ attempt: number }>(QUEUE_NAME, async () => {
       throw new Error('Fail for purge');
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -171,7 +174,7 @@ async function main() {
 
     const worker = new Worker<{ attempt: number }>(QUEUE_NAME, async () => {
       throw new Error('Entry test failure');
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();

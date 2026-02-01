@@ -5,6 +5,9 @@
 
 import { Queue, Worker } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-retry';
 
 async function main() {
@@ -16,7 +19,7 @@ async function main() {
   // Test 1: Fixed backoff retry
   console.log('1. Testing FIXED BACKOFF...');
   try {
-    const queue = new Queue<{ attempt: number }>(QUEUE_NAME);
+    const queue = new Queue<{ attempt: number }>(QUEUE_NAME, { embedded: true });
     queue.obliterate();
 
     await queue.add('fixed-job', { attempt: 0 }, {
@@ -34,7 +37,7 @@ async function main() {
         throw new Error(`Attempt ${attempts.length} failed`);
       }
       return { success: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 1000));
     await worker.close();
@@ -58,7 +61,7 @@ async function main() {
   // Test 2: Exponential backoff
   console.log('\n2. Testing EXPONENTIAL BACKOFF...');
   try {
-    const queue = new Queue<{ attempt: number }>(QUEUE_NAME);
+    const queue = new Queue<{ attempt: number }>(QUEUE_NAME, { embedded: true });
     queue.obliterate();
 
     await queue.add('exp-job', { attempt: 0 }, {
@@ -74,7 +77,7 @@ async function main() {
         throw new Error(`Attempt ${timestamps.length} failed`);
       }
       return { success: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 2000));
     await worker.close();
@@ -105,7 +108,7 @@ async function main() {
   // Test 3: Custom backoff function
   console.log('\n3. Testing CUSTOM BACKOFF...');
   try {
-    const queue = new Queue<{ attempt: number }>(QUEUE_NAME);
+    const queue = new Queue<{ attempt: number }>(QUEUE_NAME, { embedded: true });
     queue.obliterate();
 
     // Custom backoff: 100ms * attempt number
@@ -122,7 +125,7 @@ async function main() {
         throw new Error(`Fail ${attemptCount}`);
       }
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 1500));
     await worker.close();
@@ -144,7 +147,7 @@ async function main() {
   // Test 4: No retry (attempts = 1)
   console.log('\n4. Testing NO RETRY (attempts=1)...');
   try {
-    const queue = new Queue<{ attempt: number }>(QUEUE_NAME);
+    const queue = new Queue<{ attempt: number }>(QUEUE_NAME, { embedded: true });
     queue.obliterate();
 
     await queue.add('no-retry-job', { attempt: 0 }, { attempts: 1 });
@@ -154,7 +157,7 @@ async function main() {
     const worker = new Worker<{ attempt: number }>(QUEUE_NAME, async () => {
       attemptCount++;
       throw new Error('Always fails');
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -178,7 +181,7 @@ async function main() {
   // Test 5: Successful on retry
   console.log('\n5. Testing SUCCESS ON RETRY...');
   try {
-    const queue = new Queue<{ attempt: number }>(QUEUE_NAME);
+    const queue = new Queue<{ attempt: number }>(QUEUE_NAME, { embedded: true });
     queue.obliterate();
 
     await queue.add('success-retry-job', { attempt: 0 }, {
@@ -196,7 +199,7 @@ async function main() {
       }
       succeeded = true;
       return { success: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 1000));
     await worker.close();
@@ -218,7 +221,7 @@ async function main() {
   // Test 6: removeOnComplete
   console.log('\n6. Testing REMOVE ON COMPLETE...');
   try {
-    const queue = new Queue<{ value: number }>(QUEUE_NAME);
+    const queue = new Queue<{ value: number }>(QUEUE_NAME, { embedded: true });
     queue.obliterate();
 
     const job = await queue.add('remove-job', { value: 1 }, {
@@ -227,7 +230,7 @@ async function main() {
 
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       return { done: true };
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 300));
     await worker.close();

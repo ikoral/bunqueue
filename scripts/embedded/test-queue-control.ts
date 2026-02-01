@@ -5,12 +5,15 @@
 
 import { Queue, Worker } from '../../src/client';
 
+// Force embedded mode
+process.env.BUNQUEUE_EMBEDDED = '1';
+
 const QUEUE_NAME = 'test-queue-control';
 
 async function main() {
   console.log('=== Test Queue Control ===\n');
 
-  const queue = new Queue<{ value: number }>(QUEUE_NAME);
+  const queue = new Queue<{ value: number }>(QUEUE_NAME, { embedded: true });
   let passed = 0;
   let failed = 0;
 
@@ -30,7 +33,7 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async (job) => {
       processed.push(job.data.value);
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 300));
 
@@ -57,7 +60,7 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async (job) => {
       processed.push(job.data.value);
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 500));
     await worker.close();
@@ -142,7 +145,7 @@ async function main() {
     const worker = new Worker<{ value: number }>('test-pause-check', async () => {
       processed = true;
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 300));
     const whilePaused = processed;
@@ -180,7 +183,7 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async (job) => {
       processed.push(job.data.value);
       return {};
-    }, { concurrency: 1 });
+    }, { concurrency: 1, embedded: true });
 
     await new Promise(r => setTimeout(r, 300));
     await worker.close();

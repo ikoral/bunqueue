@@ -42,15 +42,21 @@ export async function pushJob(queue: string, input: JobInput, ctx: PushContext):
   // Generate UUIDv7 ID
   const id = generateJobId();
 
-  // Handle custom ID idempotency
+  // Handle custom ID idempotency (BullMQ-style: return existing job)
   if (input.customId) {
     const existing = ctx.customIdMap.get(input.customId);
     if (existing) {
       const location = ctx.jobIndex.get(existing);
-      if (location) {
-        // Return existing job ID - caller should fetch the job
-        throw new Error(`Job with customId ${input.customId} already exists`);
+      if (location?.type === 'queue') {
+        // BullMQ-style: return existing job instead of creating a duplicate
+        const shard = ctx.shards[location.shardIdx];
+        const existingJob = shard.getQueue(location.queueName).find(existing);
+        if (existingJob) {
+          return existingJob;
+        }
       }
+      // If job is processing, completed, or not found, clean up the map entry
+      // and allow creating a new job with the same customId
       ctx.customIdMap.delete(input.customId);
     }
     ctx.customIdMap.set(input.customId, id);

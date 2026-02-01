@@ -504,37 +504,42 @@ new Worker('processing', async (job) => {
 });
 ```
 
-## Unique Jobs
+## Unique Jobs (Deduplication)
 
-Prevent duplicate jobs.
+Prevent duplicate jobs using BullMQ-style idempotency.
 
 ```typescript
 import { Queue } from 'bunqueue/client';
 
-const queue = new Queue('notifications');
+const queue = new Queue('notifications', { embedded: true });
 
-// Add unique job - won't duplicate
-await queue.add('notify', {
+// Add unique job
+const job1 = await queue.add('notify', {
   userId: 'user-123',
   type: 'welcome'
 }, {
   jobId: 'welcome-user-123'  // Unique identifier
 });
 
-// This will be ignored (same jobId)
-await queue.add('notify', {
+// Same jobId returns existing job (BullMQ-style idempotency)
+const job2 = await queue.add('notify', {
   userId: 'user-123',
   type: 'welcome'
 }, {
   jobId: 'welcome-user-123'
 });
 
-// Or use unique key
-await queue.add('daily-digest', {
-  userId: 'user-123'
-}, {
-  uniqueKey: `digest-user-123-${new Date().toDateString()}`
-});
+console.log(job1.id === job2.id); // true - same job returned
+
+// Useful for service restart recovery
+async function restoreJobsOnStartup(savedJobs: any[]) {
+  for (const saved of savedJobs) {
+    // Existing jobs are returned, not duplicated
+    await queue.add(saved.name, saved.data, {
+      jobId: saved.customId
+    });
+  }
+}
 ```
 
 ## Queue Groups

@@ -72,7 +72,7 @@ const job = await queue.add('job-name', data, {
   attempts: 5,            // Max retry attempts (default: 3)
   backoff: 2000,          // Backoff between retries (default: 1000ms)
   timeout: 30000,         // Job timeout in ms
-  jobId: 'custom-id',     // Custom job ID for deduplication
+  jobId: 'custom-id',     // Custom job ID for deduplication (BullMQ-style)
   removeOnComplete: true, // Remove job data after completion
   removeOnFail: false,    // Keep failed jobs
   stallTimeout: 60000,    // Per-job stall timeout (overrides queue config)
@@ -149,6 +149,43 @@ Use `durable: true` for:
 | Default | ~100k jobs/sec | Up to 10ms | Emails, notifications, analytics |
 | Durable | ~10k jobs/sec | None | Payments, orders, critical events |
 :::
+
+### Job Deduplication (BullMQ-style)
+
+Use `jobId` to prevent duplicate jobs. When a job with the same `jobId` already exists, **the existing job is returned** instead of creating a duplicate. This is BullMQ-compatible idempotent behavior.
+
+```typescript
+// First call: creates the job
+const job1 = await queue.add('process', { orderId: 123 }, {
+  jobId: 'order-123'
+});
+
+// Second call with same jobId: returns existing job (no duplicate)
+const job2 = await queue.add('process', { orderId: 123 }, {
+  jobId: 'order-123'
+});
+
+console.log(job1.id === job2.id); // true - same job returned
+```
+
+:::tip[Use cases for jobId]
+- **Idempotent operations**: Safe to call multiple times without side effects
+- **Service restart recovery**: Restore jobs without creating duplicates
+- **Webhook deduplication**: Prevent duplicate processing of retried webhooks
+- **User action deduplication**: Prevent double-submits from UI
+:::
+
+```typescript
+// Example: Restore jobs on service startup
+async function restoreJobs(jobsToRestore: SavedJob[]) {
+  for (const saved of jobsToRestore) {
+    // Safe: existing jobs are returned, not duplicated
+    await queue.add('process', saved.data, {
+      jobId: saved.id
+    });
+  }
+}
+```
 
 ## Query Operations
 
@@ -262,7 +299,7 @@ See [Dead Letter Queue](/bunqueue/guide/dlq/) for more details.
 | `attempts` | `number` | `3` | Max retry attempts |
 | `backoff` | `number` | `1000` | Backoff base in ms (exponential) |
 | `timeout` | `number` | - | Processing timeout in ms |
-| `jobId` | `string` | - | Custom ID for deduplication |
+| `jobId` | `string` | - | Custom ID for deduplication (BullMQ-style idempotent) |
 | `removeOnComplete` | `boolean` | `false` | Auto-delete after completion |
 | `removeOnFail` | `boolean` | `false` | Auto-delete after failure |
 | `stallTimeout` | `number` | - | Per-job stall timeout override |
