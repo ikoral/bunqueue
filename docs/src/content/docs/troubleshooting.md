@@ -344,6 +344,40 @@ bunqueue backup list
 bunqueue backup restore <key> --force
 ```
 
+## Sandboxed Worker Issues
+
+### Segmentation fault when terminating workers
+
+If you experience crashes (segfaults) when using `SandboxedWorker`, especially during worker timeout or error handling, this is a **known Bun bug**.
+
+:::caution[Bun Worker API is experimental]
+From [Bun's documentation](https://bun.sh/docs/api/workers):
+> The `Worker` API is still experimental (particularly for terminating workers). We are actively working on improving this.
+:::
+
+**Symptoms:**
+- `Segmentation fault at address 0xE8`
+- `Worker has been terminated` errors
+- Crashes during `worker.terminate()` calls
+
+**Workaround:**
+- Avoid forcefully terminating workers when possible
+- Use graceful shutdown instead of `worker.terminate()`
+- Consider using the standard `Worker` class instead of `SandboxedWorker` for production workloads
+
+```typescript
+// Instead of force termination
+await worker.stop();  // Graceful shutdown
+
+// Avoid tight timeout values that cause frequent terminations
+const worker = new SandboxedWorker('queue', {
+  processor: './processor.ts',
+  timeout: 30000,  // Use longer timeout to avoid frequent terminations
+});
+```
+
+This issue will be resolved in a future Bun release.
+
 ## Common Error Messages
 
 | Error | Cause | Solution |
@@ -354,6 +388,7 @@ bunqueue backup restore <key> --force
 | `ECONNREFUSED` | Server not running | Start server or use embedded mode |
 | `ETIMEDOUT` | Network issue | Check connectivity |
 | `Job not found` | Already completed/removed | Check job lifecycle |
+| `Segmentation fault` | Bun Worker termination bug | Use graceful shutdown, see above |
 
 ## Debug Mode
 
