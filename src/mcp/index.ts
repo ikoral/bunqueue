@@ -127,7 +127,7 @@ async function main() {
         const request = JSON.parse(message) as McpRequest;
         const response = await handleRequest(request);
         const responseJson = JSON.stringify(response);
-        const responseHeader = `Content-Length: ${Buffer.byteLength(responseJson)}\r\n\r\n`;
+        const responseHeader = `Content-Length: ${encoder.encode(responseJson).byteLength}\r\n\r\n`;
         process.stdout.write(encoder.encode(responseHeader + responseJson));
       } catch {
         process.stderr.write(`Failed to parse message: ${message}\n`);
