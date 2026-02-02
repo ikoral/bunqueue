@@ -154,7 +154,7 @@ describe('Stress Tests', () => {
             if (!job) break;
 
             // Simulate some work
-            await new Promise((r) => setTimeout(r, Math.random() * 5));
+            await Bun.sleep(Math.random() * 5);
 
             await manager.ack(job.id, { worker: workerId });
             processedByWorker[workerId]++;
@@ -234,7 +234,7 @@ describe('Stress Tests', () => {
 
       // Process with 50% failure rate
       for (let round = 0; round < 5; round++) {
-        await new Promise((r) => setTimeout(r, 20)); // Let retries become ready
+        await Bun.sleep(20); // Let retries become ready
 
         while (true) {
           const job = await manager.pull('fail-queue', 50);
@@ -290,7 +290,7 @@ describe('Stress Tests', () => {
       expect(processed).toBe(50);
 
       // Wait for delayed jobs to become ready
-      await new Promise((r) => setTimeout(r, 150));
+      await Bun.sleep(150);
 
       // Now process delayed jobs
       while (true) {

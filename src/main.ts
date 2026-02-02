@@ -180,7 +180,7 @@ function startServer(): void {
       const stats = queueManager.getStats();
       if (stats.active === 0) break;
       serverLog.info(`Waiting for ${stats.active} active jobs...`);
-      await new Promise((r) => setTimeout(r, 1000));
+      await Bun.sleep(1000);
     }
 
     // Stop backup manager

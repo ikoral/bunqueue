@@ -24,7 +24,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: QueueEvents can be instantiated
   console.log('1. Testing QUEUEEVENTS INSTANTIATION...');
@@ -89,7 +89,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await embWorker.close();
     embEvents.close();
     embQueue.obliterate();

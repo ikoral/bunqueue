@@ -48,7 +48,7 @@ async function main() {
 
     // Set concurrency FIRST before adding jobs
     manager.setConcurrency(QUEUE_NAME, 2);
-    await new Promise(r => setTimeout(r, 50)); // Let settings propagate
+    await Bun.sleep(50); // Let settings propagate
 
     // Add 6 jobs
     await queue.addBulk(
@@ -66,17 +66,17 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       currentConcurrent++;
       maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       currentConcurrent--;
       processed++;
       return {};
     }, { concurrency: 10, autorun: false, embedded: true }); // Worker allows 10, but queue limit is 2
 
     // Small delay then start worker
-    await new Promise(r => setTimeout(r, 50));
+    await Bun.sleep(50);
     worker.run();
 
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
     await worker.close();
     manager.clearConcurrency(QUEUE_NAME);
 
@@ -121,7 +121,7 @@ async function main() {
 
     // Set rate limit FIRST before adding jobs
     manager.setRateLimit(QUEUE_NAME, 5); // 5 jobs per second
-    await new Promise(r => setTimeout(r, 50)); // Let settings propagate
+    await Bun.sleep(50); // Let settings propagate
 
     // Add 10 jobs
     await queue.addBulk(
@@ -139,10 +139,10 @@ async function main() {
     }, { concurrency: 10, autorun: false, embedded: true }); // Allow high concurrency, rate limit should throttle
 
     // Small delay then start worker
-    await new Promise(r => setTimeout(r, 50));
+    await Bun.sleep(50);
     worker.run();
 
-    await new Promise(r => setTimeout(r, 4000)); // Wait for jobs to process
+    await Bun.sleep(4000); // Wait for jobs to process
     await worker.close();
     manager.clearRateLimit(QUEUE_NAME);
 

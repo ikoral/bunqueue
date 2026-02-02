@@ -53,7 +53,7 @@ describe('Recovery Logic', () => {
       // Simulate restart
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
       process.env.DATA_PATH = DB_PATH;
@@ -83,7 +83,7 @@ describe('Recovery Logic', () => {
       // Simulate restart
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Phase 2: After restart - try to add duplicate
       queue = new Queue(QUEUE, { embedded: true });
@@ -121,7 +121,7 @@ describe('Recovery Logic', () => {
       // Simulate restart
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Phase 2: After restart - try to add duplicate
       queue = new Queue(QUEUE, { embedded: true });
@@ -161,7 +161,7 @@ describe('Recovery Logic', () => {
       // Simulate restart
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
       process.env.DATA_PATH = DB_PATH;
@@ -193,7 +193,7 @@ describe('Recovery Logic', () => {
       );
 
       worker.run();
-      await new Promise(r => setTimeout(r, 200));
+      await Bun.sleep(200);
       await worker.close();
 
       // Create child job (delayed so it won't be processed)
@@ -206,7 +206,7 @@ describe('Recovery Logic', () => {
       // Simulate restart
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
       process.env.DATA_PATH = DB_PATH;
@@ -236,7 +236,7 @@ describe('Recovery Logic', () => {
       // Simulate restart
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
       process.env.DATA_PATH = DB_PATH;
@@ -269,7 +269,7 @@ describe('Recovery Logic', () => {
       for (let i = 0; i < 3; i++) {
         queue.close();
         shutdownManager();
-        await new Promise(r => setTimeout(r, 50));
+        await Bun.sleep(50);
         // Ensure DATA_PATH is still set (parallel test isolation)
         process.env.DATA_PATH = DB_PATH;
         queue = new Queue(QUEUE, { embedded: true });
@@ -323,7 +323,7 @@ describe('Recovery Logic', () => {
       // Simulate restart
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Phase 2: After restart - verify all deduplication works
       queue = new Queue(QUEUE, { embedded: true });

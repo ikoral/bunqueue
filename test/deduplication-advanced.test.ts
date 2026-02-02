@@ -7,7 +7,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { Queue } from '../src/client/queue/queue';
 import { getSharedManager } from '../src/client/manager';
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => Bun.sleep(ms);
 
 describe('Advanced Deduplication', () => {
   const QUEUE_NAME = 'test-dedup';

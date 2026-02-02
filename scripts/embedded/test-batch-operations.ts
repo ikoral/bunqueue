@@ -67,7 +67,7 @@ async function main() {
     // Wait for all jobs to be processed
     const start = Date.now();
     while (processed.size < 100 && Date.now() - start < 5000) {
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
     }
     await worker.close();
 
@@ -100,7 +100,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (order[0] === 2 && order[1] === 3 && order[2] === 1) {

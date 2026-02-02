@@ -7,7 +7,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { QueueManager } from '../src/application/queueManager';
 
 // Helper to wait for dependency resolution (runs on interval)
-const waitForDepCheck = () => new Promise((r) => setTimeout(r, 60));
+const waitForDepCheck = () => Bun.sleep(60);
 
 describe('Job Dependencies', () => {
   let qm: QueueManager;

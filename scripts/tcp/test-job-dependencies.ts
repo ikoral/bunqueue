@@ -45,11 +45,11 @@ async function main() {
     const executed: string[] = [];
     const worker = new Worker<{ step: string }>(QUEUE_NAME, async (job) => {
       executed.push((job.data as { step: string }).step);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       return { completed: (job.data as { step: string }).step };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 3000));
+    await Bun.sleep(3000);
     await worker.close();
 
     if (executed.length >= 2) {
@@ -103,7 +103,7 @@ async function main() {
       return { done: job.data.step };
     }, { concurrency: 5, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
     await worker.close();
 
     if (parallelCompleted.length === 3 && finalExecuted) {
@@ -159,7 +159,7 @@ async function main() {
       return { done: (job.data as { step: string }).step };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 3000));
+    await Bun.sleep(3000);
     await worker.close();
 
     if (executed.length === 4) {

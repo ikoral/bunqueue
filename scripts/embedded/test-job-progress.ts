@@ -26,15 +26,15 @@ async function main() {
     const worker = new Worker<{ task: string }>(QUEUE_NAME, async (j) => {
       await j.updateProgress(25);
       progressUpdates.push(25);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
 
       await j.updateProgress(50);
       progressUpdates.push(50);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
 
       await j.updateProgress(75);
       progressUpdates.push(75);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
 
       await j.updateProgress(100);
       progressUpdates.push(100);
@@ -42,7 +42,7 @@ async function main() {
       return { completed: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (progressUpdates.join(',') === '25,50,75,100') {
@@ -69,7 +69,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     await worker.close();
 
     if (lastMessage === 'Halfway there!') {
@@ -91,14 +91,14 @@ async function main() {
 
     const worker = new Worker<{ task: string }>(QUEUE_NAME, async (j) => {
       await j.log('Starting job...');
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       await j.log('Processing data...');
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       await j.log('Finishing up...');
       return { logged: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     // Note: In embedded mode, logs are stored in memory
@@ -122,7 +122,7 @@ async function main() {
       return { processed: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     await worker.close();
 
     if (initialState === 'found') {
@@ -158,7 +158,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
     events.close();
 
@@ -191,7 +191,7 @@ async function main() {
       return { result: 'done' };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
     events.close();
 

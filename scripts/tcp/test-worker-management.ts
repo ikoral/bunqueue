@@ -176,7 +176,7 @@ async function main() {
     const initialLastSeen = worker1?.lastSeen ?? 0;
 
     // Wait a bit
-    await new Promise((r) => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Send heartbeat
     const heartbeatRes = (await tcp.send({
@@ -279,7 +279,7 @@ async function main() {
     tcp2.close();
 
     // Wait for server to detect disconnect
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // Note: The server may or may not immediately remove workers on disconnect.
     // This depends on implementation. We're testing the behavior exists.

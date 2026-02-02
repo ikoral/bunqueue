@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // ============================================================================
   // Test 1: getJobState
@@ -27,7 +27,7 @@ async function main() {
   console.log('1. Testing getJobState...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const job = await queue.add('state-test', { value: 1 });
     const state = await queue.getJobState(job.id);
@@ -51,12 +51,12 @@ async function main() {
   console.log('\n2. Testing isPausedAsync...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const notPaused = await queue.isPausedAsync();
     if (!notPaused) {
       queue.pause();
-      await new Promise(r => setTimeout(r, 200));
+      await Bun.sleep(200);
 
       const isPaused = await queue.isPausedAsync();
       if (isPaused) {
@@ -82,7 +82,7 @@ async function main() {
   console.log('\n3. Testing countAsync...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('count-1', { value: 1 });
     await queue.add('count-2', { value: 2 });
@@ -108,7 +108,7 @@ async function main() {
   console.log('\n4. Testing getWaitingAsync / getDelayedAsync...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('waiting-1', { value: 1 });
     await queue.add('waiting-2', { value: 2 });
@@ -137,7 +137,7 @@ async function main() {
   console.log('\n5. Testing getWaitingCount / getDelayedCount...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('count-1', { value: 1 });
     await queue.add('count-2', { value: 2 });
@@ -166,7 +166,7 @@ async function main() {
   console.log('\n6. Testing cleanAsync...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('clean-1', { value: 1 });
     await queue.add('clean-2', { value: 2 });
@@ -175,7 +175,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 5, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     const cleaned = await queue.cleanAsync(0, 100, 'completed');
@@ -194,7 +194,7 @@ async function main() {
   console.log('\n7. Testing promoteJobs...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('promote-1', { value: 1 }, { delay: 60000 });
     await queue.add('promote-2', { value: 2 }, { delay: 60000 });
@@ -225,7 +225,7 @@ async function main() {
   console.log('\n8. Testing getJobLogs / addJobLog...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const job = await queue.add('logs-test', { value: 1 });
 
@@ -258,7 +258,7 @@ async function main() {
   console.log('\n9. Testing updateJobProgress...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Note: updateJobProgress only works for jobs in "processing" state (after pull)
     // This is by design - only active jobs can report progress
@@ -272,12 +272,12 @@ async function main() {
       await j.updateProgress(50);
       progressUpdated = true;
       progressValue = 50;
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
       return { done: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
     // Wait for worker to process
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     console.log(`   Note: updateJobProgress requires job to be in processing state`);
@@ -301,7 +301,7 @@ async function main() {
   console.log('\n10. Testing setGlobalConcurrency / removeGlobalConcurrency...');
   try {
     queue.setGlobalConcurrency(5);
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     queue.removeGlobalConcurrency();
     console.log('   [PASS] setGlobalConcurrency/removeGlobalConcurrency works');
     passed++;
@@ -316,7 +316,7 @@ async function main() {
   console.log('\n11. Testing setGlobalRateLimit / removeGlobalRateLimit...');
   try {
     queue.setGlobalRateLimit(10);
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     queue.removeGlobalRateLimit();
     console.log('   [PASS] setGlobalRateLimit/removeGlobalRateLimit works');
     passed++;
@@ -375,7 +375,7 @@ async function main() {
   console.log('\n15. Testing getPrioritized / getPrioritizedCount...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('p1', { value: 1 }, { priority: 1 });
     await queue.add('p5', { value: 2 }, { priority: 5 });

@@ -33,7 +33,7 @@ describe('QueueEvents - Core Events', () => {
     const job = await queue.add('test', { value: 42 });
 
     // Wait for event to be emitted
-    await new Promise((r) => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     expect(emittedJobId).toBe(job.id);
   });
@@ -56,7 +56,7 @@ describe('QueueEvents - Core Events', () => {
     const job = await queue.add('test', { value: 21 });
 
     // Wait for processing and event
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     expect(emittedJobId).toBe(job.id);
     expect(emittedReturnValue).toBe(42);
@@ -87,7 +87,7 @@ describe('QueueEvents - Core Events', () => {
     const job = await queue.add('test', { value: 42 }, { attempts: 1 });
 
     // Wait for processing and event
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // Check that failed event was emitted
     expect(failedEvents.length).toBeGreaterThanOrEqual(1);
@@ -109,7 +109,7 @@ describe('QueueEvents - Core Events', () => {
       async (job) => {
         await job.updateProgress(50, 'Half done');
         // Small delay to ensure event is processed
-        await new Promise((r) => setTimeout(r, 50));
+        await Bun.sleep(50);
         return job.data.value;
       },
       { embedded: true, autorun: true }
@@ -118,7 +118,7 @@ describe('QueueEvents - Core Events', () => {
     const job = await queue.add('test', { value: 42 });
 
     // Wait for processing and event propagation
-    await new Promise((r) => setTimeout(r, 800));
+    await Bun.sleep(800);
 
     // Progress events may or may not be emitted depending on timing
     // Just verify no errors occurred
@@ -190,13 +190,13 @@ describe('QueueEvents - New BullMQ v5 Events', () => {
     const job = await queue.add('test', { value: 42 });
 
     // Wait for waiting event
-    await new Promise((r) => setTimeout(r, 50));
+    await Bun.sleep(50);
 
     // Cancel/remove the job
     queue.remove(job.id);
 
     // Wait for removed event
-    await new Promise((r) => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     expect(emittedJobId).toBe(job.id);
     expect(emittedPrev).toBe('waiting');
@@ -230,7 +230,7 @@ describe('QueueEvents - New BullMQ v5 Events', () => {
     const job = await queue.add('test', { value: 42 }, { attempts: 3, backoff: 100 });
 
     // Wait for retry (backoff is 100ms, should retry quickly)
-    await new Promise((r) => setTimeout(r, 2000));
+    await Bun.sleep(2000);
 
     // Job should have been retried
     expect(retriedJobIds.length).toBeGreaterThanOrEqual(1);
@@ -271,7 +271,7 @@ describe('Worker - Stalled Event', () => {
 
     // Add and process a job
     await queue.add('test', { value: 42 });
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // In normal processing, no stalled events should occur
     expect(stalledCount).toBe(0);

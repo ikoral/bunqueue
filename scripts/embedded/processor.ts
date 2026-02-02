@@ -4,7 +4,7 @@ export default async function process(job: { data: unknown }) {
     throw new Error('Intentional failure');
   }
   if ((job.data as any).shouldTimeout) {
-    await new Promise(r => setTimeout(r, 60000)); // Long wait
+    await Bun.sleep(60000); // Long wait
   }
   return { processed: true };
 }

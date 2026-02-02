@@ -36,7 +36,7 @@ async function main() {
     }, { concurrency: 1, embedded: true });
 
     // Wait for multiple executions
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (executions >= 3) {
@@ -66,7 +66,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     // Allow some tolerance for timing (3-4 executions is acceptable)
@@ -98,7 +98,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (order[0] === 'high' && order[1] === 'low') {
@@ -129,7 +129,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 600));
+    await Bun.sleep(600);
     await worker.close();
 
     const actualDelay = firstExecution - start;
@@ -166,7 +166,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     await worker.close();
 
     if (processed === 0) {

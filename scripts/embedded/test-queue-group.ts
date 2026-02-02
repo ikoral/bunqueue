@@ -76,7 +76,7 @@ async function main() {
       return { processed: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed.length === 3 && processed.includes(1) && processed.includes(2) && processed.includes(3)) {
@@ -155,7 +155,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     if (processed.length === 0) {
       console.log('   ✅ pauseAll pauses all queues in group');
@@ -189,7 +189,7 @@ async function main() {
 
     // Pause, then resume
     group.pauseAll();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     group.resumeAll();
 
     const processed: number[] = [];
@@ -203,7 +203,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     await worker1.close();
     await worker2.close();
@@ -271,7 +271,7 @@ async function main() {
 
     // Obliterate all
     group.obliterateAll();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const countsAfterObl1 = queue1.getJobs({ state: 'waiting' }).length;
     const countsAfterObl2 = queue2.getJobs({ state: 'waiting' }).length;

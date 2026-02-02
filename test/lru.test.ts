@@ -292,7 +292,7 @@ describe('TTLMap', () => {
 
       expect(ttlMap.get('a')).toBe(1);
 
-      await new Promise((r) => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       expect(ttlMap.get('a')).toBeUndefined();
     });
@@ -302,7 +302,7 @@ describe('TTLMap', () => {
       ttlMap.set('short', 1, 50); // 50ms TTL
       ttlMap.set('long', 2, 5000); // 5s TTL
 
-      await new Promise((r) => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       expect(ttlMap.get('short')).toBeUndefined();
       expect(ttlMap.get('long')).toBe(2);
@@ -314,7 +314,7 @@ describe('TTLMap', () => {
 
       expect(ttlMap.has('a')).toBe(true);
 
-      await new Promise((r) => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       expect(ttlMap.has('a')).toBe(false);
     });

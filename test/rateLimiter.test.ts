@@ -50,7 +50,7 @@ describe('ProtocolRateLimiter', () => {
       expect(limiter.isAllowed('client1')).toBe(false);
 
       // Wait for window to expire
-      await new Promise((r) => setTimeout(r, 1100));
+      await Bun.sleep(1100);
 
       expect(limiter.isAllowed('client1')).toBe(true);
     });
@@ -113,7 +113,7 @@ describe('ProtocolRateLimiter', () => {
       cleaningLimiter.isAllowed('client2');
 
       // Wait for cleanup
-      await new Promise((r) => setTimeout(r, 200));
+      await Bun.sleep(200);
 
       // After cleanup, clients should have full quota again
       expect(cleaningLimiter.getRemaining('client1')).toBe(5);

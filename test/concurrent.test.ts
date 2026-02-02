@@ -114,7 +114,7 @@ describe('Concurrent Operations', () => {
       const pullPromises = Array.from({ length: 5 }, () => qm.pull('test', 500));
 
       // Push while pulls are waiting
-      await new Promise((r) => setTimeout(r, 50));
+      await Bun.sleep(50);
       const pushPromises = Array.from({ length: 5 }, (_, i) =>
         qm.push('test', { data: { id: i } })
       );
@@ -137,7 +137,7 @@ describe('Concurrent Operations', () => {
       const pullPromise = qm.pull('test', 1000);
 
       // Cancel while pull might be in progress
-      await new Promise((r) => setTimeout(r, 50));
+      await Bun.sleep(50);
       const cancelResult = await qm.cancel(job.id);
 
       const pulled = await pullPromise;

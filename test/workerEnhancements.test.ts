@@ -174,7 +174,7 @@ describe('Worker - Cancel Methods', () => {
         'worker-cancel-test',
         async () => {
           // Long running job
-          await new Promise((r) => setTimeout(r, 1000));
+          await Bun.sleep(1000);
           return 1;
         },
         { embedded: true, autorun: true }
@@ -188,7 +188,7 @@ describe('Worker - Cancel Methods', () => {
       const job = await queue.add('test', { value: 42 });
 
       // Wait for job to be picked up
-      await new Promise((r) => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Try to cancel (may or may not be active yet)
       worker.cancelJob(job.id);
@@ -300,7 +300,7 @@ describe('Worker - Rate Limiter', () => {
     await queue.add('test4', { value: 4 });
 
     // Wait for processing
-    await new Promise((r) => setTimeout(r, 1500));
+    await Bun.sleep(1500);
 
     // Should have processed all 4 jobs
     expect(processedTimes.length).toBe(4);
@@ -349,7 +349,7 @@ describe('Worker - Events', () => {
       });
 
       // Wait for initial drained event (queue starts empty)
-      await new Promise((r) => setTimeout(r, 200));
+      await Bun.sleep(200);
 
       expect(drainedCount).toBeGreaterThanOrEqual(1);
     });
@@ -361,7 +361,7 @@ describe('Worker - Events', () => {
       worker = new Worker(
         'worker-events-test',
         async () => {
-          await new Promise((r) => setTimeout(r, 50));
+          await Bun.sleep(50);
           return 1;
         },
         { embedded: true, autorun: true }
@@ -380,7 +380,7 @@ describe('Worker - Events', () => {
       await queue.add('test2', { value: 2 });
 
       // Wait for jobs to complete and drained to be emitted
-      await new Promise((r) => setTimeout(r, 1500));
+      await Bun.sleep(1500);
 
       // Both jobs should be completed
       expect(completedCount).toBe(2);
@@ -404,7 +404,7 @@ describe('Worker - Events', () => {
 
       worker.run();
 
-      await new Promise((r) => setTimeout(r, 50));
+      await Bun.sleep(50);
       expect(readyEmitted).toBe(true);
     });
   });

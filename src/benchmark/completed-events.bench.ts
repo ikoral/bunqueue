@@ -55,7 +55,7 @@ async function main(): Promise<void> {
   console.log(`   ✓ Pulled: ${fmt(pulled)}, Acked: ${fmt(acked)} in ${processTime.toFixed(0)}ms`);
 
   // Wait for events to propagate
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   const totalTime = performance.now() - start;
 

@@ -169,7 +169,7 @@ async function main() {
       return { processed: (job.data as { value: number }).value };
     }, { concurrency: 5, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     const statsAfter = manager.getStats();

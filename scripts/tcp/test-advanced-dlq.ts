@@ -32,7 +32,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: setDlqConfig - TCP mode should warn (embedded only)
   console.log('1. Testing SET DLQ CONFIG (TCP)...');
@@ -83,7 +83,7 @@ async function main() {
   console.log('\n3. Testing GET DLQ WITH FILTER (TCP)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs that will fail
     await queue.addBulk([
@@ -95,7 +95,7 @@ async function main() {
       throw new Error('Intentional failure');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker.close();
 
     // In TCP mode, getDlq returns empty array
@@ -139,7 +139,7 @@ async function main() {
   console.log('\n5. Testing RETRY DLQ BY FILTER (TCP)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs that will fail
     await queue.addBulk([
@@ -151,7 +151,7 @@ async function main() {
       throw new Error('First failure');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker1.close();
 
     // In TCP mode, retryDlqByFilter returns 0
@@ -159,7 +159,7 @@ async function main() {
 
     // Use standard retryDlq which works via TCP
     queue.retryDlq();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Process any retried jobs
     let successCount = 0;
@@ -168,7 +168,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker2.close();
 
     console.log('   [PASS] retryDlqByFilter handled gracefully in TCP mode');
@@ -183,7 +183,7 @@ async function main() {
   console.log('\n6. Testing STANDARD DLQ OPERATIONS (TCP)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add job that will fail
     await queue.add('standard-dlq', { value: 42 }, { attempts: 1 });
@@ -192,12 +192,12 @@ async function main() {
       throw new Error('Standard DLQ test failure');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 600));
+    await Bun.sleep(600);
     await worker1.close();
 
     // Standard retryDlq via TCP
     queue.retryDlq();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Process retried job
     let processed = false;
@@ -206,12 +206,12 @@ async function main() {
       return { value: job.data.value };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker2.close();
 
     // Purge DLQ via TCP
     queue.purgeDlq();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     if (processed) {
       console.log('   [PASS] Standard DLQ operations work via TCP');

@@ -40,7 +40,7 @@ async function main() {
         return { processed: true };
       }, { concurrency: 1, embedded: true });
 
-      await new Promise(r => setTimeout(r, 500));
+      await Bun.sleep(500);
       await worker.close();
 
       // After processing, job should be completed
@@ -73,7 +73,7 @@ async function main() {
       return { sum: (j.data as { value: number }).value, processed: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     // Get job counts to verify completion

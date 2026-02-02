@@ -39,7 +39,7 @@ async function main() {
   console.log('3. Acked job with result:', JSON.stringify(result));
 
   // Wait for event
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   qm.shutdown();
 }

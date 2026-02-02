@@ -26,7 +26,7 @@ async function runTest(t: { name: string; fn: () => Promise<void> | void }) {
 
 async function cleanup() {
   shutdownManager();
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
 }
 
 // ============================================================================
@@ -104,7 +104,7 @@ const tests = [
       backoff: { type: 'fixed', delay: 100 }
     });
 
-    await new Promise((r) => setTimeout(r, 1500));
+    await Bun.sleep(1500);
 
     if (attempts !== 3) throw new Error(`Expected 3 attempts, got ${attempts}`);
 
@@ -146,7 +146,7 @@ const tests = [
       backoff: { type: 'exponential', delay: 50 }
     });
 
-    await new Promise((r) => setTimeout(r, 2000));
+    await Bun.sleep(2000);
 
     if (attempts !== 4) throw new Error(`Expected 4 attempts, got ${attempts}`);
 
@@ -181,7 +181,7 @@ const tests = [
       backoff: { type: 'fixed', delay: 50 }
     });
 
-    await new Promise((r) => setTimeout(r, 1000));
+    await Bun.sleep(1000);
 
     // Should have tried 3 times then stopped
     if (attempts !== 3) throw new Error(`Expected 3 attempts, got ${attempts}`);
@@ -210,7 +210,7 @@ const tests = [
       backoff: { type: 'fixed', delay: 0 }
     });
 
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     const elapsed = Date.now() - startTime;
 
@@ -243,7 +243,7 @@ const tests = [
       backoff: { type: 'fixed', delay: 50 }
     });
 
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // All retries should see the same data
     for (const data of seenData) {
@@ -321,7 +321,7 @@ const tests = [
       backoff: { type: 'fixed', delay: 1000 }
     });
 
-    await new Promise((r) => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     if (attempts !== 1) throw new Error(`Expected 1 attempt, got ${attempts}`);
 

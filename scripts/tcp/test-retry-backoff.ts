@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Job retries on failure
   console.log('1. Testing BASIC RETRY...');
@@ -33,7 +33,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (attempts === 3) {
@@ -52,7 +52,7 @@ async function main() {
   console.log('\n2. Testing BACKOFF DELAY...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('backoff-job', { failCount: 0 }, { attempts: 3, backoff: 200 });
 
@@ -63,7 +63,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
     await worker.close();
 
     if (attemptTimes.length >= 2) {
@@ -88,7 +88,7 @@ async function main() {
   console.log('\n3. Testing MAX ATTEMPTS EXCEEDED...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('max-attempts-job', { failCount: 0 }, { attempts: 2, backoff: 50 });
 
@@ -98,7 +98,7 @@ async function main() {
       throw new Error('Always fails');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (totalAttempts === 2) {
@@ -117,7 +117,7 @@ async function main() {
   console.log('\n4. Testing EXPONENTIAL BACKOFF...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Exponential backoff: 100, 200, 400...
     await queue.add('exp-backoff-job', { failCount: 0 }, { attempts: 4, backoff: 100 });
@@ -129,7 +129,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
     await worker.close();
 
     if (attemptTimes.length >= 3) {
@@ -156,7 +156,7 @@ async function main() {
   console.log('\n5. Testing RETRY THEN SUCCESS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('retry-success-job', { failCount: 0 }, { attempts: 5, backoff: 50 });
 
@@ -170,7 +170,7 @@ async function main() {
       return finalResult;
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (attemptCount === 3 && finalResult) {
@@ -189,7 +189,7 @@ async function main() {
   console.log('\n6. Testing MULTIPLE JOBS RETRYING...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'multi-1', data: { failCount: 1 }, opts: { attempts: 2, backoff: 50 } },
@@ -209,7 +209,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 2, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     const totalAttempts = Array.from(jobAttempts.values()).reduce((a, b) => a + b, 0);

@@ -35,7 +35,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     if (processed.length === 0) {
       console.log('   ✅ Queue paused - no jobs processed');
@@ -62,7 +62,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed.length === 3) {
@@ -116,7 +116,7 @@ async function main() {
     queue.obliterate();
 
     // Small delay for obliterate to complete
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const countsAfter = queue.getJobCounts();
 
@@ -147,11 +147,11 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     const whilePaused = processed;
 
     queue2.resume();
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     const afterResume = processed;
 
     await worker.close();
@@ -185,7 +185,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     await worker.close();
 
     if (processed.includes(999)) {

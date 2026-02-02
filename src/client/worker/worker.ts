@@ -525,7 +525,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       // Wait for buffered jobs to be processed and all active jobs to finish
       const bufferSize = () => this.pendingJobs.length - this.pendingJobsHead;
       while (this.activeJobs > 0 || bufferSize() > 0) {
-        await new Promise((r) => setTimeout(r, 50));
+        await Bun.sleep(50);
       }
     }
 
@@ -536,7 +536,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.ackBatcher.stop();
 
     // Small delay to ensure TCP responses are processed
-    await new Promise((r) => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Unsubscribe from stalled events
     if (this.stalledUnsubscribe) {

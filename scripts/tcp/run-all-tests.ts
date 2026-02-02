@@ -24,7 +24,7 @@ async function waitForServer(maxWaitMs = 10000): Promise<boolean> {
     } catch {
       // Server not ready yet
     }
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
   }
   return false;
 }

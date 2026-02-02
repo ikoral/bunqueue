@@ -115,7 +115,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Stats - Get queue statistics via TCP
   console.log('1. Testing STATS (TCP command)...');
@@ -228,7 +228,7 @@ async function main() {
     await queue.add('job-1', { value: 1 });
     await queue.add('job-2', { value: 2 });
     await queue.add('job-3', { value: 3 });
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const statsAfter = await tcp.send({ cmd: 'Stats' });
     const statsDataAfter = statsAfter.stats as Record<string, unknown>;
@@ -261,7 +261,7 @@ async function main() {
       return { processed: (job.data as { value: number }).value };
     }, { concurrency: 5, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     const statsAfter = await tcp.send({ cmd: 'Stats' });

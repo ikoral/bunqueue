@@ -11,7 +11,7 @@ function fmt(n: number): string {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+  return Bun.sleep(ms);
 }
 
 let testsPassed = 0;

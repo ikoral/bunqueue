@@ -54,7 +54,7 @@ async function testHighVolume(jobs: number): Promise<void> {
     `   ✓ ${fmt(jobs)} processed in ${fmt(procTime)}ms (${fmt((jobs / procTime) * 1000)}/sec)`
   );
 
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
   const totalTime = performance.now() - start;
   const endMem = memMB();
 
@@ -119,7 +119,7 @@ async function testConcurrentQueues(queues: number, jobsPerQueue: number): Promi
   }
   await Promise.all(procPromises);
 
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
   const totalTime = performance.now() - start;
 
   console.log('\n📊 Results:');
@@ -163,7 +163,7 @@ async function testLargePayloads(jobs: number, payloadKB: number): Promise<void>
     if (job) await qm.ack(job.id);
   }
 
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
   const totalTime = performance.now() - start;
   const endMem = memMB();
   const totalDataMB = (jobs * payloadKB) / 1024;

@@ -41,7 +41,7 @@ async function releaseClientJobsWithRetry(
         error: lastError.message,
       });
       // Exponential backoff: 100ms, 200ms, 400ms
-      await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempt)));
+      await Bun.sleep(100 * Math.pow(2, attempt));
     }
   }
 

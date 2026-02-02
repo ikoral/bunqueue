@@ -26,7 +26,7 @@ async function runTest(t: { name: string; fn: () => Promise<void> | void }) {
 
 async function cleanup() {
   shutdownManager();
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
 }
 
 // ============================================================================
@@ -99,7 +99,7 @@ const tests = [
     }, { embedded: true, autorun: true });
 
     queue.resume();
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // LIFO: 3, 2, 1
     if (processedOrder[0] !== 3) throw new Error(`Expected first job order 3, got ${processedOrder[0]}`);

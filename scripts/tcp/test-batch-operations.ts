@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Bulk add jobs
   console.log('1. Testing BULK ADD...');
@@ -51,7 +51,7 @@ async function main() {
       return {};
     }, { concurrency: 5, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (processed.length === 3) {
@@ -70,7 +70,7 @@ async function main() {
   console.log('\n3. Testing LARGE BATCH (100 jobs)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const jobs = Array.from({ length: 100 }, (_, i) => ({
       name: `job-${i}`,
@@ -102,7 +102,7 @@ async function main() {
       return {};
     }, { concurrency: 20, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 3000));
+    await Bun.sleep(3000);
     await worker.close();
 
     if (processedCount === 100) {
@@ -121,7 +121,7 @@ async function main() {
   console.log('\n5. Testing BATCH WITH PRIORITIES...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'low', data: { index: 1 }, opts: { priority: 1 } },
@@ -135,7 +135,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     // High (2) should come first, then medium (3), then low (1)

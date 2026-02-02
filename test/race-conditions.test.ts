@@ -330,7 +330,7 @@ describe('Race Condition Tests', () => {
           Promise.resolve(qm.renewJobLock(job.id, job.token, 30000))
         );
         await Promise.all(renewPromises);
-        await new Promise((r) => setTimeout(r, 50));
+        await Bun.sleep(50);
       }
 
       // All jobs should still be active (lock renewals prevent stall)
@@ -573,7 +573,7 @@ describe('Race Condition Tests', () => {
       await Promise.all(chaos);
 
       // Wait for any pending retries
-      await new Promise((r) => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       // Invariant: total jobs should be accounted for
       const midStats = qm.getStats();

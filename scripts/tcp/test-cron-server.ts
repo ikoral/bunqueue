@@ -22,7 +22,7 @@ async function main() {
 
   // Clean up
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Clean up any existing crons from previous test runs
   const existingCrons = await tcp.send({ cmd: 'CronList' });
@@ -33,7 +33,7 @@ async function main() {
       }
     }
   }
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Add cron job with cron expression (every 5 seconds)
   console.log('1. Testing CRON WITH CRON EXPRESSION...');

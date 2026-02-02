@@ -45,12 +45,12 @@ async function main() {
     const executed: string[] = [];
     const worker = new Worker<{ step: string }>(QUEUE_NAME, async (job) => {
       executed.push((job.data as { step: string }).step);
-      await new Promise(r => setTimeout(r, 50)); // Simulate work
+      await Bun.sleep(50); // Simulate work
       return { completed: (job.data as { step: string }).step };
     }, { concurrency: 1, embedded: true });
 
     // Wait for all jobs (longer timeout for dependency resolution)
-    await new Promise(r => setTimeout(r, 3000));
+    await Bun.sleep(3000);
     await worker.close();
 
     // All 3 jobs should execute (or at least most)
@@ -105,7 +105,7 @@ async function main() {
       return { done: job.data.step };
     }, { concurrency: 5, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (parallelCompleted.length === 3 && finalExecuted) {
@@ -161,7 +161,7 @@ async function main() {
       return { done: (job.data as { step: string }).step };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
     await worker.close();
 
     // All 4 nodes should execute (order depends on dependency resolution)

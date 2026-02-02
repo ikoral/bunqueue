@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Job goes to DLQ after max attempts
   console.log('1. Testing JOB TO DLQ...');
@@ -32,7 +32,7 @@ async function main() {
       throw new Error('Always fails');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (attempts >= 2) {
@@ -51,7 +51,7 @@ async function main() {
   console.log('\n2. Testing MULTIPLE DLQ JOBS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'fail-1', data: { value: 1 }, opts: { attempts: 1 } },
@@ -65,7 +65,7 @@ async function main() {
       throw new Error('Intentional failure');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (failCount === 3) {
@@ -85,7 +85,7 @@ async function main() {
   try {
     // Retry all jobs from DLQ
     queue.retryDlq();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     let retryCount = 0;
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
@@ -93,7 +93,7 @@ async function main() {
       return { success: true }; // Now succeed
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     // At least some should be retried
@@ -113,7 +113,7 @@ async function main() {
   console.log('\n4. Testing REMOVE ON FAIL...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('remove-on-fail', { value: 99 }, {
       attempts: 1,
@@ -124,7 +124,7 @@ async function main() {
       throw new Error('Fail and remove');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     // Job should be removed, not in DLQ
@@ -139,7 +139,7 @@ async function main() {
   console.log('\n5. Testing PURGE DLQ...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs that will fail
     await queue.addBulk([
@@ -151,12 +151,12 @@ async function main() {
       throw new Error('Fail for purge test');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     // Purge the DLQ
     queue.purgeDlq();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     console.log('   ✅ DLQ purged');
     passed++;
@@ -169,7 +169,7 @@ async function main() {
   console.log('\n6. Testing SUCCESS AFTER RETRIES...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('retry-success', { value: 42 }, { attempts: 3, backoff: 50 });
 
@@ -180,7 +180,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (attempts === 3) {

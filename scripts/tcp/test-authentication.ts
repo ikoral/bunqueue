@@ -83,9 +83,9 @@ async function main() {
     }
 
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     queue.close();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes('Not authenticated') || msg.includes('Invalid token')) {
@@ -191,9 +191,9 @@ async function main() {
     }
 
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     queue.close();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes('Not authenticated') || msg.includes('Invalid token')) {
@@ -258,7 +258,7 @@ async function main() {
       connection: { port: TCP_PORT, token: VALID_TOKEN },
     });
     cleanupQueue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     cleanupQueue.close();
   } catch {
     // Ignore cleanup errors

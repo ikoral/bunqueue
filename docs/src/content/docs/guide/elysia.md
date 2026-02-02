@@ -121,7 +121,7 @@ const emailWorker = new Worker<EmailJob>('emails', async (job) => {
   await job.log(`Sending to: ${job.data.to}`);
 
   // Simulate sending
-  await new Promise(r => setTimeout(r, Math.random() * 500 + 100));
+  await Bun.sleep(Math.random() * 500 + 100);
 
   await job.updateProgress(100, 'Sent!');
   return {
@@ -136,7 +136,7 @@ const reportWorker = new Worker<ReportJob>('reports', async (job) => {
   // Progress updates
   for (let i = 0; i <= 100; i += 20) {
     await job.updateProgress(i, `Processing... ${i}%`);
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
   }
 
   return {

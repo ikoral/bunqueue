@@ -86,7 +86,7 @@ async function main() {
     const initialLastSeen = worker.lastSeen;
 
     // Wait a bit and send heartbeat
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     const heartbeatSuccess = workerManager.heartbeat(worker.id);
 
     const updatedWorker = workerManager.get(worker.id);

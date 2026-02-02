@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Push a job
   console.log('1. Testing PUSH...');
@@ -47,7 +47,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (processed) {
@@ -66,7 +66,7 @@ async function main() {
   console.log('\n3. Testing JOB FAILURE...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     await queue.add('fail-job', { message: 'This will fail' }, { attempts: 1 });
 
     let failedJob = false;
@@ -75,7 +75,7 @@ async function main() {
       throw new Error('Intentional failure');
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (failedJob) {
@@ -94,7 +94,7 @@ async function main() {
   console.log('\n4. Testing PRIORITY...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     await queue.add('low-priority', { message: 'Low' }, { priority: 1 });
     await queue.add('high-priority', { message: 'High' }, { priority: 10 });
 
@@ -104,7 +104,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (jobs[0] === 'High' && jobs[1] === 'Low') {
@@ -123,7 +123,7 @@ async function main() {
   console.log('\n5. Testing DELAYED JOB...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     const start = Date.now();
     await queue.add('delayed-job', { message: 'Delayed' }, { delay: 300 });
 
@@ -133,7 +133,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     const delay = processedAt - start;
@@ -153,7 +153,7 @@ async function main() {
   console.log('\n6. Testing GET JOB...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     const job = await queue.add('get-test', { message: 'Find me' });
     const retrieved = await queue.getJob(job.id);
 

@@ -100,7 +100,7 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       jobStarted = true;
       // Simulate stalled job by hanging without heartbeat
-      await new Promise(r => setTimeout(r, 2000));
+      await Bun.sleep(2000);
       return { done: true };
     }, {
       concurrency: 1,
@@ -109,7 +109,7 @@ async function main() {
     });
 
     // Wait for job to be picked up and stall detection to kick in
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close(true);
 
     // Check if stall was detected (job should be in DLQ or retried)
@@ -152,7 +152,7 @@ async function main() {
       processCount++;
       if (processCount === 1) {
         // First attempt: hang to trigger stall
-        await new Promise(r => setTimeout(r, 1000));
+        await Bun.sleep(1000);
       }
       successfulProcess = true;
       return { recovered: true };
@@ -162,11 +162,11 @@ async function main() {
       useLocks: true,
     });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker1.close(true);
 
     // Give time for recovery processing
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     if (processCount >= 1) {
       console.log(`   ✅ Job was processed ${processCount} time(s), recovery=${successfulProcess}`);
@@ -198,7 +198,7 @@ async function main() {
 
     // Worker that always stalls (no heartbeat, hangs)
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
-      await new Promise(r => setTimeout(r, 2000)); // Hang indefinitely
+      await Bun.sleep(2000); // Hang indefinitely
       return { done: true };
     }, {
       concurrency: 1,
@@ -207,7 +207,7 @@ async function main() {
     });
 
     // Wait for stall detection to trigger and move to DLQ
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close(true);
 
     const dlq = queue.getDlq();
@@ -245,7 +245,7 @@ async function main() {
     let jobCompleted = false;
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       // Process quickly within grace period
-      await new Promise(r => setTimeout(r, 300));
+      await Bun.sleep(300);
       jobCompleted = true;
       return { success: true };
     }, {
@@ -254,7 +254,7 @@ async function main() {
       useLocks: true,
     });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker.close();
 
     const dlq = queue.getDlq();

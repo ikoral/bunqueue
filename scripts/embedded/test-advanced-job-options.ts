@@ -37,12 +37,12 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       processingStarted = true;
       // Simulate work that takes longer than timeout
-      await new Promise(r => setTimeout(r, 300));
+      await Bun.sleep(300);
       return { success: true };
     }, { concurrency: 1, embedded: true });
 
     // Wait for job to be processed and timeout checked
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker.close();
 
     // Check if job went to DLQ due to timeout
@@ -291,7 +291,7 @@ async function main() {
       return { processed: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker.close();
 
     // Check job states after processing

@@ -60,7 +60,7 @@ describe('Stability Tests', () => {
       await manager.fail(pulled!.id, 'Test error');
 
       // Job should be back in queue for retry
-      await new Promise((r) => setTimeout(r, 50));
+      await Bun.sleep(50);
       const stats = manager.getStats();
       expect(stats.waiting + stats.delayed).toBeGreaterThanOrEqual(1);
     });
@@ -257,14 +257,14 @@ describe('Stability Tests', () => {
 
       // Fail twice
       for (let i = 0; i < 2; i++) {
-        await new Promise((r) => setTimeout(r, 10));
+        await Bun.sleep(10);
         const job = await manager.pull('dlq-queue', 1000);
         if (job) {
           await manager.fail(job.id, `Failure ${i + 1}`);
         }
       }
 
-      await new Promise((r) => setTimeout(r, 50));
+      await Bun.sleep(50);
       const stats = manager.getStats();
       expect(stats.dlq).toBe(1);
     });
@@ -437,7 +437,7 @@ describe('Stability Tests', () => {
         }
 
         // Small delay to let SQLite process
-        await new Promise((r) => setTimeout(r, 10));
+        await Bun.sleep(10);
 
         // Pull and ack all
         for (let i = 0; i < BATCH_SIZE; i++) {
@@ -446,7 +446,7 @@ describe('Stability Tests', () => {
         }
 
         // Small delay between iterations
-        await new Promise((r) => setTimeout(r, 10));
+        await Bun.sleep(10);
       }
 
       // Force GC if available
@@ -521,7 +521,7 @@ describe('Stability Tests', () => {
       await queue.add('task', { index: 3 });
 
       // Wait for processing
-      await new Promise((r) => setTimeout(r, 500));
+      await Bun.sleep(500);
 
       expect(processed.length).toBe(3);
       expect(processed.sort()).toEqual([1, 2, 3]);
@@ -551,7 +551,7 @@ describe('Stability Tests', () => {
 
       await queue.add('task', { shouldFail: true });
 
-      await new Promise((r) => setTimeout(r, 300));
+      await Bun.sleep(300);
 
       expect(errorCount).toBe(1);
 

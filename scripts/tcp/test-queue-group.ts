@@ -30,12 +30,12 @@ async function main() {
     // Clean state
     emailsQueue.obliterate();
     notificationsQueue.obliterate();
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     // Add jobs to each queue
     await emailsQueue.add('send', { email: 'user@test.com' });
     await notificationsQueue.add('notify', { message: 'Hello' });
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Verify jobs are in the namespaced queues
     const emailCounts = await emailsQueue.getJobCountsAsync();
@@ -57,7 +57,7 @@ async function main() {
     // Cleanup
     emailsQueue.obliterate();
     notificationsQueue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
   } catch (e) {
     console.log(`   ❌ getQueue test failed: ${e}`);
     failed++;
@@ -71,7 +71,7 @@ async function main() {
 
     // Clean state
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Add jobs
     await queue.addBulk([
@@ -79,7 +79,7 @@ async function main() {
       { name: 'job-2', data: { value: 2 } },
       { name: 'job-3', data: { value: 3 } },
     ]);
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const processed: number[] = [];
     const worker = group.getWorker<{ value: number }>('worker-test', async (job) => {
@@ -87,9 +87,9 @@ async function main() {
       return { processed: true };
     }, { concurrency: 1, connection: CONNECTION, useLocks: true });
 
-    await new Promise(r => setTimeout(r, 1200));
+    await Bun.sleep(1200);
     await worker.close();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     if (processed.length === 3 && processed.includes(1) && processed.includes(2) && processed.includes(3)) {
       console.log(`   ✅ getWorker processes jobs from namespaced queue (${processed.length} jobs)`);
@@ -121,13 +121,13 @@ async function main() {
     queue1.obliterate();
     queue2.obliterate();
     queue3.obliterate();
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     // Add at least one job to each to ensure they exist
     await queue1.add('job', { x: 1 });
     await queue2.add('job', { x: 2 });
     await queue3.add('job', { x: 3 });
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Verify each queue is namespaced correctly by checking they have jobs
     const counts1 = await queue1.getJobCountsAsync();
@@ -159,7 +159,7 @@ async function main() {
     queue1.obliterate();
     queue2.obliterate();
     queue3.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
   } catch (e) {
     console.log(`   ❌ listQueues concept test failed: ${e}`);
     failed++;
@@ -175,17 +175,17 @@ async function main() {
     // Clean state
     queue1.obliterate();
     queue2.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Pause BEFORE adding jobs to ensure clean state
     queue1.pause();
     queue2.pause();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Add jobs to both queues
     await queue1.add('job', { value: 1 });
     await queue2.add('job', { value: 2 });
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const processed: number[] = [];
     const worker1 = group.getWorker<{ value: number }>('pause-q1', async (job) => {
@@ -198,11 +198,11 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: CONNECTION, useLocks: true });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
 
     await worker1.close();
     await worker2.close();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     if (processed.length === 0) {
       console.log('   ✅ Pausing multiple queues prevents processing');
@@ -231,7 +231,7 @@ async function main() {
     // Clean state
     queue1.obliterate();
     queue2.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Add jobs to both queues
     await queue1.add('job1', { value: 10 });
@@ -240,7 +240,7 @@ async function main() {
     // Ensure queues are active (resume in case paused from previous tests)
     queue1.resume();
     queue2.resume();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     const processed: number[] = [];
     const worker1 = group.getWorker<{ value: number }>('resume-q1', async (job) => {
@@ -253,11 +253,11 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: CONNECTION, useLocks: true });
 
-    await new Promise(r => setTimeout(r, 1200));
+    await Bun.sleep(1200);
 
     await worker1.close();
     await worker2.close();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     if (processed.length >= 2 && processed.includes(10) && processed.includes(20)) {
       console.log(`   ✅ Resuming multiple queues allows processing (${processed.length} jobs processed)`);
@@ -288,10 +288,10 @@ async function main() {
     // Clean state with double obliterate to ensure clean
     queue1.obliterate();
     queue2.obliterate();
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     queue1.obliterate();
     queue2.obliterate();
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // Add jobs to both queues
     await queue1.addBulk([
@@ -302,7 +302,7 @@ async function main() {
       { name: 'job3', data: { value: 3 } },
       { name: 'job4', data: { value: 4 } },
     ]);
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     const countsBefore1 = await queue1.getJobCountsAsync();
     const countsBefore2 = await queue2.getJobCountsAsync();
@@ -310,7 +310,7 @@ async function main() {
     // Drain all manually (simulating drainAll for TCP mode)
     queue1.drain();
     queue2.drain();
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     const countsAfterDrain1 = await queue1.getJobCountsAsync();
     const countsAfterDrain2 = await queue2.getJobCountsAsync();
@@ -330,7 +330,7 @@ async function main() {
     await queue2.addBulk([
       { name: 'job7', data: { value: 7 } },
     ]);
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     const countsBeforeObl1 = await queue1.getJobCountsAsync();
     const countsBeforeObl2 = await queue2.getJobCountsAsync();
@@ -338,7 +338,7 @@ async function main() {
     // Obliterate all manually
     queue1.obliterate();
     queue2.obliterate();
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     const countsAfterObl1 = await queue1.getJobCountsAsync();
     const countsAfterObl2 = await queue2.getJobCountsAsync();

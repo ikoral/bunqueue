@@ -74,7 +74,7 @@ describe('JobOptions - Backoff Object', () => {
       { attempts: 3, backoff: { type: 'fixed', delay: 100 } }
     );
 
-    await new Promise((r) => setTimeout(r, 1000));
+    await Bun.sleep(1000);
 
     expect(attempts).toBe(3);
     // Fixed backoff should be roughly constant (allow some variance)
@@ -133,7 +133,7 @@ describe('JobOptions - LIFO', () => {
 
     // Resume and let worker process
     queue.resume();
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // LIFO: last added should be processed first
     expect(processedOrder).toEqual([3, 2, 1]);

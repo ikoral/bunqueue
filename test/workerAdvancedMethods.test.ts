@@ -78,7 +78,7 @@ describe('Worker Advanced Methods - BullMQ v5', () => {
       expect(worker.isRateLimited()).toBe(true);
 
       // Wait for rate limit to expire
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await Bun.sleep(100);
 
       expect(worker.isRateLimited()).toBe(false);
 

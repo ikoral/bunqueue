@@ -19,7 +19,7 @@ async function main() {
 
   // Clean up
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Repeating job with interval
   console.log('1. Testing REPEAT EVERY INTERVAL...');
@@ -35,7 +35,7 @@ async function main() {
       return { executed: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (executions >= 3) {
@@ -54,7 +54,7 @@ async function main() {
   console.log('\n2. Testing REPEAT WITH LIMIT...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     let executions = 0;
 
     await queue.add('limited-repeat', { type: 'limited' }, {
@@ -66,7 +66,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (executions >= 3 && executions <= 4) {
@@ -85,7 +85,7 @@ async function main() {
   console.log('\n3. Testing JOBS WITH PRIORITY...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('low-priority', { type: 'low' }, { priority: 1 });
     await queue.add('high-priority', { type: 'high' }, { priority: 10 });
@@ -96,7 +96,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (order[0] === 'high' && order[1] === 'low') {
@@ -115,7 +115,7 @@ async function main() {
   console.log('\n4. Testing DELAYED START...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
     const start = Date.now();
     let firstExecution = 0;
 
@@ -128,7 +128,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     const actualDelay = firstExecution - start;
@@ -148,7 +148,7 @@ async function main() {
   console.log('\n5. Testing QUEUE DRAIN...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'drain-1', data: { type: 'drain' } },
@@ -158,7 +158,7 @@ async function main() {
 
     // Drain the queue before worker starts
     queue.drain();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     let processed = 0;
     const worker = new Worker<{ type: string }>(QUEUE_NAME, async () => {
@@ -166,7 +166,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed === 0) {
@@ -185,7 +185,7 @@ async function main() {
   console.log('\n6. Testing BULK ADD...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const jobs = Array.from({ length: 100 }, (_, i) => ({
       name: `bulk-${i}`,

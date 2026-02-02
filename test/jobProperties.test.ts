@@ -151,7 +151,7 @@ describe('Job - State Check Methods', () => {
       const job = await queue.add('test', { value: 21 });
 
       // Wait for processing
-      await new Promise((r) => setTimeout(r, 500));
+      await Bun.sleep(500);
 
       // Check state via queue.getJob (fresh fetch)
       const freshJob = await queue.getJob(job.id);

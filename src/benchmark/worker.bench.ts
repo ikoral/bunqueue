@@ -42,7 +42,7 @@ async function benchmark(name: string, jobCount: number): Promise<void> {
   const afterAck = performance.now();
 
   // Wait for pending events
-  await new Promise((r) => setTimeout(r, 50));
+  await Bun.sleep(50);
 
   const totalMs = afterAck - start;
   const pushMs = afterPush - start;

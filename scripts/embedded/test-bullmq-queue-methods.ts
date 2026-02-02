@@ -54,7 +54,7 @@ async function main() {
     const notPaused = await queue.isPausedAsync();
     if (!notPaused) {
       queue.pause();
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
 
       const isPaused = await queue.isPausedAsync();
       if (isPaused) {
@@ -171,7 +171,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 5, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     // Clean completed jobs (older than 0ms)
@@ -272,12 +272,12 @@ async function main() {
       // Update progress during processing
       await job.updateProgress(50);
       progressUpdated = true;
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
       return { done: true };
     }, { concurrency: 1, embedded: true });
 
     await queue.add('progress-test', { value: 1 });
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (progressUpdated) {
@@ -371,13 +371,13 @@ async function main() {
   console.log('\n15. Testing getPrioritized / getPrioritizedCount...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('p1', { value: 1 }, { priority: 1 });
     await queue.add('p5', { value: 2 }, { priority: 5 });
     await queue.add('p10', { value: 3 }, { priority: 10 });
 
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const prioritized = await queue.getPrioritized();
     const count = await queue.getPrioritizedCount();

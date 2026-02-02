@@ -63,13 +63,13 @@ describe('Stall Detection - Heartbeat Updates', () => {
         heartbeatBefore = processingJob?.lastHeartbeat ?? null;
 
         // Wait a bit so timestamps are different
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await Bun.sleep(100);
 
         // Call updateProgress - this SHOULD refresh heartbeat
         await job.updateProgress(50);
 
         // Small delay to ensure any async updates complete
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await Bun.sleep(50);
 
         // Check lastHeartbeat again
         const processingJobAfter = processingShards[procIdx]?.get(job.id);
@@ -87,7 +87,7 @@ describe('Stall Detection - Heartbeat Updates', () => {
     await queue.add('test-job', { value: 1 });
     worker.run();
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await Bun.sleep(1000);
 
     console.log('Job ID:', jobIdCaptured);
     console.log('Heartbeat before updateProgress:', heartbeatBefore);
@@ -123,7 +123,7 @@ describe('Stall Detection - Heartbeat Updates', () => {
         // Make 5 progress updates over 600ms total
         // With stallInterval=500ms, without heartbeat refresh this would stall
         for (let i = 1; i <= 5; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 120));
+          await Bun.sleep(120);
           await job.updateProgress(i * 20);
         }
         return { success: true };
@@ -147,7 +147,7 @@ describe('Stall Detection - Heartbeat Updates', () => {
     worker.run();
 
     // Wait for completion
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await Bun.sleep(2000);
 
     // After fix: job should complete without being stalled
     expect(jobCompleted).toBe(true);

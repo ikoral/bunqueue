@@ -19,7 +19,7 @@ async function main() {
 
   // Clean up
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Duplicate returns same job (BullMQ-style idempotency)
   console.log('1. Testing DUPLICATE RETURNS SAME JOB...');
@@ -46,7 +46,7 @@ async function main() {
   console.log('\n2. Testing DIFFERENT KEYS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const job1 = await queue.add('key-1', { value: 1 }, { jobId: 'key-a' });
     const job2 = await queue.add('key-2', { value: 2 }, { jobId: 'key-b' });
@@ -68,7 +68,7 @@ async function main() {
   console.log('\n3. Testing JOB WITH UNIQUE KEY PROCESSED...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('process-test', { value: 1 }, { jobId: 'process-key' });
 
@@ -78,7 +78,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (processed) {
@@ -97,7 +97,7 @@ async function main() {
   console.log('\n4. Testing CUSTOM ID...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const customId = 'my-custom-id-123';
     const job = await queue.add('custom-id-job', { value: 42 }, { jobId: customId });
@@ -120,7 +120,7 @@ async function main() {
   console.log('\n5. Testing PROCESSING UNIQUE JOBS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('process-unique', { value: 1 }, { jobId: 'process-key-5' });
 
@@ -130,7 +130,7 @@ async function main() {
       return { value: (job.data as { value: number }).value * 2 };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (processed) {
@@ -149,7 +149,7 @@ async function main() {
   console.log('\n6. Testing BULK ADD WITH UNIQUE KEYS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const jobs = await queue.addBulk([
       { name: 'bulk-1', data: { value: 1 }, opts: { jobId: 'bulk-a' } },

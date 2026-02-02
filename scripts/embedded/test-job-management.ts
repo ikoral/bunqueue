@@ -188,7 +188,7 @@ async function main() {
     queue.purgeDlq();
 
     // Wait for obliterate to fully complete
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Create a job with low priority
     const { jobId: toJobId } = await import('../../src/domain/types/job');
@@ -252,7 +252,7 @@ async function main() {
           return {};
         }, { concurrency: 1, embedded: true });
 
-        await new Promise(r => setTimeout(r, 300));
+        await Bun.sleep(300);
         await worker.close();
 
         if (!processed) {

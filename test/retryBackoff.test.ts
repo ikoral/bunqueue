@@ -44,7 +44,7 @@ describe('Retry and Backoff', () => {
         if (pulled) {
           await qm.fail(pulled.id, `failure ${i + 1}`);
           // Wait for backoff
-          await new Promise((r) => setTimeout(r, 10));
+          await Bun.sleep(10);
         }
       }
 
@@ -67,7 +67,7 @@ describe('Retry and Backoff', () => {
       await qm.fail(job.id, 'failure 1');
 
       // Wait for backoff
-      await new Promise((r) => setTimeout(r, 10));
+      await Bun.sleep(10);
 
       // Second attempt - ack (attempts is 1 from previous fail)
       pulled = await qm.pull('test', 100);
@@ -112,7 +112,7 @@ describe('Retry and Backoff', () => {
       expect(immediatePull).toBeNull();
 
       // Wait for exponential backoff (100ms + buffer)
-      await new Promise((r) => setTimeout(r, 150));
+      await Bun.sleep(150);
 
       // Now should be pullable
       const delayedPull = await qm.pull('test', 0);
@@ -139,7 +139,7 @@ describe('Retry and Backoff', () => {
 
       // Fail - this increments attempts to 1
       await qm.fail(job.id, 'failure');
-      await new Promise((r) => setTimeout(r, 10));
+      await Bun.sleep(10);
 
       // Second pull - attempts is 1 (failed once)
       pulled = await qm.pull('test', 100);

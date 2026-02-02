@@ -199,7 +199,7 @@ async function testBasicAPIs(qm: QueueManager, r: TestResults) {
   if (failPulled) {
     // First attempt - should go to DLQ since maxAttempts=1
     await qm.fail(failJob.id, 'test error');
-    await new Promise((res) => setTimeout(res, 50)); // Allow async processing
+    await Bun.sleep(50); // Allow async processing
   }
   const dlq = qm.getDlq(Q);
   r.assert(
@@ -259,13 +259,13 @@ async function testPriorities(qm: QueueManager, r: TestResults) {
 
   // Push in specific order and wait between each
   const lowJob = await qm.push(Q, { data: { priority: 'low' }, priority: 1 });
-  await new Promise((res) => setTimeout(res, 10));
+  await Bun.sleep(10);
   const highJob = await qm.push(Q, { data: { priority: 'high' }, priority: 100 }); // Use 100 to make it clear
-  await new Promise((res) => setTimeout(res, 10));
+  await Bun.sleep(10);
   await qm.push(Q, { data: { priority: 'medium' }, priority: 50 }); // medJob
 
   // Wait for indexing
-  await new Promise((res) => setTimeout(res, 100));
+  await Bun.sleep(100);
 
   const jobs: any[] = [];
   for (let i = 0; i < 3; i++) {
@@ -302,7 +302,7 @@ async function testDelayedJobs(qm: QueueManager, r: TestResults) {
   r.assert(immediate === null, 'Delayed job not immediately available');
 
   // Wait for delay to pass
-  await new Promise((res) => setTimeout(res, 1200));
+  await Bun.sleep(1200);
 
   const delayed = await qm.pull(Q, 100);
   r.assert(delayed?.id === job.id, 'Delayed job available after delay', delayed ? 'ok' : 'null');
@@ -323,7 +323,7 @@ async function testDependencies(qm: QueueManager, r: TestResults) {
 
   await qm.ack(parent.id, {});
   // Wait longer for dependency processing
-  await new Promise((res) => setTimeout(res, 500));
+  await Bun.sleep(500);
 
   const childPulled = await qm.pull(Q, 500);
   r.assert(childPulled?.id === child.id, 'Child available after parent completes');
@@ -352,7 +352,7 @@ async function testCronJobs(qm: QueueManager, r: TestResults) {
   );
 
   // Wait for at least 2 cron executions (500ms interval)
-  await new Promise((res) => setTimeout(res, 1500));
+  await Bun.sleep(1500);
 
   let cronJobs = 0;
   while (true) {
@@ -594,7 +594,7 @@ async function testClientDisconnect(qm: QueueManager, r: TestResults) {
     client.close();
 
     // Wait for lock expiry + cleanup
-    await new Promise((res) => setTimeout(res, 2000));
+    await Bun.sleep(2000);
 
     // Job should be available again
     const job2 = await qm.pull(Q, 100);
@@ -619,7 +619,7 @@ async function testStallDetection(qm: QueueManager, r: TestResults) {
   r.assert(pulled?.id === job.id, 'Job pulled');
 
   // Wait for timeout expiry
-  await new Promise((res) => setTimeout(res, 2000));
+  await Bun.sleep(2000);
 
   // Check stats - job might be retried or still active
   const stats = qm.getStats();
@@ -685,7 +685,7 @@ async function testMemoryStability(qm: QueueManager, r: TestResults) {
   }
 
   // Wait longer for async cleanup
-  await new Promise((res) => setTimeout(res, 1000));
+  await Bun.sleep(1000);
   Bun.gc(true);
 
   const endMem = memMB();
@@ -826,7 +826,7 @@ async function testHighVolume(qm: QueueManager, r: TestResults) {
   r.pass(`Total time: ${totalTime.toFixed(2)}s`, `${fmt(Math.round(JOBS / totalTime))}/s overall`);
 
   // Wait for any async cleanup
-  await new Promise((res) => setTimeout(res, 200));
+  await Bun.sleep(200);
 
   const stats = qm.getStats();
   // Allow small number of remaining items due to async cleanup

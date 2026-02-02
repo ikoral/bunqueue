@@ -21,7 +21,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: SetConcurrency - Set concurrency limit on queue
   console.log('1. Testing SET CONCURRENCY...');
@@ -59,11 +59,11 @@ async function main() {
   console.log('\n3. Testing CONCURRENCY ENFORCEMENT...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Set concurrency FIRST before adding jobs
     await tcp.send({ cmd: 'SetConcurrency', queue: QUEUE_NAME, limit: 2 });
-    await new Promise(r => setTimeout(r, 50)); // Let settings propagate
+    await Bun.sleep(50); // Let settings propagate
 
     // Add 6 jobs
     await queue.addBulk(
@@ -81,17 +81,17 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       currentConcurrent++;
       maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       currentConcurrent--;
       processed++;
       return {};
     }, { concurrency: 10, connection: { port: TCP_PORT }, useLocks: false, autorun: false });
 
     // Small delay then start worker
-    await new Promise(r => setTimeout(r, 50));
+    await Bun.sleep(50);
     worker.run();
 
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
     await worker.close();
     await tcp.send({ cmd: 'ClearConcurrency', queue: QUEUE_NAME });
 
@@ -143,11 +143,11 @@ async function main() {
   console.log('\n6. Testing RATE LIMIT ENFORCEMENT...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Set rate limit FIRST before adding jobs
     await tcp.send({ cmd: 'RateLimit', queue: QUEUE_NAME, limit: 5 }); // 5 jobs per second
-    await new Promise(r => setTimeout(r, 50)); // Let settings propagate
+    await Bun.sleep(50); // Let settings propagate
 
     // Add 10 jobs
     await queue.addBulk(
@@ -165,10 +165,10 @@ async function main() {
     }, { concurrency: 10, connection: { port: TCP_PORT }, useLocks: false, autorun: false });
 
     // Small delay then start worker
-    await new Promise(r => setTimeout(r, 50));
+    await Bun.sleep(50);
     worker.run();
 
-    await new Promise(r => setTimeout(r, 5000)); // Wait for jobs to process
+    await Bun.sleep(5000); // Wait for jobs to process
     await worker.close();
     await tcp.send({ cmd: 'RateLimitClear', queue: QUEUE_NAME });
 

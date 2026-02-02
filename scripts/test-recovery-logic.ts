@@ -68,7 +68,7 @@ async function runTests() {
     // Simulate restart
     queue.close();
     shutdownManager();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Phase 2: After restart
     queue = new Queue(QUEUE, { embedded: true });
@@ -98,7 +98,7 @@ async function runTests() {
     shutdownManager();
   });
 
-  await new Promise(r => setTimeout(r, 200));
+  await Bun.sleep(200);
 
   // ============================================
   // TEST 2: uniqueKey Recovery (TTL deduplication)
@@ -121,7 +121,7 @@ async function runTests() {
     // Simulate restart
     queue.close();
     shutdownManager();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Phase 2: After restart
     queue = new Queue(QUEUE, { embedded: true });
@@ -146,7 +146,7 @@ async function runTests() {
     shutdownManager();
   });
 
-  await new Promise(r => setTimeout(r, 200));
+  await Bun.sleep(200);
 
   // ============================================
   // TEST 3: Dependency Recovery
@@ -177,7 +177,7 @@ async function runTests() {
     );
 
     worker.run();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
     await worker.close();
 
     // Create child job that depends on completed parent
@@ -193,7 +193,7 @@ async function runTests() {
     // Simulate restart
     queue.close();
     shutdownManager();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Phase 2: After restart
     queue = new Queue(QUEUE, { embedded: true });
@@ -214,7 +214,7 @@ async function runTests() {
     shutdownManager();
   });
 
-  await new Promise(r => setTimeout(r, 200));
+  await Bun.sleep(200);
 
   // ============================================
   // TEST 4: Combined - All features together
@@ -255,7 +255,7 @@ async function runTests() {
     // Simulate restart
     queue.close();
     shutdownManager();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Phase 2: After restart - verify all deduplication works
     queue = new Queue(QUEUE, { embedded: true });
@@ -298,7 +298,7 @@ async function runTests() {
     shutdownManager();
   });
 
-  await new Promise(r => setTimeout(r, 200));
+  await Bun.sleep(200);
 
   // ============================================
   // TEST 5: Edge Cases
@@ -327,7 +327,7 @@ async function runTests() {
     // Simulate restart
     queue.close();
     shutdownManager();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Phase 2: After restart
     queue = new Queue(QUEUE, { embedded: true });
@@ -355,7 +355,7 @@ async function runTests() {
     // Simulate restart
     queue.close();
     shutdownManager();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Phase 2: After restart - job should still be delayed
     queue = new Queue(QUEUE, { embedded: true });
@@ -387,7 +387,7 @@ async function runTests() {
     for (let i = 0; i < 3; i++) {
       queue.close();
       shutdownManager();
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       queue = new Queue(QUEUE, { embedded: true });
     }
 

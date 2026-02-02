@@ -29,13 +29,13 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Timeout - Job fails if exceeds timeout
   console.log('1. Testing TIMEOUT...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Add a job with a short timeout via raw TCP (client doesn't expose timeout fully)
     const pushResp = await tcp.send({
@@ -53,13 +53,13 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       processingStarted = true;
       // Simulate work that takes longer than timeout
-      await new Promise(r => setTimeout(r, 300));
+      await Bun.sleep(300);
       return { success: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: true });
 
-    await new Promise(r => setTimeout(r, 1200));
+    await Bun.sleep(1200);
     await worker.close();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     if (processingStarted) {
       console.log(`   ✅ Job with timeout processed (timeout enforcement happens via stall checker)`);
@@ -77,7 +77,7 @@ async function main() {
   console.log('\n2. Testing TTL (Time-To-Live)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add a job with very short TTL and delay via raw TCP
     const pushResp = await tcp.send({
@@ -92,7 +92,7 @@ async function main() {
     const jobId = pushResp.id as string;
 
     // Wait for delay to pass and TTL to expire
-    await new Promise(r => setTimeout(r, 400));
+    await Bun.sleep(400);
 
     // Try to get job state - it should be expired/failed or not found
     const stateResp = await tcp.send({ cmd: 'GetState', id: jobId });
@@ -126,7 +126,7 @@ async function main() {
   console.log('\n3. Testing TAGS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs with different tags via raw TCP
     const job1Resp = await tcp.send({
@@ -184,7 +184,7 @@ async function main() {
   console.log('\n4. Testing GROUPID...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs with different group IDs
     const jobA = await tcp.send({
@@ -240,7 +240,7 @@ async function main() {
   console.log('\n5. Testing LIFO (Last-In-First-Out)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs in FIFO mode first (default)
     await tcp.send({ cmd: 'PUSH', queue: QUEUE_NAME, data: { name: 'fifo-1', value: 1 } });
@@ -265,7 +265,7 @@ async function main() {
 
     // Now add jobs in LIFO mode
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await tcp.send({ cmd: 'PUSH', queue: QUEUE_NAME, data: { name: 'lifo-1', value: 10 }, lifo: true });
     await tcp.send({ cmd: 'PUSH', queue: QUEUE_NAME, data: { name: 'lifo-2', value: 20 }, lifo: true });
@@ -302,7 +302,7 @@ async function main() {
   console.log('\n6. Testing REMOVE_ON_COMPLETE + REMOVE_ON_FAIL combined...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Add job that will succeed with removeOnComplete
     const successResp = await tcp.send({
@@ -347,9 +347,9 @@ async function main() {
       return { processed: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: true });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     // Check job states
     const successAfter = await tcp.send({ cmd: 'GetJob', id: successId });

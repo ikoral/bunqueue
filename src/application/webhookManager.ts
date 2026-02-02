@@ -178,7 +178,7 @@ export class WebhookManager {
 
       // Wait before retry
       if (attempt < this.maxRetries - 1) {
-        await new Promise((r) => setTimeout(r, this.retryDelay * (attempt + 1)));
+        await Bun.sleep(this.retryDelay * (attempt + 1));
       }
     }
 

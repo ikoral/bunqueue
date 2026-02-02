@@ -7,7 +7,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { Queue, Worker, shutdownManager } from '../src/client';
 import { getSharedManager } from '../src/client/manager';
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => Bun.sleep(ms);
 
 describe('Quickstart Documentation Examples', () => {
   beforeEach(() => {

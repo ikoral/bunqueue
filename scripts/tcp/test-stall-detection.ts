@@ -30,7 +30,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: setStallConfig - Configure stall detection (TCP returns defaults, config is server-side)
   console.log('1. Testing SET STALL CONFIG...');
@@ -88,7 +88,7 @@ async function main() {
   console.log('\n3. Testing WORKER WITH HEARTBEAT...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('heartbeat-job', { value: 1 });
 
@@ -96,7 +96,7 @@ async function main() {
 
     // Worker with heartbeat enabled - job should complete normally
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
-      await new Promise(r => setTimeout(r, 200)); // Short processing time
+      await Bun.sleep(200); // Short processing time
       jobCompleted = true;
       return { done: true };
     }, {
@@ -107,7 +107,7 @@ async function main() {
     });
 
     // Wait for job to complete
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (jobCompleted) {
@@ -128,7 +128,7 @@ async function main() {
   console.log('\n4. Testing WORKER WITHOUT HEARTBEAT (quick job)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('no-heartbeat-job', { value: 42 });
 
@@ -136,7 +136,7 @@ async function main() {
 
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       // Quick job - completes before any stall detection
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
       jobCompleted = true;
       return { done: true };
     }, {
@@ -146,7 +146,7 @@ async function main() {
       useLocks: true,
     });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (jobCompleted) {
@@ -165,7 +165,7 @@ async function main() {
   console.log('\n5. Testing MULTIPLE JOBS PROCESSED...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add multiple jobs
     await queue.add('multi-job-1', { value: 1 });
@@ -175,7 +175,7 @@ async function main() {
     let processedCount = 0;
 
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       processedCount++;
       return { done: true };
     }, {
@@ -186,7 +186,7 @@ async function main() {
     });
 
     // Wait for all jobs to complete
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (processedCount === 3) {
@@ -205,7 +205,7 @@ async function main() {
   console.log('\n6. Testing GRACE PERIOD (quick job completion)...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('grace-job', { value: 77 });
 
@@ -214,7 +214,7 @@ async function main() {
     // Worker that completes quickly (within any grace period)
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       // Complete quickly
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       jobCompleted = true;
       return { success: true };
     }, {
@@ -224,7 +224,7 @@ async function main() {
       useLocks: true,
     });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (jobCompleted) {

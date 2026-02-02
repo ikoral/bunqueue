@@ -39,7 +39,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (attempts.length === 3) {
@@ -79,7 +79,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
     await worker.close();
 
     if (timestamps.length >= 3) {
@@ -127,7 +127,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (attemptCount === 3) {
@@ -159,7 +159,7 @@ async function main() {
       throw new Error('Always fails');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     const dlq = queue.getDlq();
@@ -201,7 +201,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (attemptCount === 3 && succeeded) {
@@ -232,7 +232,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     await worker.close();
 
     // Try to get the job - should be removed

@@ -130,7 +130,7 @@ describe('Deduplication Recovery', () => {
 
       // Process the job
       worker.run();
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await Bun.sleep(100);
       await worker.close();
 
       // After completion, customId should be cleared

@@ -42,7 +42,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: SandboxedWorker basic - Create and start sandboxed worker
   console.log('1. Testing SANDBOXED WORKER BASIC...');
@@ -56,7 +56,7 @@ async function main() {
     });
 
     worker.start();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const stats = worker.getStats();
     if (stats.total === 2 && stats.idle === 2 && stats.busy === 0) {
@@ -77,7 +77,7 @@ async function main() {
   console.log('\n2. Testing SANDBOXED WORKER PROCESSES JOBS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs
     await queue.add('job-1', { message: 'Hello from job 1' });
@@ -93,7 +93,7 @@ async function main() {
     worker.start();
 
     // Wait for jobs to be processed
-    await new Promise(r => setTimeout(r, 2000));
+    await Bun.sleep(2000);
 
     const counts = queue.getJobCounts();
     await worker.stop();
@@ -114,7 +114,7 @@ async function main() {
   console.log('\n3. Testing SANDBOXED WORKER CRASH RECOVERY...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add a job that will cause the processor to fail
     await queue.add('fail-job', { shouldFail: true }, { attempts: 1 });
@@ -130,7 +130,7 @@ async function main() {
     worker.start();
 
     // Wait for the job to be processed and fail
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
 
     const stats = worker.getStats();
     await worker.stop();
@@ -152,7 +152,7 @@ async function main() {
   console.log('\n4. Testing SANDBOXED WORKER TIMEOUT...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add a job that will timeout
     await queue.add('timeout-job', { shouldTimeout: true }, { attempts: 1 });
@@ -168,7 +168,7 @@ async function main() {
     worker.start();
 
     // Wait for the job to timeout
-    await new Promise(r => setTimeout(r, 2500));
+    await Bun.sleep(2500);
 
     const counts = queue.getJobCounts();
     const stats = worker.getStats();
@@ -191,7 +191,7 @@ async function main() {
   console.log('\n5. Testing SANDBOXED WORKER GETSTATS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const worker = new SandboxedWorker(QUEUE_NAME, {
       processor: PROCESSOR_PATH,
@@ -200,7 +200,7 @@ async function main() {
     });
 
     worker.start();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const stats = worker.getStats();
 
@@ -230,7 +230,7 @@ async function main() {
   console.log('\n6. Testing SANDBOXED WORKER STOP...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs
     await queue.add('job-1', { message: 'Job 1' });
@@ -243,7 +243,7 @@ async function main() {
     });
 
     worker.start();
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     // Stop the worker
     await worker.stop();

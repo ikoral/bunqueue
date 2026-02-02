@@ -98,7 +98,7 @@ async function main() {
     const immediate = await qm.pull('delayed', 0);
     await test('delayed job not immediately available', () => immediate === null);
 
-    await new Promise((r) => setTimeout(r, 150));
+    await Bun.sleep(150);
     const ready = await qm.pull('delayed', 0);
     await test('delayed job available after delay', () => !!ready);
     if (ready) await qm.ack(ready.id);
@@ -141,7 +141,7 @@ async function main() {
     await qm.ack(childBefore!.id);
 
     // Wait for dependency resolution (runs every 1000ms)
-    await new Promise((r) => setTimeout(r, 1200));
+    await Bun.sleep(1200);
 
     const childAfter = await qm.pull('deps', 0);
     await test('child available after parent completes', () =>
@@ -163,7 +163,7 @@ async function main() {
     await qm.fail(pulled!.id, 'First failure');
 
     // Wait for backoff (exponential: 50 * 2^0 = 50ms)
-    await new Promise((r) => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Second attempt - fail
     pulled = await qm.pull('retry', 0);
@@ -171,7 +171,7 @@ async function main() {
     await qm.fail(pulled!.id, 'Second failure');
 
     // Wait for backoff (exponential: 50 * 2^1 = 100ms)
-    await new Promise((r) => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Third attempt - succeed
     pulled = await qm.pull('retry', 0);
@@ -211,7 +211,7 @@ async function main() {
     await test('cron job added', () => cronList.some((c) => c.name === 'test-cron'));
 
     // Wait for cron to fire (repeatEvery is 500ms, scheduler ticks ~1s)
-    await new Promise((r) => setTimeout(r, 1500));
+    await Bun.sleep(1500);
 
     const cronJob = await qm.pull('cron-queue', 0);
     await test('cron job creates jobs', () => !!cronJob);
@@ -262,7 +262,7 @@ async function main() {
     await qm.ack(j!.id);
 
     // Wait for unique key to be released
-    await new Promise((r) => setTimeout(r, 50));
+    await Bun.sleep(50);
 
     // Now should be able to push with same key (new job)
     const reused = await qm.push('unique', { data: { id: 3 }, uniqueKey: 'unique-1' });
@@ -288,7 +288,7 @@ async function main() {
 
     // Complete first job
     if (first) await qm.ack(first.id);
-    await new Promise((r) => setTimeout(r, 50));
+    await Bun.sleep(50);
 
     // Now second should be available
     const secondAfter = await qm.pull('concurrency-q', 0);
@@ -346,9 +346,9 @@ async function main() {
     // Push in order 1, 2, 3 with LIFO
     // Use longer delays to ensure UUID7 timestamps differ
     await qm.push('lifo', { data: { n: 1 }, lifo: true });
-    await new Promise((r) => setTimeout(r, 50));
+    await Bun.sleep(50);
     await qm.push('lifo', { data: { n: 2 }, lifo: true });
-    await new Promise((r) => setTimeout(r, 50));
+    await Bun.sleep(50);
     await qm.push('lifo', { data: { n: 3 }, lifo: true });
 
     // Should pull in reverse order: 3, 2, 1

@@ -138,7 +138,7 @@ export class AckBatcher {
         if (attempt < maxRetries) {
           // Exponential backoff: 100ms, 200ms, 400ms
           const delay = baseDelay * Math.pow(2, attempt);
-          await new Promise((r) => setTimeout(r, delay));
+          await Bun.sleep(delay);
         }
       }
     }

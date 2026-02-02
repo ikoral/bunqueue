@@ -117,7 +117,7 @@ async function main() {
       throw new Error('Intentional failure for DLQ test');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     // Get all DLQ entries
@@ -186,7 +186,7 @@ async function main() {
       throw new Error('First failure');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker1.close();
 
     const dlqBefore = queue.getDlq();
@@ -201,7 +201,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker2.close();
 
     const dlqAfter = queue.getDlq();
@@ -239,14 +239,14 @@ async function main() {
       throw new Error('Fail for expiration test');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 400));
+    await Bun.sleep(400);
     await worker.close();
 
     const dlqBefore = queue.getDlq();
     const statsBefore = queue.getDlqStats();
 
     // Wait for expiration
-    await new Promise(r => setTimeout(r, 700));
+    await Bun.sleep(700);
 
     // Get stats after expiration - expired entries should be counted
     const statsAfter = queue.getDlqStats();

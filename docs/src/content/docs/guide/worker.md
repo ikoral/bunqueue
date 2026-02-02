@@ -303,7 +303,7 @@ const worker = new Worker<EmailJob>('emails', async (job) => {
   await job.log(`Subject: ${job.data.subject}`);
 
   // Simulate sending
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   await job.updateProgress(100, 'Sent!');
   return { sent: true, timestamp: Date.now() };

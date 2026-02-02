@@ -100,7 +100,7 @@ async function runTests() {
       throw new Error('Worker should be rate limited');
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await Bun.sleep(100);
 
     if (worker.isRateLimited()) {
       throw new Error('Rate limit should have expired');

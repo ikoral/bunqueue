@@ -244,7 +244,7 @@ async function benchmarkDependencyResolution() {
       const start = performance.now();
       await qm.ack(pulledParent.id);
       // Aspetta che la dependency resolution completi
-      await new Promise((r) => setTimeout(r, 100));
+      await Bun.sleep(100);
       const elapsed = performance.now() - start;
       console.log(`  Dependency resolution for ${count} children: ${elapsed.toFixed(2)}ms`);
     }

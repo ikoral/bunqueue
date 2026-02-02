@@ -49,7 +49,7 @@ async function main() {
     }, { concurrency: 1, embedded: true });
 
     // Wait for job to be processed
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed) {
@@ -76,7 +76,7 @@ async function main() {
       throw new Error('Intentional failure');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (failedJob) {
@@ -104,7 +104,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (jobs[0] === 'High' && jobs[1] === 'Low') {
@@ -132,7 +132,7 @@ async function main() {
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 600));
+    await Bun.sleep(600);
     await worker.close();
 
     const delay = processedAt - start;

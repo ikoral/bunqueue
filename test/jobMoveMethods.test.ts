@@ -34,7 +34,7 @@ describe('Job Move Methods - BullMQ v5', () => {
       { embedded: true, autorun: true }
     );
 
-    await new Promise((r) => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     const state = await queue.getJobState(job.id);
     expect(state).toBe('completed');
@@ -54,7 +54,7 @@ describe('Job Move Methods - BullMQ v5', () => {
       { embedded: true, autorun: true }
     );
 
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     const state = await queue.getJobState(job.id);
     // Should be in DLQ (failed) state
@@ -173,7 +173,7 @@ describe('Job waitUntilFinished', () => {
     const worker = new Worker(
       'wait-test',
       async (job) => {
-        await new Promise((r) => setTimeout(r, 100));
+        await Bun.sleep(100);
         return { result: job.data.value * 2 };
       },
       { embedded: true, autorun: true }

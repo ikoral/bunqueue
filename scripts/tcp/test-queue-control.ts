@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Pause queue
   console.log('1. Testing PAUSE...');
@@ -30,7 +30,7 @@ async function main() {
     ]);
 
     queue.pause();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     let processed = 0;
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
@@ -38,7 +38,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed === 0) {
@@ -57,7 +57,7 @@ async function main() {
   console.log('\n2. Testing RESUME...');
   try {
     queue.resume();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     let processed = 0;
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
@@ -65,7 +65,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed >= 1) {
@@ -84,7 +84,7 @@ async function main() {
   console.log('\n3. Testing DRAIN...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'drain-1', data: { value: 1 } },
@@ -93,7 +93,7 @@ async function main() {
     ]);
 
     queue.drain();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     let processed = 0;
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
@@ -101,7 +101,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed === 0) {
@@ -125,7 +125,7 @@ async function main() {
     ]);
 
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     let processed = 0;
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
@@ -133,7 +133,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed === 0) {
@@ -152,7 +152,7 @@ async function main() {
   console.log('\n5. Testing PAUSE DURING PROCESSING...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk(
       Array.from({ length: 10 }, (_, i) => ({
@@ -168,14 +168,14 @@ async function main() {
     const worker = new Worker<{ value: number }>(QUEUE_NAME, async () => {
       if (!paused) processedBeforePause++;
       else processedAfterPause++;
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
       return {};
     }, { concurrency: 2, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     queue.pause();
     paused = true;
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     // Should have processed some before pause, none after
@@ -195,7 +195,7 @@ async function main() {
   console.log('\n6. Testing GET JOB COUNTS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'count-1', data: { value: 1 } },

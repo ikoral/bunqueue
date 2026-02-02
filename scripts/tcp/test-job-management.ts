@@ -26,7 +26,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Promote - Move delayed job to waiting (immediate execution)
   console.log('1. Testing PROMOTE...');
@@ -73,7 +73,7 @@ async function main() {
   console.log('\n2. Testing MOVE TO DELAYED...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Create a delayed job first
     const job = await queue.add('delay-test-job', { value: 2 }, { delay: 10000 });
@@ -102,7 +102,7 @@ async function main() {
   console.log('\n3. Testing DISCARD...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Create a waiting job
     const job = await queue.add('discard-job', { value: 3 });
@@ -136,7 +136,7 @@ async function main() {
   console.log('\n4. Testing UPDATE JOB DATA...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Create a job with initial data
     const job = await queue.add('update-job', { value: 4, message: 'original' });
@@ -173,14 +173,14 @@ async function main() {
   console.log('\n5. Testing CHANGE PRIORITY...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Create two jobs with same low priority
     const lowJob = await queue.add('low-priority', { value: 5 }, { priority: 1 });
     const highJob = await queue.add('high-priority', { value: 6 }, { priority: 1 });
 
     // Verify jobs are created before changing priority
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Change second job to higher priority via TCP
     const response = await tcp.send({
@@ -194,14 +194,14 @@ async function main() {
       const processedOrder: number[] = [];
       const worker = new Worker<{ value: number }>(QUEUE_NAME, async (j) => {
         processedOrder.push((j.data as { value: number }).value);
-        await new Promise(r => setTimeout(r, 50)); // Small delay to ensure order
+        await Bun.sleep(50); // Small delay to ensure order
         return {};
       }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: true });
 
       // Wait for both jobs to complete
-      await new Promise(r => setTimeout(r, 1500));
+      await Bun.sleep(1500);
       await worker.close();
-      await new Promise(r => setTimeout(r, 200)); // Wait for cleanup
+      await Bun.sleep(200); // Wait for cleanup
 
       // Higher priority job (value 6) should be processed first
       if (processedOrder.length === 2 && processedOrder[0] === 6 && processedOrder[1] === 5) {
@@ -228,7 +228,7 @@ async function main() {
   console.log('\n6. Testing CANCEL...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     // Create a job
     const job = await queue.add('cancel-job', { value: 7 });
@@ -250,9 +250,9 @@ async function main() {
           return {};
         }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: true });
 
-        await new Promise(r => setTimeout(r, 800));
+        await Bun.sleep(800);
         await worker.close();
-        await new Promise(r => setTimeout(r, 200));
+        await Bun.sleep(200);
 
         if (!processed) {
           console.log('   ✅ Job cancelled successfully');
@@ -273,9 +273,9 @@ async function main() {
 
   // Cleanup
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 200));
+  await Bun.sleep(200);
   queue.close();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
   tcp.close();
 
   // Summary

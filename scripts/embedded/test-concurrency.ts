@@ -34,12 +34,12 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       currentConcurrent++;
       maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
       currentConcurrent--;
       return {};
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 600));
+    await Bun.sleep(600);
     await worker.close();
 
     if (maxConcurrent === 1) {
@@ -72,12 +72,12 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       currentConcurrent++;
       maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
-      await new Promise(r => setTimeout(r, 200));
+      await Bun.sleep(200);
       currentConcurrent--;
       return {};
     }, { concurrency: 5, embedded: true });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker.close();
 
     if (maxConcurrent >= 4 && maxConcurrent <= 5) {
@@ -111,13 +111,13 @@ async function main() {
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       currentConcurrent++;
       maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       currentConcurrent--;
       processed++;
       return {};
     }, { concurrency: 20, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (maxConcurrent >= 15 && processed === 50) {
@@ -148,17 +148,17 @@ async function main() {
 
     const worker1 = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       processedBy.set('worker1', (processedBy.get('worker1') ?? 0) + 1);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       return {};
     }, { concurrency: 2, embedded: true });
 
     const worker2 = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       processedBy.set('worker2', (processedBy.get('worker2') ?? 0) + 1);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       return {};
     }, { concurrency: 2, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker1.close();
     await worker2.close();
 
@@ -192,23 +192,23 @@ async function main() {
 
     const worker = new Worker<{ index: number }>(QUEUE_NAME, async () => {
       processed++;
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       return {};
     }, { concurrency: 1, autorun: false, embedded: true });
 
     // Process first batch
     worker.run();
-    await new Promise(r => setTimeout(r, 150));
+    await Bun.sleep(150);
     const afterFirst = processed;
 
     // Pause
     worker.pause();
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
     const afterPause = processed;
 
     // Resume
     worker.resume();
-    await new Promise(r => setTimeout(r, 400));
+    await Bun.sleep(400);
     await worker.close();
 
     if (afterFirst > 0 && afterPause === afterFirst && processed === 5) {
@@ -244,12 +244,12 @@ async function main() {
     }, { concurrency: 3, embedded: true });
 
     // Wait while paused
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     const whilePaused = processed;
 
     // Resume
     queue.resume();
-    await new Promise(r => setTimeout(r, 300));
+    await Bun.sleep(300);
     await worker.close();
 
     if (whilePaused === 0 && processed === 3) {

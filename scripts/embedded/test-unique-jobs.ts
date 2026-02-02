@@ -76,7 +76,7 @@ async function main() {
       return { done: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed) {
@@ -127,7 +127,7 @@ async function main() {
       return { value: (job.data as { value: number }).value * 2 };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed) {

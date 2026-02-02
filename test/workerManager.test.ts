@@ -71,7 +71,7 @@ describe('WorkerManager', () => {
       const worker = manager.register('worker-1', ['emails']);
       const initialLastSeen = worker.lastSeen;
 
-      await new Promise((r) => setTimeout(r, 10));
+      await Bun.sleep(10);
 
       const updated = manager.heartbeat(worker.id);
       expect(updated).toBe(true);
@@ -99,7 +99,7 @@ describe('WorkerManager', () => {
       const worker = manager.register('worker-1', ['emails']);
       const initial = worker.lastSeen;
 
-      await new Promise((r) => setTimeout(r, 10));
+      await Bun.sleep(10);
       manager.incrementActive(worker.id);
 
       expect(worker.lastSeen).toBeGreaterThan(initial);

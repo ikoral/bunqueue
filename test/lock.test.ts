@@ -113,7 +113,7 @@ describe('RWLock', () => {
       g.release();
     });
 
-    await new Promise((r) => setTimeout(r, 50));
+    await Bun.sleep(50);
     order.push('write-end');
     writeGuard.release();
 
@@ -134,7 +134,7 @@ describe('RWLock', () => {
       g.release();
     });
 
-    await new Promise((r) => setTimeout(r, 50));
+    await Bun.sleep(50);
     order.push('read-end');
     readGuard.release();
 
@@ -161,7 +161,7 @@ describe('RWLock', () => {
       g.release();
     });
 
-    await new Promise((r) => setTimeout(r, 10));
+    await Bun.sleep(10);
     readGuard.release();
 
     await Promise.all([writePromise, readPromise]);

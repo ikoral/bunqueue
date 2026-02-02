@@ -19,13 +19,13 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: GetState - waiting, active, completed, failed states
   console.log('1. Testing GetState...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Create a job and check waiting state
     const job = await queue.add('state-test', { value: 1 });
@@ -42,7 +42,7 @@ async function main() {
         return { processed: true };
       }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-      await new Promise(r => setTimeout(r, 1000));
+      await Bun.sleep(1000);
       await worker.close();
 
       // After processing, job should be completed
@@ -67,7 +67,7 @@ async function main() {
   console.log('\n2. Testing GetResult...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const job = await queue.add('result-test', { value: 42 });
 
@@ -75,7 +75,7 @@ async function main() {
       return { sum: (j.data as { value: number }).value, processed: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     // Get job counts to verify completion (async version for TCP)
@@ -97,7 +97,7 @@ async function main() {
   console.log('\n3. Testing GetJobs with state filter...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs with different characteristics
     await queue.add('job-1', { value: 1 });
@@ -127,7 +127,7 @@ async function main() {
   console.log('\n4. Testing GetJobs with pagination...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add multiple jobs
     for (let i = 0; i < 10; i++) {
@@ -170,7 +170,7 @@ async function main() {
   console.log('\n5. Testing GetCountsPerPriority...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add jobs with different priorities
     await queue.add('low-1', { value: 1 }, { priority: 1 });
@@ -206,7 +206,7 @@ async function main() {
   console.log('\n6. Testing GetJobByCustomId...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const customId = 'my-unique-custom-id-123';
     const job = await queue.add('custom-id-job', { value: 42 }, { jobId: customId });

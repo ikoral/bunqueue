@@ -30,7 +30,7 @@ async function main() {
     });
 
     const job = await queue.add('waiting-test', { task: 'test-waiting' });
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
 
     events.close();
 
@@ -48,7 +48,7 @@ async function main() {
 
   // Clean up for next test
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 2: active event - Emitted when job starts processing
   console.log('\n2. Testing ACTIVE EVENT...');
@@ -65,11 +65,11 @@ async function main() {
     const job = await queue.add('active-test', { task: 'test-active' });
 
     const worker = new Worker<{ task: string }>(QUEUE_NAME, async () => {
-      await new Promise(r => setTimeout(r, 100));
+      await Bun.sleep(100);
       return { processed: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
     events.close();
 
@@ -87,7 +87,7 @@ async function main() {
 
   // Clean up for next test
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 3: completed event - Emitted when job completes
   console.log('\n3. Testing COMPLETED EVENT...');
@@ -109,7 +109,7 @@ async function main() {
       return { success: true, message: 'done' };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
     events.close();
 
@@ -128,7 +128,7 @@ async function main() {
 
   // Clean up for next test
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 4: failed event - Emitted when job fails
   console.log('\n4. Testing FAILED EVENT...');
@@ -152,7 +152,7 @@ async function main() {
       throw new Error('Intentional failure for testing');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
     events.close();
 
@@ -171,7 +171,7 @@ async function main() {
 
   // Clean up for next test
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 5: progress event - Emitted when job progress updates
   console.log('\n5. Testing PROGRESS EVENT...');
@@ -187,16 +187,16 @@ async function main() {
 
     const worker = new Worker<{ task: string }>(QUEUE_NAME, async (j) => {
       await j.updateProgress(25);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       await j.updateProgress(50);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       await j.updateProgress(75);
-      await new Promise(r => setTimeout(r, 50));
+      await Bun.sleep(50);
       await j.updateProgress(100);
       return { done: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 800));
+    await Bun.sleep(800);
     await worker.close();
     events.close();
 
@@ -216,7 +216,7 @@ async function main() {
 
   // Clean up for next test
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 6: Multiple event listeners - Multiple listeners on same event
   console.log('\n6. Testing MULTIPLE EVENT LISTENERS...');
@@ -244,7 +244,7 @@ async function main() {
       return { result: 'success' };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
     events.close();
 

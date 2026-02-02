@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Update job progress
   console.log('1. Testing PROGRESS UPDATE...');
@@ -32,12 +32,12 @@ async function main() {
       for (let i = 1; i <= steps; i++) {
         await job.updateProgress((i / steps) * 100);
         lastProgress = (i / steps) * 100;
-        await new Promise(r => setTimeout(r, 50));
+        await Bun.sleep(50);
       }
       return { completed: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (lastProgress === 100) {
@@ -56,7 +56,7 @@ async function main() {
   console.log('\n2. Testing PROGRESS WITH MESSAGE...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('progress-msg-job', { steps: 3 });
 
@@ -66,12 +66,12 @@ async function main() {
       for (let i = 0; i < msgs.length; i++) {
         await job.updateProgress(((i + 1) / 3) * 100, msgs[i]);
         messages.push(msgs[i]);
-        await new Promise(r => setTimeout(r, 50));
+        await Bun.sleep(50);
       }
       return { done: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (messages.length === 3) {
@@ -90,7 +90,7 @@ async function main() {
   console.log('\n3. Testing JOB LOGGING...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('logging-job', { steps: 3 });
 
@@ -105,7 +105,7 @@ async function main() {
       return { logged: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (logCount === 3) {
@@ -124,7 +124,7 @@ async function main() {
   console.log('\n4. Testing INCREMENTAL PROGRESS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('incremental-job', { steps: 10 });
 
@@ -137,7 +137,7 @@ async function main() {
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (progressValues.length === 10 && progressValues[9] === 100) {
@@ -156,7 +156,7 @@ async function main() {
   console.log('\n5. Testing MULTIPLE JOBS PROGRESS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'multi-1', data: { steps: 2 } },
@@ -172,7 +172,7 @@ async function main() {
       return {};
     }, { concurrency: 3, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (completedJobs === 3) {
@@ -191,7 +191,7 @@ async function main() {
   console.log('\n6. Testing PROGRESS + LOGGING...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.add('combined-job', { steps: 2 });
 
@@ -209,7 +209,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (progressDone && logsDone) {

@@ -80,7 +80,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1 });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     if (processed) {

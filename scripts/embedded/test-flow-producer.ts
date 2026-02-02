@@ -26,7 +26,7 @@ async function runTest(t: { name: string; fn: () => Promise<void> | void }) {
 
 async function cleanup() {
   shutdownManager();
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
 }
 
 // ============================================================================
@@ -210,7 +210,7 @@ const tests = [
       return { computed: job.data.value * 2 };
     }, { embedded: true, autorun: true });
 
-    await new Promise((r) => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     const result = flow.getParentResult(parentJob.id);
     // Result should be the return value from the worker
@@ -237,7 +237,7 @@ const tests = [
       return { result: job.data.value };
     }, { embedded: true, autorun: true });
 
-    await new Promise((r) => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     const results = flow.getParentResults([job1.id, job2.id]);
     if (!(results instanceof Map)) throw new Error('Expected Map result');

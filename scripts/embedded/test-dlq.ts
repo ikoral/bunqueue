@@ -37,7 +37,7 @@ async function main() {
       throw new Error(`Attempt ${attempts} failed`);
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     const dlq = queue.getDlq();
@@ -101,7 +101,7 @@ async function main() {
       throw new Error('First failure');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker1.close();
 
     const dlqBefore = queue.getDlq();
@@ -116,7 +116,7 @@ async function main() {
       return { success: true };
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker2.close();
 
     if (dlqBefore.length > 0 && retrySucceeded) {
@@ -144,7 +144,7 @@ async function main() {
       throw new Error('Fail for purge');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     const dlqBefore = queue.getDlq();
@@ -176,7 +176,7 @@ async function main() {
       throw new Error('Entry test failure');
     }, { concurrency: 1, embedded: true });
 
-    await new Promise(r => setTimeout(r, 500));
+    await Bun.sleep(500);
     await worker.close();
 
     const allDlq = queue.getDlq();

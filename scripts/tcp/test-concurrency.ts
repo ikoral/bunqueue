@@ -19,7 +19,7 @@ async function main() {
 
   // Clean state
   queue.obliterate();
-  await new Promise(r => setTimeout(r, 100));
+  await Bun.sleep(100);
 
   // Test 1: Single concurrency (sequential processing)
   console.log('1. Testing SINGLE CONCURRENCY...');
@@ -33,11 +33,11 @@ async function main() {
     const timestamps: number[] = [];
     const worker = new Worker<{ delay: number }>(QUEUE_NAME, async (job) => {
       timestamps.push(Date.now());
-      await new Promise(r => setTimeout(r, (job.data as { delay: number }).delay));
+      await Bun.sleep((job.data as { delay: number }).delay);
       return {};
     }, { concurrency: 1, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     // With concurrency 1, jobs should be spaced out
@@ -64,7 +64,7 @@ async function main() {
   console.log('\n2. Testing HIGH CONCURRENCY...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk([
       { name: 'parallel-1', data: { delay: 200 } },
@@ -77,11 +77,11 @@ async function main() {
     const startTimes: number[] = [];
     const worker = new Worker<{ delay: number }>(QUEUE_NAME, async (job) => {
       startTimes.push(Date.now());
-      await new Promise(r => setTimeout(r, (job.data as { delay: number }).delay));
+      await Bun.sleep((job.data as { delay: number }).delay);
       return {};
     }, { concurrency: 5, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1000));
+    await Bun.sleep(1000);
     await worker.close();
 
     if (startTimes.length === 5) {
@@ -107,7 +107,7 @@ async function main() {
   console.log('\n3. Testing CONCURRENCY LIMIT...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     // Add 6 jobs
     await queue.addBulk(
@@ -123,12 +123,12 @@ async function main() {
     const worker = new Worker<{ delay: number }>(QUEUE_NAME, async (job) => {
       currentConcurrent++;
       maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
-      await new Promise(r => setTimeout(r, (job.data as { delay: number }).delay));
+      await Bun.sleep((job.data as { delay: number }).delay);
       currentConcurrent--;
       return {};
     }, { concurrency: 3, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (maxConcurrent <= 3) {
@@ -147,7 +147,7 @@ async function main() {
   console.log('\n4. Testing MULTIPLE WORKERS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk(
       Array.from({ length: 10 }, (_, i) => ({
@@ -161,17 +161,17 @@ async function main() {
 
     const worker1 = new Worker<{ delay: number }>(QUEUE_NAME, async (job) => {
       worker1Count++;
-      await new Promise(r => setTimeout(r, (job.data as { delay: number }).delay));
+      await Bun.sleep((job.data as { delay: number }).delay);
       return {};
     }, { concurrency: 2, connection: { port: TCP_PORT }, useLocks: false });
 
     const worker2 = new Worker<{ delay: number }>(QUEUE_NAME, async (job) => {
       worker2Count++;
-      await new Promise(r => setTimeout(r, (job.data as { delay: number }).delay));
+      await Bun.sleep((job.data as { delay: number }).delay);
       return {};
     }, { concurrency: 2, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker1.close();
     await worker2.close();
 
@@ -192,7 +192,7 @@ async function main() {
   console.log('\n5. Testing FAST JOBS...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk(
       Array.from({ length: 50 }, (_, i) => ({
@@ -207,7 +207,7 @@ async function main() {
       return {};
     }, { concurrency: 10, connection: { port: TCP_PORT }, useLocks: false });
 
-    await new Promise(r => setTimeout(r, 1500));
+    await Bun.sleep(1500);
     await worker.close();
 
     if (count === 50) {
@@ -226,7 +226,7 @@ async function main() {
   console.log('\n6. Testing FORCE CLOSE...');
   try {
     queue.obliterate();
-    await new Promise(r => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     await queue.addBulk(
       Array.from({ length: 3 }, (_, i) => ({
@@ -237,13 +237,13 @@ async function main() {
 
     let processed = 0;
     const worker = new Worker<{ delay: number }>(QUEUE_NAME, async (job) => {
-      await new Promise(r => setTimeout(r, (job.data as { delay: number }).delay));
+      await Bun.sleep((job.data as { delay: number }).delay);
       processed++;
       return {};
     }, { concurrency: 2, connection: { port: TCP_PORT }, useLocks: false });
 
     // Wait a bit then force close
-    await new Promise(r => setTimeout(r, 200));
+    await Bun.sleep(200);
     await worker.close(true); // Force close
 
     if (processed >= 1) {

@@ -35,7 +35,7 @@ describe('TTL and Expiration', () => {
       });
 
       // Wait for TTL to expire
-      await new Promise((r) => setTimeout(r, 10));
+      await Bun.sleep(10);
 
       // Job should not be pullable (expired)
       const pulled = await qm.pull('test', 0);
@@ -61,7 +61,7 @@ describe('TTL and Expiration', () => {
       });
 
       // Wait for delay to pass
-      await new Promise((r) => setTimeout(r, 150));
+      await Bun.sleep(150);
 
       // Job should be expired (TTL < delay)
       const pulled = await qm.pull('test', 0);
@@ -204,7 +204,7 @@ describe('Delayed Jobs', () => {
     });
 
     // Wait for delay
-    await new Promise((r) => setTimeout(r, 100));
+    await Bun.sleep(100);
 
     const pulled = await qm.pull('test', 0);
     expect(pulled?.id).toBe(job.id);

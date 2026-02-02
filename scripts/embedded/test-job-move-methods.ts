@@ -26,7 +26,7 @@ async function runTest(t: { name: string; fn: () => Promise<void> | void }) {
 
 async function cleanup() {
   shutdownManager();
-  await new Promise((r) => setTimeout(r, 100));
+  await Bun.sleep(100);
 }
 
 // ============================================================================
@@ -45,7 +45,7 @@ const tests = [
       return null;
     }, { embedded: true, autorun: true });
 
-    await new Promise((r) => setTimeout(r, 300));
+    await Bun.sleep(300);
 
     const state = await queue.getJobState(job.id);
     if (state !== 'completed') throw new Error(`Expected completed, got ${state}`);
@@ -65,7 +65,7 @@ const tests = [
       throw new Error('Should not reach here');
     }, { embedded: true, autorun: true });
 
-    await new Promise((r) => setTimeout(r, 500));
+    await Bun.sleep(500);
 
     const state = await queue.getJobState(job.id);
     if (state !== 'failed') throw new Error(`Expected failed, got ${state}`);
@@ -185,7 +185,7 @@ const tests = [
     queue.obliterate();
 
     const worker = new Worker('test-wait-finished', async (job) => {
-      await new Promise((r) => setTimeout(r, 100));
+      await Bun.sleep(100);
       return { result: job.data.value * 2 };
     }, { embedded: true, autorun: true });
 
