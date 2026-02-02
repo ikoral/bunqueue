@@ -1,5 +1,7 @@
 # bunqueue
 
+"When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test."
+
 High-performance job queue server for Bun. SQLite persistence, cron jobs, priorities, DLQ, S3 backups.
 
 ## Architecture Flow
@@ -59,6 +61,7 @@ High-performance job queue server for Bun. SQLite persistence, cron jobs, priori
 ```
 
 **Request Flow:**
+
 1. **PUSH**: Client → TcpPool → TcpServer → QueueManager → Shard[hash(queue)] → PriorityQueue → WriteBuffer → SQLite
 2. **PULL**: Client → TcpServer → QueueManager → Shard → PriorityQueue.pop() → Job (state: active)
 3. **ACK**: Client → TcpServer → AckBatcher → Shard.complete() → jobResults (LRU) + completedJobs (Set)
@@ -103,17 +106,21 @@ const shardIndex = (key: string) => fnv1aHash(key) & SHARD_MASK;
 // CORRECT: read first, then acquire lock
 const completed = completedJobs.has(id);
 const shard = await shards[idx].acquire();
-try { /* work */ } finally { shard.release(); }
+try {
+  /* work */
+} finally {
+  shard.release();
+}
 ```
 
 ## Memory Bounds
 
-| Collection | Max Size | Eviction |
-|------------|----------|----------|
-| completedJobs | 50,000 | FIFO batch |
-| jobResults | 5,000 | LRU |
-| jobLogs | 10,000 | LRU |
-| customIdMap | 50,000 | LRU |
+| Collection    | Max Size | Eviction   |
+| ------------- | -------- | ---------- |
+| completedJobs | 50,000   | FIFO batch |
+| jobResults    | 5,000    | LRU        |
+| jobLogs       | 10,000   | LRU        |
+| customIdMap   | 50,000   | LRU        |
 
 Cleanup runs every 10s. Evicts 50% when full.
 
@@ -184,13 +191,20 @@ import { Queue, Worker } from 'bunqueue/client';
 const queue = new Queue<T>('emails', { connection: { port: 6789 } });
 await queue.add('send', { email: 'user@test.com' });
 await queue.add('payment', data, { durable: true }); // Immediate disk write
-queue.pause(); queue.resume(); queue.drain(); queue.obliterate();
+queue.pause();
+queue.resume();
+queue.drain();
+queue.obliterate();
 
 // Worker
-const worker = new Worker('emails', async (job) => {
-  await job.updateProgress(50);
-  return { sent: true };
-}, { concurrency: 5, heartbeatInterval: 10000 });
+const worker = new Worker(
+  'emails',
+  async (job) => {
+    await job.updateProgress(50);
+    return { sent: true };
+  },
+  { concurrency: 5, heartbeatInterval: 10000 }
+);
 
 worker.on('completed', (job, result) => {});
 worker.on('failed', (job, err) => {});
@@ -201,22 +215,23 @@ queue.setStallConfig({ stallInterval: 30000, maxStalls: 3, gracePeriod: 5000 });
 // DLQ (embedded only)
 queue.setDlqConfig({ autoRetry: true, maxAge: 604800000, maxEntries: 10000 });
 const entries = queue.getDlq({ reason: 'timeout' });
-queue.retryDlq(); queue.purgeDlq();
+queue.retryDlq();
+queue.purgeDlq();
 ```
 
 ## Job Options
 
 ```typescript
 interface JobOptions {
-  priority?: number;        // Higher = sooner
-  delay?: number;           // ms before processing
-  attempts?: number;        // Max retries (default: 3)
-  backoff?: number;         // Retry backoff (default: 1000ms)
-  timeout?: number;         // Processing timeout
-  jobId?: string;           // Custom ID (idempotent)
+  priority?: number; // Higher = sooner
+  delay?: number; // ms before processing
+  attempts?: number; // Max retries (default: 3)
+  backoff?: number; // Retry backoff (default: 1000ms)
+  timeout?: number; // Processing timeout
+  jobId?: string; // Custom ID (idempotent)
   removeOnComplete?: boolean;
   removeOnFail?: boolean;
-  durable?: boolean;        // Bypass write buffer
+  durable?: boolean; // Bypass write buffer
 }
 ```
 
@@ -224,11 +239,11 @@ interface JobOptions {
 
 ```typescript
 interface WorkerOptions {
-  concurrency?: number;      // Parallel jobs (default: 1)
+  concurrency?: number; // Parallel jobs (default: 1)
   heartbeatInterval?: number; // Stall detection (default: 10000, 0=disabled)
-  batchSize?: number;        // Pull batch (default: 10, max: 1000)
-  pollTimeout?: number;      // Long poll (default: 0, max: 30000)
-  useLocks?: boolean;        // Lock-based ownership (default: true)
+  batchSize?: number; // Pull batch (default: 10, max: 1000)
+  pollTimeout?: number; // Long poll (default: 0, max: 30000)
+  useLocks?: boolean; // Lock-based ownership (default: true)
 }
 ```
 
@@ -254,10 +269,10 @@ bun run bench                      # Benchmarks
 
 ## Performance
 
-| Mode | Throughput | Data Loss Risk |
-|------|------------|----------------|
-| Buffered (default) | ~100k jobs/sec | Up to 10ms |
-| Durable | ~10k jobs/sec | None |
+| Mode               | Throughput     | Data Loss Risk |
+| ------------------ | -------------- | -------------- |
+| Buffered (default) | ~100k jobs/sec | Up to 10ms     |
+| Durable            | ~10k jobs/sec  | None           |
 
 ## Debug Endpoints
 
@@ -282,10 +297,10 @@ const mem = queueManager.getMemoryStats();
 
 ## Background Tasks
 
-| Task | Interval | Purpose |
-|------|----------|---------|
-| Cleanup | 10s | Memory cleanup, orphan removal |
-| Stall check | 5s | Detect unresponsive jobs |
-| Dependency | 100ms | Process job dependencies |
-| DLQ maintenance | 60s | Auto-retry, expiration |
-| Lock expiration | 10s | Remove expired locks |
+| Task            | Interval | Purpose                        |
+| --------------- | -------- | ------------------------------ |
+| Cleanup         | 10s      | Memory cleanup, orphan removal |
+| Stall check     | 5s       | Detect unresponsive jobs       |
+| Dependency      | 100ms    | Process job dependencies       |
+| DLQ maintenance | 60s      | Auto-retry, expiration         |
+| Lock expiration | 10s      | Remove expired locks           |
