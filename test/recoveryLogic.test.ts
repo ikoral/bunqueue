@@ -7,7 +7,9 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { Queue, Worker, shutdownManager } from '../src/client';
 import { unlinkSync, existsSync } from 'fs';
 
-const DB_PATH = '/tmp/test-recovery-logic.db';
+// Use unique DB path per test file execution to avoid parallel test interference
+const TEST_RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+const DB_PATH = `/tmp/test-recovery-logic-${TEST_RUN_ID}.db`;
 
 function cleanupDb() {
   if (existsSync(DB_PATH)) unlinkSync(DB_PATH);
@@ -17,6 +19,8 @@ function cleanupDb() {
 
 describe('Recovery Logic', () => {
   beforeEach(() => {
+    // Always shutdown any existing manager first to ensure clean state
+    shutdownManager();
     cleanupDb();
     process.env.DATA_PATH = DB_PATH;
   });
