@@ -50,7 +50,8 @@ describe('Recovery Logic', () => {
       shutdownManager();
       await new Promise(r => setTimeout(r, 100));
 
-      // Phase 2: After restart
+      // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
+      process.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       const dedupAfter = await queue.getDeduplicationJobId('unique-job-123');
@@ -153,7 +154,8 @@ describe('Recovery Logic', () => {
       shutdownManager();
       await new Promise(r => setTimeout(r, 100));
 
-      // Phase 2: After restart
+      // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
+      process.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       const count = await queue.count();
@@ -196,7 +198,8 @@ describe('Recovery Logic', () => {
       shutdownManager();
       await new Promise(r => setTimeout(r, 100));
 
-      // Phase 2: After restart
+      // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
+      process.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       // Child should be in queue
@@ -225,7 +228,8 @@ describe('Recovery Logic', () => {
       shutdownManager();
       await new Promise(r => setTimeout(r, 100));
 
-      // Phase 2: After restart
+      // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
+      process.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       const delayedJobs = await queue.getJobs(['delayed']);
@@ -255,6 +259,8 @@ describe('Recovery Logic', () => {
         queue.close();
         shutdownManager();
         await new Promise(r => setTimeout(r, 50));
+        // Ensure DATA_PATH is still set (parallel test isolation)
+        process.env.DATA_PATH = DB_PATH;
         queue = new Queue(QUEUE, { embedded: true });
       }
 
