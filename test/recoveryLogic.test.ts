@@ -37,7 +37,8 @@ describe('Recovery Logic', () => {
 
       const job1 = await queue.add('task', { value: 1 }, {
         jobId: 'unique-job-123',
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
       const originalId = String(job1.id);
 
@@ -70,7 +71,8 @@ describe('Recovery Logic', () => {
 
       const job1 = await queue.add('task', { value: 1 }, {
         jobId: 'dedup-test-456',
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
       const originalId = String(job1.id);
 
@@ -107,7 +109,8 @@ describe('Recovery Logic', () => {
 
       const job1 = await queue.add('task', { value: 1 }, {
         deduplication: { id: 'dedup-key-789', ttl: 300000 },
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
       const originalId = String(job1.id);
 
@@ -142,11 +145,13 @@ describe('Recovery Logic', () => {
 
       const job1 = await queue.add('task', { value: 1 }, {
         deduplication: { id: 'key-a', ttl: 300000 },
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
       const job2 = await queue.add('task', { value: 2 }, {
         deduplication: { id: 'key-b', ttl: 300000 },
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
 
       // Simulate restart
@@ -189,7 +194,8 @@ describe('Recovery Logic', () => {
 
       // Create child job (delayed so it won't be processed)
       const childJob = await queue.add('child', { value: 'child' }, {
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
       const childId = String(childJob.id);
 
@@ -221,7 +227,7 @@ describe('Recovery Logic', () => {
       let queue = new Queue(QUEUE, { embedded: true });
       queue.obliterate();
 
-      await queue.add('task', { value: 1 }, { delay: 3600000 }); // 1 hour
+      await queue.add('task', { value: 1 }, { delay: 3600000, durable: true }); // 1 hour, immediate disk write
 
       // Simulate restart
       queue.close();
@@ -250,7 +256,8 @@ describe('Recovery Logic', () => {
 
       const job = await queue.add('task', { value: 1 }, {
         jobId: 'persist-id',
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
       const originalId = String(job.id);
 
@@ -287,20 +294,23 @@ describe('Recovery Logic', () => {
       // Job A: Simple job with jobId
       const jobA = await queue.add('taskA', { type: 'A' }, {
         jobId: 'job-a',
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
 
       // Job B: Job with uniqueKey deduplication
       const jobB = await queue.add('taskB', { type: 'B' }, {
         deduplication: { id: 'key-b', ttl: 300000 },
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
 
       // Job C: Job with both jobId and deduplication
       const jobC = await queue.add('taskC', { type: 'C' }, {
         jobId: 'job-c',
         deduplication: { id: 'key-c', ttl: 300000 },
-        delay: 60000
+        delay: 60000,
+        durable: true  // Ensure immediate disk write for recovery test
       });
 
       const countBefore = await queue.count();
