@@ -77,6 +77,7 @@ export async function updateJobProgress(
 
     job.progress = Math.max(0, Math.min(100, progress));
     if (message !== undefined) job.progressMessage = message;
+    job.lastHeartbeat = Date.now();
 
     // Broadcast progress event to internal subscribers
     ctx.eventsManager.broadcast({

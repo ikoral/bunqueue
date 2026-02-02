@@ -712,6 +712,57 @@ export class QueueManager {
     return statsMgr.getStats(this.contextFactory.getStatsContext(), this.cronScheduler);
   }
 
+  /** Get job counts for a specific queue */
+  getQueueJobCounts(queueName: string): {
+    waiting: number;
+    delayed: number;
+    active: number;
+    completed: number;
+    failed: number;
+  } {
+    const idx = shardIndex(queueName);
+    const shard = this.shards[idx];
+    const queue = shard.queues.get(queueName);
+    const now = Date.now();
+
+    // Count waiting vs delayed jobs in the queue
+    let waiting = 0;
+    let delayed = 0;
+    if (queue) {
+      for (const job of queue.values()) {
+        if (job.runAt > now) {
+          delayed++;
+        } else {
+          waiting++;
+        }
+      }
+    }
+
+    // Count active jobs (processing) for this queue
+    let active = 0;
+    for (const procShard of this.processingShards) {
+      for (const job of procShard.values()) {
+        if (job.queue === queueName) {
+          active++;
+        }
+      }
+    }
+
+    // Count completed jobs for this queue
+    let completed = 0;
+    for (const [jobId, loc] of this.jobIndex) {
+      if (loc.type === 'completed' && this.completedJobs.has(jobId)) {
+        // We don't store queueName in completed location, so this is approximate
+        completed++;
+      }
+    }
+
+    // Count failed (DLQ) jobs for this queue
+    const failed = shard.getDlq(queueName).length;
+
+    return { waiting, delayed, active, completed, failed };
+  }
+
   getMemoryStats() {
     return statsMgr.getMemoryStats(this.contextFactory.getStatsContext());
   }

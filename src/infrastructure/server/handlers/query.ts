@@ -41,23 +41,13 @@ export function handleGetResult(
 
 /** Handle GetJobCounts command */
 export function handleGetJobCounts(
-  _cmd: Extract<Command, { cmd: 'GetJobCounts' }>,
+  cmd: Extract<Command, { cmd: 'GetJobCounts' }>,
   ctx: HandlerContext,
   reqId?: string
 ): Response {
-  const stats = ctx.queueManager.getStats();
-  // For a specific queue, we'd need per-queue stats
-  // For now return global stats
-  return resp.counts(
-    {
-      waiting: stats.waiting,
-      delayed: stats.delayed,
-      active: stats.active,
-      completed: stats.completed,
-      failed: Number(stats.totalFailed),
-    },
-    reqId
-  );
+  // Get queue-specific counts
+  const counts = ctx.queueManager.getQueueJobCounts(cmd.queue);
+  return resp.counts(counts, reqId);
 }
 
 /** Handle GetCountsPerPriority command */

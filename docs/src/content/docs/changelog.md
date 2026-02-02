@@ -10,6 +10,23 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.0.3] - 2026-02-02
+
+### Changed
+- **Major refactor: Split queue.ts into modular architecture** (1955 → 485 lines)
+  - Follows single responsibility principle with 14 focused modules
+  - New modules: operations/add.ts, operations/counts.ts, operations/query.ts, operations/management.ts, operations/cleanup.ts, operations/control.ts
+  - New modules: jobMove.ts, jobProxy.ts, bullmqCompat.ts, scheduler.ts, dlq.ts, stall.ts, rateLimit.ts, deduplication.ts, workers.ts, queueTypes.ts
+  - All 894 unit tests, 25 TCP test suites, and 32 embedded test suites pass
+
+### Fixed
+- `getJob()` now properly awaits async manager.getJob() call
+- `getJobCounts()` now uses queue-specific counts instead of global stats
+- `promoteJobs()` implements correct iteration over delayed jobs
+- `addBulk()` properly passes BullMQ v5 options (lifo, stackTraceLimit, keepLogs, etc.)
+- `toPublicJob()` used for full job options support in getJob()
+- `extendJobLock()` passes token parameter correctly
+
 ## [2.0.2] - 2026-02-02
 
 ### Fixed

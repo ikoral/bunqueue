@@ -226,18 +226,58 @@ export class SqliteStorage {
 
   // ============ Query Operations ============
 
-  loadPendingJobs(): Job[] {
+  /**
+   * Load pending jobs with pagination for efficient recovery.
+   * Orders by priority (desc) and run_at (asc) to process urgent jobs first.
+   * @param limit Max jobs to return (default: 10000)
+   * @param offset Skip first N jobs (default: 0)
+   */
+  loadPendingJobs(limit: number = 10000, offset: number = 0): Job[] {
     const rows = this.db
-      .query<DbJob, []>("SELECT * FROM jobs WHERE state IN ('waiting', 'delayed') ORDER BY id")
-      .all();
+      .query<
+        DbJob,
+        [number, number]
+      >("SELECT * FROM jobs WHERE state IN ('waiting', 'delayed') ORDER BY priority DESC, run_at ASC LIMIT ? OFFSET ?")
+      .all(limit, offset);
     return rows.map((row) => rowToJob(row));
   }
 
-  loadActiveJobs(): Job[] {
+  /**
+   * Load active jobs with pagination.
+   * @param limit Max jobs to return (default: 10000)
+   * @param offset Skip first N jobs (default: 0)
+   */
+  loadActiveJobs(limit: number = 10000, offset: number = 0): Job[] {
     const rows = this.db
-      .query<DbJob, []>("SELECT * FROM jobs WHERE state = 'active' ORDER BY id")
-      .all();
+      .query<
+        DbJob,
+        [number, number]
+      >("SELECT * FROM jobs WHERE state = 'active' ORDER BY started_at ASC LIMIT ? OFFSET ?")
+      .all(limit, offset);
     return rows.map((row) => rowToJob(row));
+  }
+
+  /**
+   * Count pending jobs (for pagination)
+   */
+  countPendingJobs(): number {
+    const result = this.db
+      .query<
+        { count: number },
+        []
+      >("SELECT COUNT(*) as count FROM jobs WHERE state IN ('waiting', 'delayed')")
+      .get();
+    return result?.count ?? 0;
+  }
+
+  /**
+   * Count active jobs (for pagination)
+   */
+  countActiveJobs(): number {
+    const result = this.db
+      .query<{ count: number }, []>("SELECT COUNT(*) as count FROM jobs WHERE state = 'active'")
+      .get();
+    return result?.count ?? 0;
   }
 
   // ============ Cron Operations ============

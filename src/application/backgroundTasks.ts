@@ -5,6 +5,7 @@
 
 import { queueLog } from '../shared/logger';
 import { shardIndex } from '../shared/hash';
+import { FailureReason } from '../domain/types/dlq';
 import * as dlqOps from './dlqManager';
 import { checkExpiredLocks } from './lockManager';
 import { cleanup } from './cleanupTasks';
@@ -221,6 +222,10 @@ function performDlqMaintenance(ctx: BackgroundContext): void {
 
 // ============ Recovery ============
 
+/** Batch size for paginated recovery */
+const RECOVERY_BATCH_SIZE = 10000;
+
+// eslint-disable-next-line complexity
 export function recover(ctx: BackgroundContext): void {
   if (!ctx.storage) return;
 
@@ -228,48 +233,134 @@ export function recover(ctx: BackgroundContext): void {
   const completedInDb = ctx.storage.loadCompletedJobIds();
 
   const now = Date.now();
-  for (const job of ctx.storage.loadPendingJobs()) {
-    const idx = shardIndex(job.queue);
-    const shard = ctx.shards[idx];
 
-    // Check if job has unmet dependencies
-    // Check both in-memory completedJobs AND SQLite job_results table
-    const hasDependencies = job.dependsOn && job.dependsOn.length > 0;
-    const needsWaitingDeps =
-      hasDependencies &&
-      !job.dependsOn.every((depId) => ctx.completedJobs.has(depId) || completedInDb.has(depId));
+  // === PHASE 1: Recover active jobs (were processing when server stopped) ===
+  // These jobs are considered "stalled" and need to be retried or moved to DLQ
+  let totalActiveRecovered = 0;
+  let activeOffset = 0;
 
-    if (needsWaitingDeps) {
-      // Job is waiting for dependencies - don't add to main queue
-      shard.waitingDeps.set(job.id, job);
-      shard.registerDependencies(job.id, job.dependsOn);
-      // Note: don't call incrementQueued for waitingDeps jobs (matches push.ts behavior)
-    } else {
-      // Job is ready to process
-      shard.getQueue(job.queue).push(job);
-      // Update running counters for O(1) stats and temporal index
-      const isDelayed = job.runAt > now;
-      shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
+  while (true) {
+    const activeJobs = ctx.storage.loadActiveJobs(RECOVERY_BATCH_SIZE, activeOffset);
+    if (activeJobs.length === 0) break;
+
+    for (const job of activeJobs) {
+      const idx = shardIndex(job.queue);
+      const shard = ctx.shards[idx];
+      const stallConfig = shard.getStallConfig(job.queue);
+
+      // Increment stall count (job was interrupted)
+      job.stallCount = (job.stallCount || 0) + 1;
+      job.attempts++;
+      job.startedAt = null;
+      job.lastHeartbeat = now;
+
+      // Check if exceeded max stalls
+      const maxStalls = stallConfig.maxStalls ?? 3;
+      if (job.stallCount >= maxStalls) {
+        // Move to DLQ
+        const entry = shard.addToDlq(
+          job,
+          FailureReason.Stalled,
+          `Job stalled ${job.stallCount} times (recovered at startup)`
+        );
+        ctx.jobIndex.set(job.id, { type: 'dlq', queueName: job.queue });
+        ctx.storage.saveDlqEntry(entry);
+        ctx.storage.deleteJob(job.id);
+        queueLog.warn('Recovered active job exceeded max stalls, moved to DLQ', {
+          jobId: String(job.id),
+          queue: job.queue,
+          stallCount: job.stallCount,
+        });
+      } else {
+        // Retry: put back in queue with backoff
+        job.runAt = now + job.backoff * Math.pow(2, job.attempts - 1);
+        shard.getQueue(job.queue).push(job);
+        const isDelayed = job.runAt > now;
+        shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
+        ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+        ctx.storage.updateForRetry(job);
+        queueLog.info('Recovered active job, retrying', {
+          jobId: String(job.id),
+          queue: job.queue,
+          stallCount: job.stallCount,
+          attempt: job.attempts,
+        });
+      }
+
+      ctx.registerQueueName(job.queue);
     }
 
-    ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+    totalActiveRecovered += activeJobs.length;
+    activeOffset += activeJobs.length;
+    if (activeJobs.length < RECOVERY_BATCH_SIZE) break;
+  }
 
-    // Restore customId mapping for deduplication (fixes idempotency on restart)
-    if (job.customId) {
-      ctx.customIdMap.set(job.customId, job.id);
+  if (totalActiveRecovered > 0) {
+    queueLog.info('Recovered active jobs from previous session', { count: totalActiveRecovered });
+  }
+
+  // === PHASE 2: Load pending jobs ===
+  let totalPendingLoaded = 0;
+  let offset = 0;
+
+  // Load pending jobs in batches to avoid memory spikes
+  while (true) {
+    const jobs = ctx.storage.loadPendingJobs(RECOVERY_BATCH_SIZE, offset);
+    if (jobs.length === 0) break;
+
+    for (const job of jobs) {
+      const idx = shardIndex(job.queue);
+      const shard = ctx.shards[idx];
+
+      // Check if job has unmet dependencies
+      // Check both in-memory completedJobs AND SQLite job_results table
+      const hasDependencies = job.dependsOn && job.dependsOn.length > 0;
+      const needsWaitingDeps =
+        hasDependencies &&
+        !job.dependsOn.every((depId) => ctx.completedJobs.has(depId) || completedInDb.has(depId));
+
+      if (needsWaitingDeps) {
+        // Job is waiting for dependencies - don't add to main queue
+        shard.waitingDeps.set(job.id, job);
+        shard.registerDependencies(job.id, job.dependsOn);
+        // Note: don't call incrementQueued for waitingDeps jobs (matches push.ts behavior)
+      } else {
+        // Job is ready to process
+        shard.getQueue(job.queue).push(job);
+        // Update running counters for O(1) stats and temporal index
+        const isDelayed = job.runAt > now;
+        shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
+      }
+
+      ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: job.queue });
+
+      // Restore customId mapping for deduplication (fixes idempotency on restart)
+      if (job.customId) {
+        ctx.customIdMap.set(job.customId, job.id);
+      }
+
+      // Restore uniqueKey mapping for TTL-based deduplication
+      if (job.uniqueKey) {
+        shard.registerUniqueKeyWithTtl(
+          job.queue,
+          job.uniqueKey,
+          job.id,
+          job.deduplicationTtl ?? undefined
+        );
+      }
+
+      ctx.registerQueueName(job.queue);
     }
 
-    // Restore uniqueKey mapping for TTL-based deduplication
-    if (job.uniqueKey) {
-      shard.registerUniqueKeyWithTtl(
-        job.queue,
-        job.uniqueKey,
-        job.id,
-        job.deduplicationTtl ?? undefined
-      );
-    }
+    totalPendingLoaded += jobs.length;
+    offset += jobs.length;
 
-    ctx.registerQueueName(job.queue);
+    // If we got less than batch size, we're done
+    if (jobs.length < RECOVERY_BATCH_SIZE) break;
+  }
+
+  if (totalPendingLoaded > 0) {
+    queueLog.info('Loaded pending jobs', { count: totalPendingLoaded });
   }
 
   // Load DLQ entries
