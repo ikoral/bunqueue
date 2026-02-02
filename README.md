@@ -1,5 +1,20 @@
 <p align="center">
-  <img src=".github/logo.svg" alt="bunqueue" width="300" />
+  <img src=".github/banner.svg" alt="bunqueue - High-performance job queue for Bun" width="700" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/egeominotti/bunqueue/actions"><img src="https://github.com/egeominotti/bunqueue/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/egeominotti/bunqueue/releases"><img src="https://img.shields.io/github/v/release/egeominotti/bunqueue" alt="Release"></a>
+  <a href="https://github.com/egeominotti/bunqueue/blob/main/LICENSE"><img src="https://img.shields.io/github/license/egeominotti/bunqueue" alt="License"></a>
+  <a href="https://www.npmjs.com/package/bunqueue"><img src="https://img.shields.io/npm/v/bunqueue" alt="npm"></a>
+</p>
+
+<p align="center">
+  <strong>High-performance job queue for Bun. Zero external dependencies.</strong>
+</p>
+
+<p align="center">
+  <a href="https://egeominotti.github.io/bunqueue/"><strong>Documentation</strong></a>
 </p>
 
 ---
