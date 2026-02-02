@@ -9,10 +9,10 @@ import { createLogger } from '../shared/logger';
 const workerLog = createLogger('Worker');
 
 /** Worker timeout - consider dead after this many ms without heartbeat */
-const WORKER_TIMEOUT_MS = parseInt(process.env.WORKER_TIMEOUT_MS ?? '30000', 10);
+const WORKER_TIMEOUT_MS = parseInt(Bun.env.WORKER_TIMEOUT_MS ?? '30000', 10);
 
 /** Cleanup interval for stale workers */
-const WORKER_CLEANUP_INTERVAL_MS = parseInt(process.env.WORKER_CLEANUP_INTERVAL_MS ?? '60000', 10);
+const WORKER_CLEANUP_INTERVAL_MS = parseInt(Bun.env.WORKER_CLEANUP_INTERVAL_MS ?? '60000', 10);
 
 /**
  * Worker Manager

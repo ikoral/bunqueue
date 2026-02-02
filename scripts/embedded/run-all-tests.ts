@@ -4,11 +4,10 @@
  */
 
 // Force embedded mode for all tests
-process.env.BUNQUEUE_EMBEDDED = '1';
+Bun.env.BUNQUEUE_EMBEDDED = '1';
 
 import { spawn } from 'bun';
 import { readdir } from 'fs/promises';
-import { join } from 'path';
 
 const SCRIPTS_DIR = import.meta.dir;
 

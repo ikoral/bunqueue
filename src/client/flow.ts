@@ -28,7 +28,7 @@ export type {
   GetFlowOpts,
 } from './flowTypes';
 
-const FORCE_EMBEDDED = process.env.BUNQUEUE_EMBEDDED === '1';
+const FORCE_EMBEDDED = Bun.env.BUNQUEUE_EMBEDDED === '1';
 
 /**
  * FlowProducer creates job flows with automatic dependencies.

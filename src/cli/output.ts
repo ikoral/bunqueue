@@ -16,7 +16,7 @@ const colors = {
 } as const;
 
 /** Check if colors are supported */
-const supportsColor = process.stdout.isTTY && process.env.NO_COLOR !== '1';
+const supportsColor = process.stdout.isTTY && Bun.env.NO_COLOR !== '1';
 
 /** Apply color if supported */
 function color(text: string, colorCode: string): string {
@@ -57,6 +57,13 @@ function formatJob(job: Record<string, unknown>): string {
   return lines.join('\n');
 }
 
+/** Pad string to width accounting for ANSI codes */
+function pad(text: string, width: number): string {
+  const visualWidth = Bun.stringWidth(text);
+  const padding = Math.max(0, width - visualWidth);
+  return text + ' '.repeat(padding);
+}
+
 /** Format jobs as a table */
 function formatJobsTable(jobs: Record<string, unknown>[]): string {
   if (jobs.length === 0) {
@@ -64,19 +71,19 @@ function formatJobsTable(jobs: Record<string, unknown>[]): string {
   }
 
   const header = [
-    color('ID', colors.bold).padEnd(20 + (supportsColor ? 9 : 0)),
-    color('Queue', colors.bold).padEnd(15 + (supportsColor ? 9 : 0)),
-    color('State', colors.bold).padEnd(12 + (supportsColor ? 9 : 0)),
-    color('Priority', colors.bold).padEnd(10 + (supportsColor ? 9 : 0)),
+    pad(color('ID', colors.bold), 20),
+    pad(color('Queue', colors.bold), 15),
+    pad(color('State', colors.bold), 12),
+    pad(color('Priority', colors.bold), 10),
     color('Attempts', colors.bold),
   ].join(' ');
 
   const rows = jobs.map((job) =>
     [
-      str(job.id).padEnd(20),
-      str(job.queue).padEnd(15),
-      str(job.state, '-').padEnd(12),
-      str(job.priority).padEnd(10),
+      pad(str(job.id), 20),
+      pad(str(job.queue), 15),
+      pad(str(job.state, '-'), 12),
+      pad(str(job.priority), 10),
       `${str(job.attempts)}/${str(job.maxAttempts)}`,
     ].join(' ')
   );

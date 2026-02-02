@@ -40,8 +40,13 @@ export interface BackupResult {
 export interface BackupMetadata {
   timestamp: string;
   version: string;
+  /** Original uncompressed size in bytes */
   size: number;
+  /** Compressed size in bytes (if compressed) */
+  compressedSize?: number;
   checksum: string;
+  /** Whether the backup is gzip compressed */
+  compressed?: boolean;
 }
 
 /** Backup list item */
@@ -64,15 +69,15 @@ export const DEFAULTS = {
  */
 export function configFromEnv(databasePath: string): S3BackupConfig {
   return {
-    enabled: process.env.S3_BACKUP_ENABLED === '1' || process.env.S3_BACKUP_ENABLED === 'true',
-    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? process.env.AWS_ACCESS_KEY_ID ?? '',
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? '',
-    bucket: process.env.S3_BUCKET ?? process.env.AWS_BUCKET ?? '',
-    endpoint: process.env.S3_ENDPOINT ?? process.env.AWS_ENDPOINT,
-    region: process.env.S3_REGION ?? process.env.AWS_REGION ?? DEFAULTS.region,
-    intervalMs: parseInt(process.env.S3_BACKUP_INTERVAL ?? '', 10) || DEFAULTS.intervalMs,
-    retention: parseInt(process.env.S3_BACKUP_RETENTION ?? '', 10) || DEFAULTS.retention,
-    prefix: process.env.S3_BACKUP_PREFIX ?? DEFAULTS.prefix,
+    enabled: Bun.env.S3_BACKUP_ENABLED === '1' || Bun.env.S3_BACKUP_ENABLED === 'true',
+    accessKeyId: Bun.env.S3_ACCESS_KEY_ID ?? Bun.env.AWS_ACCESS_KEY_ID ?? '',
+    secretAccessKey: Bun.env.S3_SECRET_ACCESS_KEY ?? Bun.env.AWS_SECRET_ACCESS_KEY ?? '',
+    bucket: Bun.env.S3_BUCKET ?? Bun.env.AWS_BUCKET ?? '',
+    endpoint: Bun.env.S3_ENDPOINT ?? Bun.env.AWS_ENDPOINT,
+    region: Bun.env.S3_REGION ?? Bun.env.AWS_REGION ?? DEFAULTS.region,
+    intervalMs: parseInt(Bun.env.S3_BACKUP_INTERVAL ?? '', 10) || DEFAULTS.intervalMs,
+    retention: parseInt(Bun.env.S3_BACKUP_RETENTION ?? '', 10) || DEFAULTS.retention,
+    prefix: Bun.env.S3_BACKUP_PREFIX ?? DEFAULTS.prefix,
     databasePath,
   };
 }

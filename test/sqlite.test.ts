@@ -6,45 +6,45 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { SqliteStorage } from '../src/infrastructure/persistence/sqlite';
 import { jobId } from '../src/domain/types/job';
-import { unlinkSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 const TEST_DB_PATH = './test-storage.db';
 
 describe('SqliteStorage', () => {
   let storage: SqliteStorage;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // Clean up any existing test database
-    if (existsSync(TEST_DB_PATH)) {
-      unlinkSync(TEST_DB_PATH);
+    if (await Bun.file(TEST_DB_PATH).exists()) {
+      await unlink(TEST_DB_PATH);
     }
-    if (existsSync(`${TEST_DB_PATH}-wal`)) {
-      unlinkSync(`${TEST_DB_PATH}-wal`);
+    if (await Bun.file(`${TEST_DB_PATH}-wal`).exists()) {
+      await unlink(`${TEST_DB_PATH}-wal`);
     }
-    if (existsSync(`${TEST_DB_PATH}-shm`)) {
-      unlinkSync(`${TEST_DB_PATH}-shm`);
+    if (await Bun.file(`${TEST_DB_PATH}-shm`).exists()) {
+      await unlink(`${TEST_DB_PATH}-shm`);
     }
 
     storage = new SqliteStorage({ path: TEST_DB_PATH });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     storage.close();
     // Clean up test database
-    if (existsSync(TEST_DB_PATH)) {
-      unlinkSync(TEST_DB_PATH);
+    if (await Bun.file(TEST_DB_PATH).exists()) {
+      await unlink(TEST_DB_PATH);
     }
-    if (existsSync(`${TEST_DB_PATH}-wal`)) {
-      unlinkSync(`${TEST_DB_PATH}-wal`);
+    if (await Bun.file(`${TEST_DB_PATH}-wal`).exists()) {
+      await unlink(`${TEST_DB_PATH}-wal`);
     }
-    if (existsSync(`${TEST_DB_PATH}-shm`)) {
-      unlinkSync(`${TEST_DB_PATH}-shm`);
+    if (await Bun.file(`${TEST_DB_PATH}-shm`).exists()) {
+      await unlink(`${TEST_DB_PATH}-shm`);
     }
   });
 
   describe('Database Creation', () => {
-    test('should create database file', () => {
-      expect(existsSync(TEST_DB_PATH)).toBe(true);
+    test('should create database file', async () => {
+      expect(await Bun.file(TEST_DB_PATH).exists()).toBe(true);
     });
 
     test('should have valid database size', () => {

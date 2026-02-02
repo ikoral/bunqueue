@@ -5,20 +5,20 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { QueueManager } from '../src/application/queueManager';
-import { unlinkSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 const TEST_DB = './test-stress.db';
 
-function cleanup() {
-  [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`].forEach((f) => {
-    if (existsSync(f)) unlinkSync(f);
-  });
+async function cleanup() {
+  for (const f of [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`]) {
+    if (await Bun.file(f).exists()) await unlink(f);
+  }
 }
 
 describe('Stress Tests', () => {
   describe('1. High Volume Push', () => {
     test('handles 1000 sequential pushes', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       const start = performance.now();
@@ -32,11 +32,11 @@ describe('Stress Tests', () => {
       console.log(`1000 sequential pushes: ${duration.toFixed(2)}ms (${(1000 / (duration / 1000)).toFixed(0)} ops/sec)`);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('handles 500 parallel pushes', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       const start = performance.now();
@@ -51,13 +51,13 @@ describe('Stress Tests', () => {
       console.log(`500 parallel pushes: ${duration.toFixed(2)}ms (${(500 / (duration / 1000)).toFixed(0)} ops/sec)`);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('2. High Volume Processing', () => {
     test('processes 500 jobs end-to-end', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       // Push 500 jobs
@@ -86,13 +86,13 @@ describe('Stress Tests', () => {
       console.log(`500 jobs processed: ${duration.toFixed(2)}ms (${(500 / (duration / 1000)).toFixed(0)} ops/sec)`);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('3. Multiple Queues', () => {
     test('handles 10 queues with 100 jobs each', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       const QUEUE_COUNT = 10;
@@ -126,13 +126,13 @@ describe('Stress Tests', () => {
       expect(stats.completed).toBe(QUEUE_COUNT * JOBS_PER_QUEUE);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('4. Concurrent Workers Simulation', () => {
     test('simulates 5 workers processing concurrently', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       const TOTAL_JOBS = 200;
@@ -174,13 +174,13 @@ describe('Stress Tests', () => {
       console.log(`Worker distribution: ${processedByWorker.join(', ')}`);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('5. Priority Under Load', () => {
     test('maintains priority order under load', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       // Push jobs with different priorities (interleaved)
@@ -211,13 +211,13 @@ describe('Stress Tests', () => {
       expect(orderCorrect).toBe(true);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('6. Failure Recovery', () => {
     test('handles rapid fail/retry cycles', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       // Push jobs that will fail
@@ -257,13 +257,13 @@ describe('Stress Tests', () => {
       expect(stats.completed + stats.dlq).toBe(50);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('7. Delayed Jobs Under Load', () => {
     test('handles many delayed jobs correctly', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       // Push mix of immediate and delayed jobs
@@ -306,13 +306,13 @@ describe('Stress Tests', () => {
       expect(stats.completed).toBe(100);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('8. Persistence Under Load', () => {
     test('persists and recovers under load', async () => {
-      cleanup();
+      await cleanup();
 
       // Phase 1: Create and fill
       let manager = new QueueManager({ dataPath: TEST_DB });
@@ -350,21 +350,21 @@ describe('Stress Tests', () => {
       expect(stats.completed).toBe(100);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('9. Edge Cases', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('handles very long queue names', async () => {

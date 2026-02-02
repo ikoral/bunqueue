@@ -43,10 +43,10 @@ export class SandboxedWorker {
   }
 
   /** Start the sandboxed worker pool */
-  start(): void {
+  async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
-    this.wrapperPath = createWrapperScript(this.queueName, this.options.processor);
+    this.wrapperPath = await createWrapperScript(this.queueName, this.options.processor);
 
     for (let i = 0; i < this.options.concurrency; i++) {
       this.spawnWorker(i);
@@ -65,7 +65,7 @@ export class SandboxedWorker {
     this.workers.length = 0;
 
     if (this.pullPromise) await this.pullPromise;
-    cleanupWrapperScript(this.wrapperPath);
+    await cleanupWrapperScript(this.wrapperPath);
   }
 
   /** Get worker pool stats */

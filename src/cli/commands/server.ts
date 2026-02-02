@@ -32,13 +32,13 @@ function parseServerArgs(args: string[]): ServerOptions {
   });
 
   return {
-    tcpPort: parseInt((values['tcp-port'] as string) ?? process.env.TCP_PORT ?? '6789', 10),
-    httpPort: parseInt((values['http-port'] as string) ?? process.env.HTTP_PORT ?? '6790', 10),
-    host: (values.host as string) ?? process.env.HOST ?? '0.0.0.0',
-    dataPath: (values['data-path'] as string) ?? process.env.DATA_PATH,
+    tcpPort: parseInt((values['tcp-port'] as string) ?? Bun.env.TCP_PORT ?? '6789', 10),
+    httpPort: parseInt((values['http-port'] as string) ?? Bun.env.HTTP_PORT ?? '6790', 10),
+    host: (values.host as string) ?? Bun.env.HOST ?? '0.0.0.0',
+    dataPath: (values['data-path'] as string) ?? Bun.env.DATA_PATH,
     authTokens:
       (values['auth-tokens'] as string)?.split(',').filter(Boolean) ??
-      process.env.AUTH_TOKENS?.split(',').filter(Boolean) ??
+      Bun.env.AUTH_TOKENS?.split(',').filter(Boolean) ??
       [],
   };
 }
@@ -53,14 +53,14 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
   const options = parseServerArgs(args);
 
   // Set environment variables for the server
-  process.env.TCP_PORT = String(options.tcpPort);
-  process.env.HTTP_PORT = String(options.httpPort);
-  process.env.HOST = options.host;
+  Bun.env.TCP_PORT = String(options.tcpPort);
+  Bun.env.HTTP_PORT = String(options.httpPort);
+  Bun.env.HOST = options.host;
   if (options.dataPath) {
-    process.env.DATA_PATH = options.dataPath;
+    Bun.env.DATA_PATH = options.dataPath;
   }
   if (options.authTokens.length > 0) {
-    process.env.AUTH_TOKENS = options.authTokens.join(',');
+    Bun.env.AUTH_TOKENS = options.authTokens.join(',');
   }
 
   // Import and start the server components

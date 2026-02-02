@@ -32,25 +32,31 @@ export async function performBackup(
 
     // Read database file
     const data = await dbFile.arrayBuffer();
-    const size = data.byteLength;
+    const originalSize = data.byteLength;
 
-    // Calculate checksum
+    // Compress with gzip for efficient storage
+    const compressed = Bun.gzipSync(new Uint8Array(data));
+    const compressedSize = compressed.byteLength;
+
+    // Calculate checksum of original data (for integrity verification)
     const hasher = new Bun.CryptoHasher('sha256');
     hasher.update(new Uint8Array(data));
     const checksum = hasher.digest('hex');
 
-    // Upload to S3
+    // Upload compressed backup to S3
     const s3File = client.file(key);
-    await s3File.write(new Uint8Array(data), {
-      type: 'application/x-sqlite3',
+    await s3File.write(compressed, {
+      type: 'application/gzip',
     });
 
     // Upload metadata
     const metadata: BackupMetadata = {
       timestamp: new Date().toISOString(),
       version: VERSION,
-      size,
+      size: originalSize,
+      compressedSize,
       checksum,
+      compressed: true,
     };
 
     const metadataKey = `${key}.meta.json`;
@@ -60,14 +66,16 @@ export async function performBackup(
 
     const duration = Date.now() - startTime;
 
+    const ratio = ((1 - compressedSize / originalSize) * 100).toFixed(1);
     backupLog.info('Backup completed', {
       key,
-      size: `${(size / 1024 / 1024).toFixed(2)} MB`,
+      size: `${(originalSize / 1024 / 1024).toFixed(2)} MB`,
+      compressed: `${(compressedSize / 1024 / 1024).toFixed(2)} MB (${ratio}% saved)`,
       duration: `${duration}ms`,
       checksum: checksum.substring(0, 16) + '...',
     });
 
-    return { success: true, key, size, duration };
+    return { success: true, key, size: originalSize, duration };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     backupLog.error('Backup failed', { error: message });
@@ -132,17 +140,33 @@ export async function restoreBackup(
     }
 
     // Download backup
-    const data = await s3File.arrayBuffer();
+    const compressedData = await s3File.arrayBuffer();
 
-    // Verify checksum if metadata exists
+    // Check metadata to determine if backup is compressed
     const metadataKey = `${key}.meta.json`;
     const metadataFile = client.file(metadataKey);
     const metadataExists = await metadataFile.exists();
+    let metadataRaw: BackupMetadata | null = null;
 
     if (metadataExists) {
-      const metadataRaw = (await metadataFile.json()) as BackupMetadata;
+      metadataRaw = (await metadataFile.json()) as BackupMetadata;
+    }
+
+    // Decompress if backup is compressed (new format) or try to detect gzip magic bytes
+    const isCompressed =
+      metadataRaw?.compressed ??
+      (compressedData.byteLength >= 2 &&
+        new Uint8Array(compressedData)[0] === 0x1f &&
+        new Uint8Array(compressedData)[1] === 0x8b);
+
+    const data = isCompressed
+      ? Bun.gunzipSync(new Uint8Array(compressedData))
+      : new Uint8Array(compressedData);
+
+    // Verify checksum if metadata exists
+    if (metadataRaw?.checksum) {
       const hasher = new Bun.CryptoHasher('sha256');
-      hasher.update(new Uint8Array(data));
+      hasher.update(data);
       const checksum = hasher.digest('hex');
 
       if (checksum !== metadataRaw.checksum) {
@@ -151,13 +175,16 @@ export async function restoreBackup(
     }
 
     // Write to database path
-    await Bun.write(config.databasePath, new Uint8Array(data));
+    await Bun.write(config.databasePath, data);
 
     const duration = Date.now() - startTime;
 
     backupLog.info('Restore completed', {
       key,
       size: `${(data.byteLength / 1024 / 1024).toFixed(2)} MB`,
+      compressed: isCompressed
+        ? `${(compressedData.byteLength / 1024 / 1024).toFixed(2)} MB`
+        : 'no',
       duration: `${duration}ms`,
     });
 

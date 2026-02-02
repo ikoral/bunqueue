@@ -5,30 +5,30 @@
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { Queue, Worker, shutdownManager } from '../src/client';
-import { unlinkSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 // Use unique DB path per test file execution to avoid parallel test interference
 const TEST_RUN_ID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const DB_PATH = `/tmp/test-recovery-logic-${TEST_RUN_ID}.db`;
 
-function cleanupDb() {
-  if (existsSync(DB_PATH)) unlinkSync(DB_PATH);
-  if (existsSync(DB_PATH + '-wal')) unlinkSync(DB_PATH + '-wal');
-  if (existsSync(DB_PATH + '-shm')) unlinkSync(DB_PATH + '-shm');
+async function cleanupDb() {
+  if (await Bun.file(DB_PATH).exists()) await unlink(DB_PATH);
+  if (await Bun.file(DB_PATH + '-wal').exists()) await unlink(DB_PATH + '-wal');
+  if (await Bun.file(DB_PATH + '-shm').exists()) await unlink(DB_PATH + '-shm');
 }
 
 describe('Recovery Logic', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Always shutdown any existing manager first to ensure clean state
     shutdownManager();
-    cleanupDb();
-    process.env.DATA_PATH = DB_PATH;
+    await cleanupDb();
+    Bun.env.DATA_PATH = DB_PATH;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     shutdownManager();
-    cleanupDb();
-    delete process.env.DATA_PATH;
+    await cleanupDb();
+    delete Bun.env.DATA_PATH;
   });
 
   describe('customIdMap Recovery (jobId deduplication)', () => {
@@ -56,7 +56,7 @@ describe('Recovery Logic', () => {
       await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
-      process.env.DATA_PATH = DB_PATH;
+      Bun.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       const dedupAfter = await queue.getDeduplicationJobId('unique-job-123');
@@ -164,7 +164,7 @@ describe('Recovery Logic', () => {
       await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
-      process.env.DATA_PATH = DB_PATH;
+      Bun.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       const count = await queue.count();
@@ -209,7 +209,7 @@ describe('Recovery Logic', () => {
       await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
-      process.env.DATA_PATH = DB_PATH;
+      Bun.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       // Child should be in queue
@@ -239,7 +239,7 @@ describe('Recovery Logic', () => {
       await Bun.sleep(100);
 
       // Phase 2: After restart - ensure DATA_PATH is still set (parallel test isolation)
-      process.env.DATA_PATH = DB_PATH;
+      Bun.env.DATA_PATH = DB_PATH;
       queue = new Queue(QUEUE, { embedded: true });
 
       const delayedJobs = await queue.getJobs(['delayed']);
@@ -271,7 +271,7 @@ describe('Recovery Logic', () => {
         shutdownManager();
         await Bun.sleep(50);
         // Ensure DATA_PATH is still set (parallel test isolation)
-        process.env.DATA_PATH = DB_PATH;
+        Bun.env.DATA_PATH = DB_PATH;
         queue = new Queue(QUEUE, { embedded: true });
       }
 

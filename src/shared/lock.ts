@@ -5,7 +5,7 @@
  */
 
 /** Default lock timeout in milliseconds */
-const DEFAULT_LOCK_TIMEOUT_MS = parseInt(process.env.LOCK_TIMEOUT_MS ?? '5000', 10);
+const DEFAULT_LOCK_TIMEOUT_MS = parseInt(Bun.env.LOCK_TIMEOUT_MS ?? '5000', 10);
 
 /** Lock acquisition result */
 export interface LockGuard {

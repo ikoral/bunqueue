@@ -10,28 +10,28 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { QueueManager } from '../src/application/queueManager';
 import { shardIndex } from '../src/shared/hash';
-import { unlinkSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 const TEST_DB = './test-race.db';
 
-function cleanup() {
-  [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`].forEach((f) => {
-    if (existsSync(f)) unlinkSync(f);
-  });
+async function cleanup() {
+  for (const f of [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`]) {
+    if (await Bun.file(f).exists()) await unlink(f);
+  }
 }
 
 describe('Race Condition Tests', () => {
   describe('1. Concurrent Client Disconnections (releaseClientJobs)', () => {
     let qm: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       qm = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       qm.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('should safely release jobs when multiple clients disconnect simultaneously', async () => {
@@ -178,14 +178,14 @@ describe('Race Condition Tests', () => {
   describe('2. Lock Expiration Under Load (checkExpiredLocks)', () => {
     let qm: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       qm = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       qm.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('should handle concurrent lock renewals and operations', async () => {
@@ -288,17 +288,17 @@ describe('Race Condition Tests', () => {
   describe('3. Stall Detection Under Concurrent Load', () => {
     let qm: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       qm = new QueueManager({
         dataPath: TEST_DB,
         stallCheckMs: 100, // Fast stall check for testing
       });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       qm.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('should handle concurrent lock renewals without losing jobs', async () => {
@@ -415,14 +415,14 @@ describe('Race Condition Tests', () => {
   describe('4. Mixed Concurrent Operations Stress Test', () => {
     let qm: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       qm = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       qm.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('should handle push/pull/ack/fail/release all concurrently', async () => {
@@ -614,14 +614,14 @@ describe('Race Condition Tests', () => {
   describe('5. High Concurrency Lock Contention', () => {
     let qm: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       qm = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       qm.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('should handle 100 concurrent pulls from same queue', async () => {
@@ -724,14 +724,14 @@ describe('Race Condition Tests', () => {
   describe('6. Cross-Queue Concurrent Operations', () => {
     let qm: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       qm = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       qm.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('should handle operations across 10 queues simultaneously', async () => {
@@ -809,14 +809,14 @@ describe('Race Condition Tests', () => {
 describe('Race Condition Benchmarks', () => {
   let qm: QueueManager;
 
-  beforeEach(() => {
-    cleanup();
+  beforeEach(async () => {
+    await cleanup();
     qm = new QueueManager({ dataPath: TEST_DB });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     qm.shutdown();
-    cleanup();
+    await cleanup();
   });
 
   test('BENCHMARK: 1000 concurrent push operations', async () => {

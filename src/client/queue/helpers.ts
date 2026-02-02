@@ -11,7 +11,7 @@ import type { DlqFilter as ClientDlqFilter } from '../types';
 import type * as dlqOps from '../../application/dlqManager';
 
 /** Check if embedded mode should be forced (for tests) */
-export const FORCE_EMBEDDED = process.env.BUNQUEUE_EMBEDDED === '1';
+export const FORCE_EMBEDDED = Bun.env.BUNQUEUE_EMBEDDED === '1';
 
 /** Internal type for accessing manager internals (shards is private) */
 interface ManagerInternals {

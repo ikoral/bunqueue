@@ -11,7 +11,7 @@ let instance: QueueManager | null = null;
 
 /** Get data path from environment */
 function getDataPath(): string | undefined {
-  return process.env.DATA_PATH ?? process.env.SQLITE_PATH;
+  return Bun.env.DATA_PATH ?? Bun.env.SQLITE_PATH;
 }
 
 /** Get shared QueueManager instance */

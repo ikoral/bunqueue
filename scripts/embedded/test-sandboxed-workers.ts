@@ -8,10 +8,9 @@
  */
 
 import { Queue, SandboxedWorker } from '../../src/client';
-import { resolve } from 'path';
 
 const QUEUE_NAME = 'test-sandboxed-workers';
-const PROCESSOR_PATH = resolve(import.meta.dir, './processor.ts');
+const PROCESSOR_PATH = `${import.meta.dir}/processor.ts`;
 
 async function main() {
   console.log('=== Test Sandboxed Workers (Embedded) ===\n');
@@ -34,7 +33,7 @@ async function main() {
       maxRestarts: 3,
     });
 
-    worker.start();
+    await worker.start();
     await Bun.sleep(100);
 
     const stats = worker.getStats();
@@ -69,7 +68,7 @@ async function main() {
       timeout: 5000,
     });
 
-    worker.start();
+    await worker.start();
 
     // Wait for jobs to be processed
     await Bun.sleep(2000);
@@ -106,7 +105,7 @@ async function main() {
       maxRestarts: 3,
     });
 
-    worker.start();
+    await worker.start();
 
     // Wait for the job to be processed and fail
     await Bun.sleep(1500);
@@ -144,7 +143,7 @@ async function main() {
       maxRestarts: 3,
     });
 
-    worker.start();
+    await worker.start();
 
     // Wait for the job to timeout
     await Bun.sleep(2500);
@@ -178,7 +177,7 @@ async function main() {
       timeout: 5000,
     });
 
-    worker.start();
+    await worker.start();
     await Bun.sleep(100);
 
     const stats = worker.getStats();
@@ -221,7 +220,7 @@ async function main() {
       timeout: 5000,
     });
 
-    worker.start();
+    await worker.start();
     await Bun.sleep(500);
 
     // Stop the worker

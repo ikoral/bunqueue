@@ -23,7 +23,7 @@ export async function executeBackupCommand(args: string[]): Promise<BackupComman
   const subArgs = args.slice(1);
 
   // Get database path from env
-  const dataPath = process.env.DATA_PATH ?? process.env.SQLITE_PATH;
+  const dataPath = Bun.env.DATA_PATH ?? Bun.env.SQLITE_PATH;
 
   if (!dataPath) {
     return {

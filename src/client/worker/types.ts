@@ -32,7 +32,7 @@ export interface TcpConnection {
 }
 
 /** Check if embedded mode should be forced (for tests) */
-export const FORCE_EMBEDDED = process.env.BUNQUEUE_EMBEDDED === '1';
+export const FORCE_EMBEDDED = Bun.env.BUNQUEUE_EMBEDDED === '1';
 
 /** Worker constants */
 export const WORKER_CONSTANTS = {

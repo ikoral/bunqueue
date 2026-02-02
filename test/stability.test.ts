@@ -6,28 +6,28 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { Queue, Worker } from '../src/client';
 import { QueueManager } from '../src/application/queueManager';
-import { unlinkSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 const TEST_DB = './test-stability.db';
 
-function cleanup() {
-  [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`].forEach((f) => {
-    if (existsSync(f)) unlinkSync(f);
-  });
+async function cleanup() {
+  for (const f of [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`]) {
+    if (await Bun.file(f).exists()) await unlink(f);
+  }
 }
 
 describe('Stability Tests', () => {
   describe('1. Basic Operations Stability', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('push/pull/ack cycle works correctly', async () => {
@@ -84,14 +84,14 @@ describe('Stability Tests', () => {
   describe('2. Concurrent Operations', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('handles concurrent pushes', async () => {
@@ -150,7 +150,7 @@ describe('Stability Tests', () => {
 
   describe('3. Persistence & Recovery', () => {
     test('jobs survive restart', async () => {
-      cleanup();
+      await cleanup();
 
       // Create manager and push jobs
       let manager = new QueueManager({ dataPath: TEST_DB });
@@ -176,11 +176,11 @@ describe('Stability Tests', () => {
       expect(job).toBeDefined();
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('DLQ entries survive restart', async () => {
-      cleanup();
+      await cleanup();
 
       let manager = new QueueManager({ dataPath: TEST_DB });
 
@@ -206,11 +206,11 @@ describe('Stability Tests', () => {
       expect(stats.dlq).toBe(1);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('completed jobs with results survive restart', async () => {
-      cleanup();
+      await cleanup();
 
       let manager = new QueueManager({ dataPath: TEST_DB });
 
@@ -231,21 +231,21 @@ describe('Stability Tests', () => {
       expect(result).toEqual({ result: 'success', value: 42 });
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('4. DLQ Operations', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('job moves to DLQ after max attempts', async () => {
@@ -294,14 +294,14 @@ describe('Stability Tests', () => {
   describe('5. Priority & Ordering', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('higher priority jobs are pulled first', async () => {
@@ -336,14 +336,14 @@ describe('Stability Tests', () => {
   describe('6. Unique Keys & Deduplication', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('unique key returns existing job for duplicates', async () => {
@@ -385,14 +385,14 @@ describe('Stability Tests', () => {
   describe('7. Rate Limiting & Concurrency', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('concurrency limit is respected', async () => {
@@ -421,7 +421,7 @@ describe('Stability Tests', () => {
 
   describe('8. Memory Stability', () => {
     test('handles moderate throughput without memory leak', async () => {
-      cleanup();
+      await cleanup();
       const manager = new QueueManager({ dataPath: TEST_DB });
 
       const initialMemory = process.memoryUsage().heapUsed;
@@ -462,21 +462,21 @@ describe('Stability Tests', () => {
       expect(stats.completed).toBe(BATCH_SIZE * ITERATIONS);
 
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
   });
 
   describe('9. Error Recovery', () => {
     let manager: QueueManager;
 
-    beforeEach(() => {
-      cleanup();
+    beforeEach(async () => {
+      await cleanup();
       manager = new QueueManager({ dataPath: TEST_DB });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       manager.shutdown();
-      cleanup();
+      await cleanup();
     });
 
     test('ack non-existent job throws error', async () => {
@@ -502,7 +502,7 @@ describe('Stability Tests', () => {
 
   describe('10. Worker Integration', () => {
     test('worker processes jobs correctly', async () => {
-      cleanup();
+      await cleanup();
       const processed: number[] = [];
 
       const queue = new Queue<{ index: number }>('worker-test');
@@ -527,11 +527,11 @@ describe('Stability Tests', () => {
       expect(processed.sort()).toEqual([1, 2, 3]);
 
       await worker.close();
-      cleanup();
+      await cleanup();
     });
 
     test('worker handles errors gracefully', async () => {
-      cleanup();
+      await cleanup();
       let errorCount = 0;
 
       const queue = new Queue<{ shouldFail: boolean }>('error-worker-test');
@@ -556,7 +556,7 @@ describe('Stability Tests', () => {
       expect(errorCount).toBe(1);
 
       await worker.close();
-      cleanup();
+      await cleanup();
     });
   });
 });

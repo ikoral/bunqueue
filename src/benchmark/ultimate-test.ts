@@ -14,17 +14,17 @@
 
 import { QueueManager } from '../application/queueManager';
 import { createTcpServer } from '../infrastructure/server/tcp';
-import { unlinkSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 // ============ Config ============
 const TEST_DB = './ultimate-test.db';
 const TCP_PORT = 16888;
 
 // ============ Utilities ============
-function cleanup() {
-  [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`].forEach((f) => {
-    if (existsSync(f)) unlinkSync(f);
-  });
+async function cleanup() {
+  for (const f of [TEST_DB, `${TEST_DB}-wal`, `${TEST_DB}-shm`]) {
+    if (await Bun.file(f).exists()) await unlink(f);
+  }
 }
 
 function fmt(n: number): string {
@@ -839,7 +839,7 @@ async function main() {
   console.log('║          ULTIMATE TEST - Production Readiness              ║');
   console.log('╚════════════════════════════════════════════════════════════╝');
 
-  cleanup();
+  await cleanup();
 
   const qm = new QueueManager({ dataPath: TEST_DB });
   const results = new TestResults();
@@ -870,7 +870,7 @@ async function main() {
     process.exit(1);
   } finally {
     qm.shutdown();
-    cleanup();
+    await cleanup();
   }
 }
 

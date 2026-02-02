@@ -4,14 +4,14 @@
  */
 
 import { Queue, Worker, shutdownManager } from '../src/client';
-import { unlinkSync, existsSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 const DB_PATH = '/tmp/test-recovery-logic.db';
 
-function cleanup() {
-  if (existsSync(DB_PATH)) unlinkSync(DB_PATH);
-  if (existsSync(DB_PATH + '-wal')) unlinkSync(DB_PATH + '-wal');
-  if (existsSync(DB_PATH + '-shm')) unlinkSync(DB_PATH + '-shm');
+async function cleanup() {
+  if (await Bun.file(DB_PATH).exists()) await unlink(DB_PATH);
+  if (await Bun.file(DB_PATH + '-wal').exists()) await unlink(DB_PATH + '-wal');
+  if (await Bun.file(DB_PATH + '-shm').exists()) await unlink(DB_PATH + '-shm');
 }
 
 interface TestResult {
@@ -38,7 +38,7 @@ async function runTests() {
   console.log('='.repeat(60) + '\n');
 
   // Clean start
-  cleanup();
+  await cleanup();
   process.env.DATA_PATH = DB_PATH;
 
   // ============================================
@@ -429,7 +429,7 @@ async function runTests() {
   }
 
   // Cleanup
-  cleanup();
+  await cleanup();
 
   console.log('\n' + (failed === 0 ? '✅ ALL TESTS PASSED!' : '❌ SOME TESTS FAILED!') + '\n');
 
@@ -438,6 +438,6 @@ async function runTests() {
 
 runTests().catch(err => {
   console.error('Fatal error:', err);
-  cleanup();
+  await cleanup();
   process.exit(1);
 });

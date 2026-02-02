@@ -3,9 +3,7 @@
  * Creates the wrapper script that loads processor in worker process
  */
 
-import { join } from 'path';
-import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
-import { tmpdir } from 'os';
+import { mkdir } from 'fs/promises';
 
 /**
  * Escape a string for safe embedding in a template literal
@@ -18,10 +16,13 @@ function escapeForTemplateLiteral(str: string): string {
 /**
  * Create wrapper script file that loads the processor
  */
-export function createWrapperScript(queueName: string, processorPath: string): string {
+export async function createWrapperScript(
+  queueName: string,
+  processorPath: string
+): Promise<string> {
   const fullPath = processorPath.startsWith('/')
     ? processorPath
-    : join(process.cwd(), processorPath);
+    : `${process.cwd()}/${processorPath}`;
 
   // Escape the path to prevent code injection via backticks or template expressions
   const escapedPath = escapeForTemplateLiteral(fullPath);
@@ -56,13 +57,14 @@ self.onmessage = async (event) => {
 };
 `;
 
-  const tempDir = join(tmpdir(), 'bunqueue-workers');
-  if (!existsSync(tempDir)) {
-    mkdirSync(tempDir, { recursive: true });
+  const tempDir = `${Bun.env.TMPDIR ?? '/tmp'}/bunqueue-workers`;
+  const tempDirFile = Bun.file(tempDir);
+  if (!(await tempDirFile.exists())) {
+    await mkdir(tempDir, { recursive: true });
   }
 
-  const wrapperPath = join(tempDir, `worker-${queueName}-${Date.now()}.ts`);
-  writeFileSync(wrapperPath, wrapperCode);
+  const wrapperPath = `${tempDir}/worker-${queueName}-${Date.now()}.ts`;
+  await Bun.write(wrapperPath, wrapperCode);
 
   return wrapperPath;
 }
@@ -70,12 +72,16 @@ self.onmessage = async (event) => {
 /**
  * Cleanup wrapper script file
  */
-export function cleanupWrapperScript(wrapperPath: string | null): void {
-  if (wrapperPath && existsSync(wrapperPath)) {
-    try {
-      unlinkSync(wrapperPath);
-    } catch {
-      // Ignore cleanup errors
+export async function cleanupWrapperScript(wrapperPath: string | null): Promise<void> {
+  if (!wrapperPath) return;
+
+  try {
+    const file = Bun.file(wrapperPath);
+    if (await file.exists()) {
+      const { unlink } = await import('fs/promises');
+      await unlink(wrapperPath);
     }
+  } catch {
+    // Ignore cleanup errors
   }
 }

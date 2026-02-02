@@ -6,10 +6,9 @@
 
 import { spawn, type Subprocess } from 'bun';
 import { readdir } from 'fs/promises';
-import { join } from 'path';
 
 const SCRIPTS_DIR = import.meta.dir;
-const PROJECT_ROOT = join(SCRIPTS_DIR, '../..');
+const PROJECT_ROOT = `${SCRIPTS_DIR}/../..`;
 const TCP_PORT = 16789; // Use different port to avoid conflicts
 const HTTP_PORT = 16790;
 

@@ -5,9 +5,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { SandboxedWorker } from '../src/client';
 import { QueueManager } from '../src/application/queueManager';
-import { tmpdir } from 'os';
-import { join } from 'path';
-import { writeFileSync, unlinkSync } from 'fs';
+import { unlink } from 'fs/promises';
 
 describe('SandboxedWorker', () => {
   let manager: QueueManager;
@@ -17,8 +15,8 @@ describe('SandboxedWorker', () => {
     manager = new QueueManager();
 
     // Create a temporary processor file
-    processorPath = join(tmpdir(), `test-processor-${Date.now()}.ts`);
-    writeFileSync(
+    processorPath = `${Bun.env.TMPDIR || '/tmp'}/test-processor-${Date.now()}.ts`;
+    await Bun.write(
       processorPath,
       `
       export default async (job: { id: string; data: any; queue: string; progress: (n: number) => void }) => {
@@ -34,7 +32,7 @@ describe('SandboxedWorker', () => {
   afterAll(async () => {
     await manager.shutdown();
     try {
-      unlinkSync(processorPath);
+      await unlink(processorPath);
     } catch {
       // Ignore cleanup errors
     }
@@ -79,7 +77,7 @@ describe('SandboxedWorker', () => {
       manager,
     });
 
-    worker.start();
+    await worker.start();
 
     // Add job using manager directly
     const job = await manager.push(queueName, { data: { value: 21 } });
@@ -131,8 +129,8 @@ describe('SandboxedWorker', () => {
 
   test('should handle worker timeout', async () => {
     // Create a slow processor
-    const slowProcessorPath = join(tmpdir(), `slow-processor-${Date.now()}.ts`);
-    writeFileSync(
+    const slowProcessorPath = `${Bun.env.TMPDIR || '/tmp'}/slow-processor-${Date.now()}.ts`;
+    await Bun.write(
       slowProcessorPath,
       `
       export default async (job: any) => {
@@ -150,7 +148,7 @@ describe('SandboxedWorker', () => {
       manager,
     });
 
-    worker.start();
+    await worker.start();
 
     await manager.push(queueName, { data: { test: true } });
 
@@ -168,7 +166,7 @@ describe('SandboxedWorker', () => {
     await worker.stop();
 
     try {
-      unlinkSync(slowProcessorPath);
+      await unlink(slowProcessorPath);
     } catch {
       // Ignore
     }
@@ -176,8 +174,8 @@ describe('SandboxedWorker', () => {
 
   test('should handle processor errors', async () => {
     // Create an error-throwing processor
-    const errorProcessorPath = join(tmpdir(), `error-processor-${Date.now()}.ts`);
-    writeFileSync(
+    const errorProcessorPath = `${Bun.env.TMPDIR || '/tmp'}/error-processor-${Date.now()}.ts`;
+    await Bun.write(
       errorProcessorPath,
       `
       export default async (job: any) => {
@@ -194,7 +192,7 @@ describe('SandboxedWorker', () => {
       manager,
     });
 
-    worker.start();
+    await worker.start();
 
     await manager.push(queueName, { data: { test: true } });
 
@@ -213,7 +211,7 @@ describe('SandboxedWorker', () => {
     await worker.stop();
 
     try {
-      unlinkSync(errorProcessorPath);
+      await unlink(errorProcessorPath);
     } catch {
       // Ignore
     }

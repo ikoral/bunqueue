@@ -3,8 +3,6 @@
  * FNV-1a implementation for consistent hashing
  */
 
-import { cpus } from 'os';
-
 const FNV_PRIME = 0x01000193;
 const FNV_OFFSET = 0x811c9dc5;
 
@@ -28,7 +26,7 @@ export function fnv1a(str: string): number {
  * - Capped at 64 to avoid excessive memory overhead
  */
 function calculateShardCount(): number {
-  const cores = cpus().length || 4; // Fallback to 4 if detection fails
+  const cores = navigator.hardwareConcurrency || 4; // Fallback to 4 if detection fails
 
   // Find next power of 2 >= cores, capped at 64
   let shards = 1;

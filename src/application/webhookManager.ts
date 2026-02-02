@@ -16,10 +16,10 @@ import { webhookLog } from '../shared/logger';
 const textEncoder = new TextEncoder();
 
 /** Maximum webhook delivery retries (configurable via WEBHOOK_MAX_RETRIES env var) */
-const WEBHOOK_MAX_RETRIES = parseInt(process.env.WEBHOOK_MAX_RETRIES ?? '3', 10);
+const WEBHOOK_MAX_RETRIES = parseInt(Bun.env.WEBHOOK_MAX_RETRIES ?? '3', 10);
 
 /** Delay between webhook retries in ms (configurable via WEBHOOK_RETRY_DELAY_MS env var) */
-const WEBHOOK_RETRY_DELAY_MS = parseInt(process.env.WEBHOOK_RETRY_DELAY_MS ?? '1000', 10);
+const WEBHOOK_RETRY_DELAY_MS = parseInt(Bun.env.WEBHOOK_RETRY_DELAY_MS ?? '1000', 10);
 
 /** Maximum number of cached crypto keys to prevent unbounded growth */
 const MAX_KEY_CACHE_SIZE = 100;

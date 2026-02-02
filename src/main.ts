@@ -5,8 +5,8 @@
  */
 
 /** Configurable timeouts from environment (must be before startServer call) */
-const SHUTDOWN_TIMEOUT_MS = parseInt(process.env.SHUTDOWN_TIMEOUT_MS ?? '30000', 10);
-const STATS_INTERVAL_MS = parseInt(process.env.STATS_INTERVAL_MS ?? '30000', 10);
+const SHUTDOWN_TIMEOUT_MS = parseInt(Bun.env.SHUTDOWN_TIMEOUT_MS ?? '30000', 10);
+const STATS_INTERVAL_MS = parseInt(Bun.env.STATS_INTERVAL_MS ?? '30000', 10);
 
 // Check for CLI client commands (not server mode)
 const clientCommands = [
@@ -49,7 +49,6 @@ import { stopRateLimiter } from './infrastructure/server/rateLimiter';
 import { VERSION } from './shared/version';
 import { S3BackupManager } from './infrastructure/backup';
 import { SHARD_COUNT } from './shared/hash';
-import { cpus } from 'os';
 
 /** Server configuration from environment */
 interface ServerConfig {
@@ -70,17 +69,16 @@ interface ServerConfig {
 /** Load configuration from environment variables */
 function loadConfig(): ServerConfig {
   return {
-    tcpPort: parseInt(process.env.TCP_PORT ?? '6789'),
-    httpPort: parseInt(process.env.HTTP_PORT ?? '6790'),
-    hostname: process.env.HOST ?? '0.0.0.0',
-    tcpSocketPath: process.env.TCP_SOCKET_PATH,
-    httpSocketPath: process.env.HTTP_SOCKET_PATH,
-    authTokens: process.env.AUTH_TOKENS?.split(',').filter(Boolean) ?? [],
-    dataPath: process.env.DATA_PATH ?? process.env.SQLITE_PATH,
-    corsOrigins: process.env.CORS_ALLOW_ORIGIN?.split(',').filter(Boolean) ?? ['*'],
-    requireAuthForMetrics: process.env.METRICS_AUTH === 'true',
-    s3BackupEnabled:
-      process.env.S3_BACKUP_ENABLED === '1' || process.env.S3_BACKUP_ENABLED === 'true',
+    tcpPort: parseInt(Bun.env.TCP_PORT ?? '6789'),
+    httpPort: parseInt(Bun.env.HTTP_PORT ?? '6790'),
+    hostname: Bun.env.HOST ?? '0.0.0.0',
+    tcpSocketPath: Bun.env.TCP_SOCKET_PATH,
+    httpSocketPath: Bun.env.HTTP_SOCKET_PATH,
+    authTokens: Bun.env.AUTH_TOKENS?.split(',').filter(Boolean) ?? [],
+    dataPath: Bun.env.DATA_PATH ?? Bun.env.SQLITE_PATH,
+    corsOrigins: Bun.env.CORS_ALLOW_ORIGIN?.split(',').filter(Boolean) ?? ['*'],
+    requireAuthForMetrics: Bun.env.METRICS_AUTH === 'true',
+    s3BackupEnabled: Bun.env.S3_BACKUP_ENABLED === '1' || Bun.env.S3_BACKUP_ENABLED === 'true',
   };
 }
 
@@ -122,7 +120,7 @@ ${dim}────────────────────────�
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
   ${yellow}●${reset} Backup ${config.s3BackupEnabled ? `${green}S3 enabled${reset}` : `${dim}disabled${reset}`}
-  ${dim}●${reset} Shards ${bold}${SHARD_COUNT}${reset} ${dim}(${cpus().length} CPU cores)${reset}
+  ${dim}●${reset} Shards ${bold}${SHARD_COUNT}${reset} ${dim}(${navigator.hardwareConcurrency} CPU cores)${reset}
 
 ${dim}─────────────────────────────────────────────────${reset}
 
@@ -224,6 +222,6 @@ function startServer(): void {
 }
 
 // Enable JSON logging if requested
-if (process.env.LOG_FORMAT === 'json') {
+if (Bun.env.LOG_FORMAT === 'json') {
   Logger.enableJsonMode();
 }
