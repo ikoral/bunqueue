@@ -116,7 +116,7 @@ describe('Deduplication Recovery', () => {
   });
 
   describe('deduplication after job completion', () => {
-    test('should allow new job with same jobId after completion', async () => {
+    test('should return same job if jobId exists (BullMQ idempotency)', async () => {
       const customId = 'complete-then-reuse';
 
       // Add and process job
@@ -133,12 +133,37 @@ describe('Deduplication Recovery', () => {
       await Bun.sleep(100);
       await worker.close();
 
-      // After completion, customId should be cleared
-      // and we should be able to add a new job with the same ID
+      // BullMQ behavior: jobId IS the job ID, so adding same jobId returns same job
       const job2 = await queue.add('test', { value: 2 }, { jobId: customId });
 
-      // Should be a different job (new ID)
-      expect(job2.id).not.toBe(job1.id);
+      // Should be the SAME job (BullMQ idempotency - jobId is the actual ID)
+      expect(job2.id).toBe(job1.id);
+      expect(job2.id).toBe(customId);
+    });
+
+    test('should allow reusing jobId after removeOnComplete', async () => {
+      const customId = 'remove-and-reuse';
+
+      // Add job with removeOnComplete
+      const job1 = await queue.add('test', { value: 1 }, { jobId: customId, removeOnComplete: true });
+      expect(job1.id).toBe(customId);
+
+      const worker = new Worker(
+        QUEUE_NAME,
+        async () => ({ done: true }),
+        { embedded: true, autorun: false }
+      );
+
+      // Process the job (should be removed after completion)
+      worker.run();
+      await Bun.sleep(200);
+      await worker.close();
+
+      // Now we should be able to add a new job with the same ID
+      const job2 = await queue.add('test', { value: 2 }, { jobId: customId });
+
+      // Should be the same ID (reused after removal)
+      expect(job2.id).toBe(customId);
     });
   });
 

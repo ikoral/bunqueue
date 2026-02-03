@@ -9,6 +9,7 @@ import {
   type JobInput,
   createJob,
   generateJobId,
+  jobId,
 } from '../../domain/types/job';
 import { type JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
@@ -39,8 +40,8 @@ export interface PushContext {
  * Push a single job to queue
  */
 export async function pushJob(queue: string, input: JobInput, ctx: PushContext): Promise<Job> {
-  // Generate UUIDv7 ID
-  const id = generateJobId();
+  // BullMQ compatibility: use customId as actual job ID if provided
+  const id = input.customId ? jobId(input.customId) : generateJobId();
 
   // Handle custom ID idempotency (BullMQ-style: return existing job)
   if (input.customId) {
