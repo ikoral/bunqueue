@@ -110,6 +110,8 @@ export class WriteBuffer {
   private flushBuffer: Job[] = [];
   /** Lock to prevent concurrent flushes */
   private flushing = false;
+  /** Flag to prevent operations after stop */
+  private stopped = false;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly batchManager: BatchInsertManager;
   private readonly bufferSize: number;
@@ -139,8 +141,8 @@ export class WriteBuffer {
 
     // Auto-flush timer
     this.timer = setInterval(() => {
-      // Skip if we're in backoff mode (backoffTimer is active)
-      if (this.backoffTimer) return;
+      // Skip if stopped or in backoff mode
+      if (this.stopped || this.backoffTimer) return;
 
       try {
         this.flush();
@@ -170,8 +172,8 @@ export class WriteBuffer {
 
   /** Flush buffer to disk using double-buffering. Returns number of jobs flushed. */
   flush(): number {
-    // Prevent concurrent flushes
-    if (this.flushing) return 0;
+    // Prevent flush after stop or concurrent flushes
+    if (this.stopped || this.flushing) return 0;
     if (this.activeBuffer.length === 0) return 0;
 
     this.flushing = true;
@@ -295,6 +297,9 @@ export class WriteBuffer {
         // The onError callback has already been called
       }
     }
+
+    // Mark as stopped to prevent any future flush attempts
+    this.stopped = true;
   }
 
   /**
@@ -318,22 +323,26 @@ export class WriteBuffer {
 
     const pending = this.pendingCount;
     if (pending === 0) {
+      this.stopped = true;
       return 0;
     }
 
     // Try to flush with timeout
     return new Promise<number>((resolve) => {
       const timeout = setTimeout(() => {
+        this.stopped = true;
         resolve(-1); // Timed out
       }, timeoutMs);
 
       try {
         const flushed = this.flush();
         clearTimeout(timeout);
+        this.stopped = true;
         resolve(flushed);
       } catch {
         // Flush failed, but we tried
         clearTimeout(timeout);
+        this.stopped = true;
         resolve(0);
       }
     });
