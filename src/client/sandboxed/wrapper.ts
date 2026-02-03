@@ -3,7 +3,7 @@
  * Creates the wrapper script that loads processor in worker process
  */
 
-import { mkdir } from 'fs/promises';
+import { mkdir, unlink } from 'node:fs/promises';
 
 /**
  * Escape a string for safe embedding in a template literal
@@ -81,7 +81,6 @@ export async function cleanupWrapperScript(wrapperPath: string | null): Promise<
   try {
     const file = Bun.file(wrapperPath);
     if (await file.exists()) {
-      const { unlink } = await import('fs/promises');
       await unlink(wrapperPath);
     }
   } catch {

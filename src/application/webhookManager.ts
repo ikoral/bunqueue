@@ -12,45 +12,17 @@ import {
 } from '../domain/types/webhook';
 import { webhookLog } from '../shared/logger';
 
-/** Singleton TextEncoder for HMAC operations */
-const textEncoder = new TextEncoder();
-
 /** Maximum webhook delivery retries (configurable via WEBHOOK_MAX_RETRIES env var) */
 const WEBHOOK_MAX_RETRIES = parseInt(Bun.env.WEBHOOK_MAX_RETRIES ?? '3', 10);
 
 /** Delay between webhook retries in ms (configurable via WEBHOOK_RETRY_DELAY_MS env var) */
 const WEBHOOK_RETRY_DELAY_MS = parseInt(Bun.env.WEBHOOK_RETRY_DELAY_MS ?? '1000', 10);
 
-/** Maximum number of cached crypto keys to prevent unbounded growth */
-const MAX_KEY_CACHE_SIZE = 100;
-
-/** Cache for imported crypto keys - avoids expensive importKey per request */
-const keyCache = new Map<string, CryptoKey>();
-
-/** HMAC-SHA256 signature with key caching */
-async function signPayload(payload: string, secret: string): Promise<string> {
-  // Get cached key or import new one
-  let key = keyCache.get(secret);
-  if (!key) {
-    // Evict oldest entry if cache is full (LRU-style using Map insertion order)
-    if (keyCache.size >= MAX_KEY_CACHE_SIZE) {
-      const firstKey = keyCache.keys().next().value;
-      if (firstKey) keyCache.delete(firstKey);
-    }
-    key = await crypto.subtle.importKey(
-      'raw',
-      textEncoder.encode(secret),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    keyCache.set(secret, key);
-  }
-
-  const signature = await crypto.subtle.sign('HMAC', key, textEncoder.encode(payload));
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+/** HMAC-SHA256 signature using Bun native CryptoHasher (2-3x faster than WebCrypto) */
+function signPayload(payload: string, secret: string): string {
+  const hasher = new Bun.CryptoHasher('sha256', secret);
+  hasher.update(payload);
+  return hasher.digest('hex');
 }
 
 /**
@@ -80,10 +52,6 @@ export class WebhookManager {
     const webhook = this.webhooks.get(id);
     if (webhook?.enabled) {
       this.enabledCount--;
-    }
-    // Clean up cached crypto key for this webhook's secret
-    if (webhook?.secret) {
-      keyCache.delete(webhook.secret);
     }
     const removed = this.webhooks.delete(id);
     if (removed) {
@@ -152,7 +120,7 @@ export class WebhookManager {
 
     // Add signature if secret is set
     if (webhook.secret) {
-      headers['X-Webhook-Signature'] = await signPayload(body, webhook.secret);
+      headers['X-Webhook-Signature'] = signPayload(body, webhook.secret);
     }
 
     let lastError: Error | null = null;
