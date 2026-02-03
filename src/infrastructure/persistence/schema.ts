@@ -77,6 +77,20 @@ CREATE TABLE IF NOT EXISTS dlq (
 
 CREATE INDEX IF NOT EXISTS idx_dlq_queue ON dlq(queue);
 CREATE INDEX IF NOT EXISTS idx_dlq_job_id ON dlq(job_id);
+CREATE INDEX IF NOT EXISTS idx_dlq_entered_at ON dlq(entered_at);
+
+-- Performance indexes for high-throughput operations
+-- Stall detection: runs every 5s, needs fast lookup of active jobs by started_at
+CREATE INDEX IF NOT EXISTS idx_jobs_state_started
+    ON jobs(state, started_at) WHERE state = 'active';
+
+-- Group operations: fast lookup by group_id
+CREATE INDEX IF NOT EXISTS idx_jobs_group_id
+    ON jobs(group_id) WHERE group_id IS NOT NULL;
+
+-- Pending jobs: compound index for priority-ordered retrieval
+CREATE INDEX IF NOT EXISTS idx_jobs_pending_priority
+    ON jobs(queue, state, priority DESC, run_at ASC) WHERE state IN ('waiting', 'delayed');
 
 -- Cron jobs (BLOB for MessagePack)
 CREATE TABLE IF NOT EXISTS cron_jobs (
@@ -110,9 +124,26 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {
   1: SCHEMA,
+  // Migration 5: Add performance indexes for high-throughput operations
+  5: `
+-- DLQ expiration cleanup: O(log n) instead of O(n) table scan
+CREATE INDEX IF NOT EXISTS idx_dlq_entered_at ON dlq(entered_at);
+
+-- Stall detection: runs every 5s, needs fast lookup of active jobs
+CREATE INDEX IF NOT EXISTS idx_jobs_state_started
+    ON jobs(state, started_at) WHERE state = 'active';
+
+-- Group operations: fast lookup by group_id
+CREATE INDEX IF NOT EXISTS idx_jobs_group_id
+    ON jobs(group_id) WHERE group_id IS NOT NULL;
+
+-- Pending jobs: compound index for priority-ordered retrieval
+CREATE INDEX IF NOT EXISTS idx_jobs_pending_priority
+    ON jobs(queue, state, priority DESC, run_at ASC) WHERE state IN ('waiting', 'delayed');
+`,
 };
