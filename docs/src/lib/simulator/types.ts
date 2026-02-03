@@ -14,6 +14,7 @@ export interface Job {
   delay: number;
   attempts: number;
   maxAttempts: number;
+  backoff: number;
   state: JobState;
   progress: number;
   createdAt: number;
@@ -30,6 +31,7 @@ export interface JobOptions {
   priority?: number;
   delay?: number;
   attempts?: number;
+  backoff?: number;
   jobId?: string;
 }
 

@@ -61,11 +61,21 @@ export class PriorityQueue {
   }
 
   peek(): Job | undefined {
-    for (const entry of this.heap) {
+    // Skip stale entries at top of heap
+    while (this.heap.length > 0) {
+      const entry = this.heap[0];
       const indexed = this.index.get(entry.jobId);
+
       if (indexed && indexed.generation === entry.generation) {
-        return indexed.job;
+        // Valid entry found - check if ready
+        if (entry.runAt <= Date.now()) {
+          return indexed.job;
+        }
+        return undefined; // Top entry not ready yet
       }
+
+      // Stale entry - remove it
+      this.removeTop();
     }
     return undefined;
   }
@@ -74,8 +84,30 @@ export class PriorityQueue {
     const indexed = this.index.get(jobId);
     if (!indexed) return undefined;
 
+    // Delete from index - heap entry becomes stale (lazy deletion)
+    // Generation mismatch will cause it to be skipped on pop()
     this.index.delete(jobId);
+
+    // Compact heap if too many stale entries (>20%)
+    const staleRatio = (this.heap.length - this.index.size) / Math.max(1, this.heap.length);
+    if (staleRatio > 0.2 && this.heap.length > 100) {
+      this.compact();
+    }
+
     return indexed.job;
+  }
+
+  private compact(): void {
+    // Rebuild heap with only valid entries
+    const validEntries = this.heap.filter(entry => {
+      const indexed = this.index.get(entry.jobId);
+      return indexed && indexed.generation === entry.generation;
+    });
+    this.heap = validEntries;
+    // Re-heapify
+    for (let i = Math.floor(this.heap.length / 4); i >= 0; i--) {
+      this.bubbleDown(i);
+    }
   }
 
   has(jobId: string): boolean {

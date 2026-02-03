@@ -86,7 +86,8 @@ export class Shard {
 
     // Retry with exponential backoff
     job.state = 'waiting';
-    job.runAt = Date.now() + Math.pow(2, job.attempts) * 1000;
+    const backoffMs = job.backoff * Math.pow(2, job.attempts);
+    job.runAt = Date.now() + backoffMs;
     this.push(job);
     return { job, toDlq: false };
   }

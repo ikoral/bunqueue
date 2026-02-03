@@ -68,6 +68,7 @@ export class QueueSimulator {
       delay,
       attempts: 0,
       maxAttempts: options.attempts || this.config.defaultMaxAttempts,
+      backoff: options.backoff || 1000, // Default 1 second backoff
       state: delay > 0 ? 'delayed' : 'waiting',
       progress: 0,
       createdAt: now,
@@ -243,26 +244,38 @@ export class QueueSimulator {
     processor: (job: Job) => Promise<unknown>,
     concurrency: number
   ): Promise<void> {
-    const worker = this.workers.get(workerId);
-    if (!worker) return;
+    while (true) {
+      // Re-fetch worker each iteration to check current state
+      const worker = this.workers.get(workerId);
+      if (!worker || worker.status !== 'running') {
+        break;
+      }
 
-    while (worker.status === 'running') {
       // Check if we can take more jobs
       if (worker.activeJobs >= concurrency) {
         await this.sleep(100);
         continue;
       }
 
+      // Reserve slot BEFORE pulling to prevent over-concurrency
+      worker.activeJobs++;
+
       const job = this.pull(queue);
       if (!job) {
+        // No job available, release the reserved slot
+        worker.activeJobs--;
         await this.sleep(200);
         continue;
       }
 
-      worker.activeJobs++;
-
-      // Process job asynchronously
-      this.processJob(workerId, job, processor).catch(() => {});
+      // Process job asynchronously (slot already reserved)
+      this.processJob(workerId, job, processor).catch(() => {
+        // Ensure slot is released even on unexpected errors
+        const w = this.workers.get(workerId);
+        if (w && w.activeJobs > 0) {
+          w.activeJobs--;
+        }
+      });
     }
   }
 
@@ -271,9 +284,6 @@ export class QueueSimulator {
     job: Job,
     processor: (job: Job) => Promise<unknown>
   ): Promise<void> {
-    const worker = this.workers.get(workerId);
-    if (!worker) return;
-
     try {
       // Simulate processing with progress updates
       const steps = 5;
@@ -289,13 +299,27 @@ export class QueueSimulator {
 
       const result = await processor(job);
       this.ack(job.id, job.queue, result);
-      worker.processedCount++;
+
+      // Update worker stats (check worker still exists)
+      const worker = this.workers.get(workerId);
+      if (worker) {
+        worker.processedCount++;
+      }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       this.fail(job.id, job.queue, errorMsg);
-      worker.failedCount++;
+
+      // Update worker stats (check worker still exists)
+      const worker = this.workers.get(workerId);
+      if (worker) {
+        worker.failedCount++;
+      }
     } finally {
-      worker.activeJobs--;
+      // Release slot (check worker still exists)
+      const worker = this.workers.get(workerId);
+      if (worker && worker.activeJobs > 0) {
+        worker.activeJobs--;
+      }
     }
   }
 
