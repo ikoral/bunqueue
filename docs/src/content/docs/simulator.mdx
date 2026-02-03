@@ -1,0 +1,68 @@
+---
+title: Interactive Simulator
+description: Try bunqueue in your browser - explore sharding, priority queues, workers, and DLQ in real-time
+---
+
+import Simulator from '../../components/simulator/Simulator.tsx';
+
+# Interactive Simulator
+
+Experience bunqueue's features directly in your browser. This simulator implements the core queue functionality including:
+
+- **Sharding** - See how jobs are distributed across shards using FNV-1a hash
+- **Priority Queue** - Jobs with higher priority are processed first
+- **Delayed Jobs** - Schedule jobs to run after a delay
+- **Workers** - Start concurrent workers to process jobs
+- **DLQ (Dead Letter Queue)** - Failed jobs after max retries go to DLQ
+- **Queue Control** - Pause, resume, and drain queues
+
+<div style={{ marginTop: '2rem' }}>
+  <Simulator client:load />
+</div>
+
+---
+
+## How It Works
+
+### Sharding
+
+The simulator uses the same FNV-1a hash algorithm as bunqueue to distribute queues across shards:
+
+```typescript
+shardIndex = fnv1aHash(queueName) & SHARD_MASK
+```
+
+Each queue maps to exactly one shard, and all jobs in that queue share the same shard.
+
+### Job Lifecycle
+
+```
+PUSH → waiting/delayed → PULL → active → ACK/FAIL → completed/retry/DLQ
+```
+
+1. **Push** - Job enters the queue in `waiting` state (or `delayed` if delay > 0)
+2. **Pull** - Worker pulls job, state becomes `active`
+3. **Ack** - Job completed successfully → `completed`
+4. **Fail** - Job failed, will retry or move to DLQ
+
+### Try These Scenarios
+
+1. **High Throughput**: Push 100 jobs with a running worker
+2. **Priority Processing**: Push jobs with different priorities (higher = sooner)
+3. **Delayed Jobs**: Add jobs with 5000ms delay, watch them become ready
+4. **Failure Handling**: Increase failure rate, observe retries and DLQ
+5. **Queue Control**: Pause a queue, push jobs, resume and watch processing
+
+---
+
+## Differences from Real bunqueue
+
+| Feature | Simulator | Real bunqueue |
+|---------|-----------|---------------|
+| Storage | In-memory | SQLite |
+| Shards | 8 (configurable) | Auto-detected from CPU |
+| Workers | Simulated delays | Real processing |
+| Persistence | None (page refresh resets) | Full durability |
+| TCP Server | N/A | Full protocol |
+
+The simulator is designed for learning and demonstration purposes. For production workloads, use the real bunqueue server.

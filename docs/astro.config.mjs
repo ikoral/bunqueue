@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
+import react from '@astrojs/react';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { readFileSync } from 'fs';
@@ -42,6 +43,7 @@ export default defineConfig({
   },
 
   integrations: [
+    react(),
     starlight({
       title: 'bunqueue',
       description: 'High-performance job queue for Bun. SQLite persistence, DLQ, cron jobs, S3 backups.',
@@ -80,6 +82,7 @@ export default defineConfig({
             { label: 'Introduction', link: '/guide/introduction/' },
             { label: 'Installation', link: '/guide/installation/' },
             { label: 'Quick Start', link: '/guide/quickstart/' },
+            { label: 'Interactive Simulator', link: '/simulator/' },
           ],
         },
         {
