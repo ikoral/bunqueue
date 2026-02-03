@@ -439,11 +439,11 @@ export default function Simulator() {
                     {q.paused && <span className="badge paused">PAUSED</span>}
                   </div>
                   <div className="queue-stats">
-                    <span className="qs waiting">W: {q.waiting}</span>
-                    <span className="qs delayed">D: {q.delayed}</span>
-                    <span className="qs active">A: {q.active}</span>
-                    <span className="qs completed">C: {q.completed}</span>
-                    <span className="qs dlq">DLQ: {q.dlq}</span>
+                    <span className="qs waiting" title="Waiting">W:{q.waiting}</span>
+                    <span className="qs delayed" title="Delayed">D:{q.delayed}</span>
+                    <span className="qs active" title="Active">A:{q.active}</span>
+                    <span className="qs completed" title="Completed">C:{q.completed}</span>
+                    <span className="qs dlq" title="Dead Letter Queue">X:{q.dlq}</span>
                   </div>
                 </div>
               ))}
