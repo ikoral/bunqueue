@@ -1,6 +1,6 @@
 {
   "name": "bunqueue",
-  "version": "2.0.9",
+  "version": "2.1.0",
   "description": "High-performance job queue server written in TypeScript. SQLite persistence, cron scheduling, priorities, retries, DLQ, webhooks. Minimal dependencies.",
   "type": "module",
   "main": "dist/main.js",

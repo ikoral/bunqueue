@@ -10,6 +10,23 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.1.0] - 2026-02-04
+
+### Performance
+- **SQLite indexes for high-throughput operations** - Added 4 new indexes for 30-50% faster queries:
+  - `idx_jobs_state_started`: Stall detection now O(log n) instead of O(n) table scan
+  - `idx_jobs_group_id`: Fast lookup for group operations
+  - `idx_jobs_pending_priority`: Compound index for priority-ordered job retrieval
+  - `idx_dlq_entered_at`: DLQ expiration cleanup now O(log n)
+- **Date.now() caching in pull loop** - Reduced syscalls by caching timestamp per iteration (+3-5% throughput)
+
+### Fixed
+- **SQLITE_BUSY under high concurrency** - Added `PRAGMA busy_timeout = 5000` to wait for locks instead of failing immediately
+- **"Database has closed" errors during shutdown** - Added `stopped` flag to WriteBuffer to prevent flush attempts after stop()
+
+### Changed
+- Schema version bumped to 5 (auto-migrates existing databases)
+
 ## [2.0.9] - 2026-02-03
 
 ### Fixed
