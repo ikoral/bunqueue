@@ -140,6 +140,7 @@ export default defineConfig({
           label: 'Production',
           items: [
             { label: 'Deployment Guide', link: '/guide/deployment/' },
+            { label: 'Monitoring', link: '/guide/monitoring/' },
           ],
         },
         {
