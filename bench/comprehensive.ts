@@ -182,9 +182,10 @@ async function runTcpBenchmarks(): Promise<BenchResult[]> {
 
     // 3. Process benchmark
     let processed = 0;
+    const processQueueName = `tcp-proc-${scale}-${Date.now()}`;
 
     const worker = new TcpWorker(
-      `tcp-proc-${scale}-${Date.now()}`,
+      processQueueName,
       async () => {
         processed++;
         return { ok: true };
@@ -203,7 +204,7 @@ async function runTcpBenchmarks(): Promise<BenchResult[]> {
       }
     );
 
-    const processQueue = new TcpQueue(`tcp-proc-${scale}-${Date.now()}`, {
+    const processQueue = new TcpQueue(processQueueName, {
       connection: {
         host: 'localhost',
         port: 6789,
