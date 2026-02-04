@@ -6,7 +6,7 @@
 
 /** Configurable timeouts from environment (must be before startServer call) */
 const SHUTDOWN_TIMEOUT_MS = parseInt(Bun.env.SHUTDOWN_TIMEOUT_MS ?? '30000', 10);
-const STATS_INTERVAL_MS = parseInt(Bun.env.STATS_INTERVAL_MS ?? '30000', 10);
+const STATS_INTERVAL_MS = parseInt(Bun.env.STATS_INTERVAL_MS ?? '300000', 10);
 
 // Check for CLI client commands (not server mode)
 const clientCommands = [
@@ -201,7 +201,14 @@ function startServer(): void {
     const memStats = queueManager.getMemoryStats();
     const workerStats = queueManager.workerManager.getStats();
     const mem = process.memoryUsage();
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString('it-IT', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
     statsLog.info('Queue statistics', {
+      time: timestamp,
       waiting: stats.waiting,
       active: stats.active,
       delayed: stats.delayed,
