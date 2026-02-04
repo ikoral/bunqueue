@@ -1,291 +1,260 @@
 ---
 title: TCP Protocol
-description: Wire format, commands, and authentication flow
+description: Wire format, pipelining, commands, and connection management
 ---
 
-# TCP Protocol
-
-bunqueue uses a binary protocol over TCP with MessagePack serialization.
+bunqueue uses a high-performance binary protocol over TCP with MessagePack serialization and optional pipelining.
 
 ## Wire Format
 
+Each message is a **length-prefixed MessagePack frame**:
+
+| Bytes | Content |
+|-------|---------|
+| 0-3 | Frame length (4 bytes, big-endian uint32) |
+| 4-N | MessagePack payload |
+
+**Maximum frame size:** 64 MB
+
+## TCP Pipelining
+
+Pipelining allows multiple commands to be sent without waiting for responses, dramatically improving throughput.
+
+### Without Pipelining (Sequential)
+
 ```
-┌────────────────────────────────────────────────────────────┐
-│                     FRAME STRUCTURE                         │
-│                                                             │
-│  ┌───────────────────┬─────────────────────────────────┐  │
-│  │  4 bytes (u32)    │        N bytes payload          │  │
-│  │  Big-endian       │        MessagePack encoded      │  │
-│  │  length prefix    │                                 │  │
-│  └───────────────────┴─────────────────────────────────┘  │
-│                                                             │
-│  Max frame size: 64 MB                                     │
-└────────────────────────────────────────────────────────────┘
+Client                    Server
+  │── PUSH job1 ────────────>│
+  │<── { ok, id } ───────────│  wait ~1ms
+  │── PUSH job2 ────────────>│
+  │<── { ok, id } ───────────│  wait ~1ms
+  │── PUSH job3 ────────────>│
+  │<── { ok, id } ───────────│  wait ~1ms
+
+  Total: 3 round-trips ≈ 3ms
+  Throughput: ~20,000 ops/sec
 ```
+
+### With Pipelining (Parallel)
+
+```
+Client                    Server
+  │── PUSH job1 (reqId:1) ──>│
+  │── PUSH job2 (reqId:2) ──>│  no wait
+  │── PUSH job3 (reqId:3) ──>│  no wait
+  │<── { ok, reqId:1 } ──────│
+  │<── { ok, reqId:2 } ──────│
+  │<── { ok, reqId:3 } ──────│
+
+  Total: 1 round-trip ≈ 1ms
+  Throughput: ~125,000 ops/sec
+```
+
+**Result: 6x faster** with pipelining enabled.
+
+### How Pipelining Works
+
+1. **Client sends commands** with unique `reqId` identifiers
+2. **Server processes in parallel** (up to 50 concurrent per connection)
+3. **Responses include `reqId`** for matching (may arrive out of order)
+4. **Client matches responses** using a `Map<reqId, Promise>`
+
+### Configuration
+
+```typescript
+const queue = new Queue('my-queue', {
+  connection: {
+    host: 'localhost',
+    port: 6789,
+    pipelining: true,      // Enable pipelining (default: true)
+    maxInFlight: 100,      // Max concurrent commands (default: 100)
+    poolSize: 32,          // Connection pool size
+    commandTimeout: 30000  // Timeout per command (ms)
+  }
+});
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `pipelining` | `true` | Enable TCP pipelining |
+| `maxInFlight` | `100` | Max commands in flight per connection |
+| `poolSize` | `4` | Number of TCP connections |
+| `commandTimeout` | `30000` | Command timeout (ms) |
+
+## Protocol Version Negotiation
+
+On connect, client and server negotiate protocol version:
+
+```typescript
+// Client → Server
+{ cmd: 'Hello', protocolVersion: 2, capabilities: ['pipelining'] }
+
+// Server → Client
+{ ok: true, protocolVersion: 2, capabilities: ['pipelining'] }
+```
+
+Protocol v2 supports pipelining. Older clients without `Hello` default to v1 (sequential).
 
 ## Connection Lifecycle
 
-```
-┌──────────────┐
-│ DISCONNECTED │
-└──────┬───────┘
-       │ connect()
-       ▼
-┌──────────────┐
-│ CONNECTING   │
-└──────┬───────┘
-       │ Socket open
-       ▼
-┌──────────────────────────┐
-│ CONNECTED                │
-│                          │
-│ • Send Auth (if token)   │──────► { cmd: 'Auth', token }
-│ • Start health ping      │
-│ • Process commands       │
-└──────────┬───────────────┘
-           │ Error / Close
-           ▼
-┌──────────────────────────┐
-│ RECONNECTING             │
-│                          │
-│ • Exponential backoff    │
-│ • Max delay: 30s         │
-│ • Jitter: ±30%           │
-└──────────────────────────┘
+**States:**
+
+1. **DISCONNECTED** → Initial state
+2. **CONNECTING** → Socket.connect() in progress
+3. **CONNECTED** → Ready for commands
+4. **RECONNECTING** → Auto-reconnect with backoff
+
+**Connect sequence:**
+
+1. TCP socket connect
+2. Send `Hello` (protocol negotiation)
+3. Send `Auth` (if token configured)
+4. Start ping timer
+5. Ready for commands
+
+**Reconnect strategy:**
+
+- Base delay: 100ms
+- Max delay: 30s
+- Backoff: exponential (2x each attempt)
+- Jitter: ±30%
+
+## Authentication
+
+If `AUTH_TOKENS` is configured on the server, clients must authenticate:
+
+```typescript
+// Client → Server
+{ cmd: 'Auth', token: 'your-secret-token' }
+
+// Server → Client
+{ ok: true }  // or { ok: false, error: 'Invalid token' }
 ```
 
-## Authentication Flow
+Token comparison uses constant-time algorithm to prevent timing attacks.
 
-```
-Client                              Server
-  │                                   │
-  ├─── TCP Connect ────────────────────>
-  │                                   │
-  ├─── { cmd: 'Auth',                 │
-  │      token: 'secret' } ──────────>│
-  │                                   │
-  │                    [Constant-time comparison]
-  │                    [Sets authenticated: true]
-  │                                   │
-  │<─── { ok: true } ─────────────────┤
-  │                                   │
-  ├─── Subsequent Commands ──────────>│
-  │                                   │
-  │    [Commands require auth         │
-  │     if AUTH_TOKENS configured]    │
-```
-
-## Command Categories
+## Commands Reference
 
 ### Core Commands
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  PUSH: Add single job                                       │
-│  { cmd: 'PUSH', queue, data, priority?, delay?, ... }      │
-│  Response: { ok: true, id: '...' }                         │
-├─────────────────────────────────────────────────────────────┤
-│  PUSHB: Add batch of jobs                                   │
-│  { cmd: 'PUSHB', queue, jobs: [...] }                      │
-│  Response: { ok: true, ids: [...] }                        │
-├─────────────────────────────────────────────────────────────┤
-│  PULL: Get single job                                       │
-│  { cmd: 'PULL', queue, timeout?, owner? }                  │
-│  Response: { ok: true, job: {...}, token?: '...' }         │
-├─────────────────────────────────────────────────────────────┤
-│  PULLB: Get batch of jobs                                   │
-│  { cmd: 'PULLB', queue, count, timeout?, owner? }          │
-│  Response: { ok: true, jobs: [...], tokens?: [...] }       │
-├─────────────────────────────────────────────────────────────┤
-│  ACK: Acknowledge completion                                │
-│  { cmd: 'ACK', id, result?, token? }                       │
-│  Response: { ok: true }                                    │
-├─────────────────────────────────────────────────────────────┤
-│  ACKB: Batch acknowledge                                    │
-│  { cmd: 'ACKB', ids, results?, tokens? }                   │
-│  Response: { ok: true }                                    │
-├─────────────────────────────────────────────────────────────┤
-│  FAIL: Mark job failed                                      │
-│  { cmd: 'FAIL', id, error?, token? }                       │
-│  Response: { ok: true }                                    │
-└─────────────────────────────────────────────────────────────┘
-```
+| Command | Description | Request | Response |
+|---------|-------------|---------|----------|
+| `PUSH` | Add single job | `{ cmd, queue, data, priority?, delay? }` | `{ ok, id }` |
+| `PUSHB` | Add batch | `{ cmd, queue, jobs }` | `{ ok, ids }` |
+| `PULL` | Get single job | `{ cmd, queue, timeout? }` | `{ ok, job, token? }` |
+| `PULLB` | Get batch | `{ cmd, queue, count, timeout? }` | `{ ok, jobs, tokens? }` |
+| `ACK` | Complete job | `{ cmd, id, result?, token? }` | `{ ok }` |
+| `ACKB` | Complete batch | `{ cmd, ids, results?, tokens? }` | `{ ok }` |
+| `FAIL` | Fail job | `{ cmd, id, error?, token? }` | `{ ok }` |
 
 ### Query Commands
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  GetJob: Retrieve job by ID                                 │
-│  GetState: Get job state                                    │
-│  GetResult: Get job result                                  │
-│  GetJobs: List jobs with filters                            │
-│  GetJobCounts: Get queue statistics                         │
-│  GetProgress: Get job progress                              │
-│  Count: Count jobs in queue                                 │
-└─────────────────────────────────────────────────────────────┘
-```
+| Command | Description |
+|---------|-------------|
+| `GetJob` | Get job by ID |
+| `GetState` | Get job state |
+| `GetResult` | Get job result |
+| `GetJobs` | List jobs with filters |
+| `GetJobCounts` | Queue statistics |
+| `Count` | Count jobs in queue |
 
-### Queue Control Commands
+### Control Commands
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Pause: Stop processing queue                               │
-│  Resume: Resume queue processing                            │
-│  Drain: Remove all waiting jobs                             │
-│  Obliterate: Complete queue deletion                        │
-│  Clean: Remove old jobs                                     │
-└─────────────────────────────────────────────────────────────┘
-```
+| Command | Description |
+|---------|-------------|
+| `Pause` | Stop processing queue |
+| `Resume` | Resume processing |
+| `Drain` | Remove waiting jobs |
+| `Obliterate` | Delete queue completely |
+| `Clean` | Remove old jobs |
+| `Cancel` | Cancel pending job |
+| `Promote` | Move delayed job to waiting |
 
 ### DLQ Commands
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Dlq: List DLQ entries                                      │
-│  RetryDlq: Retry failed jobs                                │
-│  PurgeDlq: Remove all DLQ entries                           │
-└─────────────────────────────────────────────────────────────┘
-```
+| Command | Description |
+|---------|-------------|
+| `Dlq` | List DLQ entries |
+| `RetryDlq` | Retry failed jobs |
+| `PurgeDlq` | Clear DLQ |
 
 ### Cron Commands
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Cron: Add scheduled job                                    │
-│  CronDelete: Remove scheduled job                           │
-│  CronList: List all cron jobs                               │
-└─────────────────────────────────────────────────────────────┘
-```
+| Command | Description |
+|---------|-------------|
+| `Cron` | Add scheduled job |
+| `CronDelete` | Remove scheduled job |
+| `CronList` | List all cron jobs |
 
 ### Monitoring Commands
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Stats: Server statistics                                   │
-│  Metrics: Queue metrics                                     │
-│  Prometheus: Prometheus format metrics                      │
-│  Ping: Health check                                         │
-│  Heartbeat: Worker heartbeat                                │
-│  JobHeartbeat: Job-level heartbeat                          │
-└─────────────────────────────────────────────────────────────┘
-```
+| Command | Description |
+|---------|-------------|
+| `Stats` | Server statistics |
+| `Metrics` | Queue metrics |
+| `Prometheus` | Prometheus format |
+| `Ping` | Health check |
+| `Heartbeat` | Worker heartbeat |
+| `JobHeartbeat` | Per-job heartbeat |
 
 ## Connection Pool
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  TCP CONNECTION POOL                         │
-│                                                              │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐              │
-│  │Client 1│ │Client 2│ │Client 3│ │Client 4│              │
-│  └────────┘ └────────┘ └────────┘ └────────┘              │
-│                                                              │
-│  Selection: Round-robin, prefer connected                   │
-│                                                              │
-│  Features:                                                  │
-│  • 4 connections per pool (default)                        │
-│  • Auto-reconnect with exponential backoff                 │
-│  • Shared pools (reference counted)                        │
-│  • Health tracking (latency, errors)                       │
-└─────────────────────────────────────────────────────────────┘
+The client maintains a pool of TCP connections for load balancing:
+
+```typescript
+// Default: 4 connections, configurable via poolSize
+const pool = new TcpConnectionPool({
+  host: 'localhost',
+  port: 6789,
+  poolSize: 32  // 32 connections for high throughput
+});
 ```
 
-## Reconnection Strategy
+**Selection strategy:** Round-robin, preferring connected sockets.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  RECONNECTION                                │
-│                                                              │
-│  delay = min(baseDelay * 2^attempts, maxDelay) + jitter    │
-│                                                              │
-│  Example sequence:                                          │
-│  Attempt 1: 100ms + jitter                                 │
-│  Attempt 2: 200ms + jitter                                 │
-│  Attempt 3: 400ms + jitter                                 │
-│  Attempt 4: 800ms + jitter                                 │
-│  ...                                                        │
-│  Max: 30s                                                   │
-│                                                              │
-│  Jitter: ±30% of base delay                                │
-└─────────────────────────────────────────────────────────────┘
-```
+**Features:**
+- Automatic reconnection
+- Health tracking (latency, errors)
+- Shared pools (reference counted)
 
 ## Client Disconnect Handling
 
-```
-Client disconnects
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Server: onClose(socket)                                    │
-│                                                              │
-│  1. Get clientId from socket state                         │
-│                                                              │
-│  2. Look up clientJobs[clientId]                           │
-│     └─ Set of all jobs owned by this client                │
-│                                                              │
-│  3. For each owned job:                                    │
-│     └─ Release with retry logic                            │
-│        (exponential backoff: 100ms, 200ms, 400ms)          │
-│                                                              │
-│  4. Clean up client tracking                               │
-└─────────────────────────────────────────────────────────────┘
-```
+When a client disconnects, the server:
 
-## Validation
+1. Identifies all jobs owned by client
+2. Releases job locks (returns to queue)
+3. Cleans up client tracking
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  REQUEST VALIDATION                          │
-│                                                              │
-│  Queue name:                                                │
-│  • Max 256 characters                                       │
-│  • Alphanumeric + _-.:                                      │
-│                                                              │
-│  Job data:                                                  │
-│  • Max 10 MB JSON                                           │
-│                                                              │
-│  Job options:                                               │
-│  • priority: -1M to +1M                                    │
-│  • delay: 0 to 365 days                                    │
-│  • timeout: 0 to 24 hours                                  │
-│  • maxAttempts: 1 to 1000                                  │
-│  • backoff: 0 to 24 hours                                  │
-│  • ttl: 0 to 365 days                                      │
-│                                                              │
-│  Webhook URL (SSRF prevention):                            │
-│  • Blocks localhost, private IPs, cloud metadata           │
-│  • Requires http/https                                      │
-└─────────────────────────────────────────────────────────────┘
-```
+Jobs with active locks are automatically requeued for other workers.
+
+## Validation Limits
+
+| Parameter | Limit |
+|-----------|-------|
+| Queue name | Max 256 chars, alphanumeric + `_-.:` |
+| Job data | Max 10 MB JSON |
+| Priority | -1,000,000 to +1,000,000 |
+| Delay | 0 to 365 days |
+| Timeout | 0 to 24 hours |
+| Max attempts | 1 to 1,000 |
+| Backoff | 0 to 24 hours |
+| TTL | 0 to 365 days |
 
 ## HTTP Endpoints
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  HTTP SERVER (:6790)                         │
-│                                                              │
-│  Health & Diagnostics:                                      │
-│  GET  /health        │ Health + memory stats               │
-│  GET  /healthz       │ Kubernetes liveness                 │
-│  GET  /ready         │ Kubernetes readiness                │
-│  POST /gc            │ Force garbage collection            │
-│  GET  /heapstats     │ Memory breakdown                    │
-│                                                              │
-│  Metrics:                                                   │
-│  GET  /prometheus    │ Prometheus format                   │
-│  GET  /stats         │ JSON stats                          │
-│  GET  /metrics       │ JSON metrics                        │
-│                                                              │
-│  REST API:                                                  │
-│  POST /queues/:queue/jobs │ Add job                        │
-│  GET  /queues/:queue/jobs │ Pull job                       │
-│  GET  /jobs/:id           │ Get job                        │
-│  POST /jobs/:id/ack       │ Acknowledge                    │
-│  POST /jobs/:id/fail      │ Mark failed                    │
-│                                                              │
-│  Real-time:                                                 │
-│  GET  /ws            │ WebSocket upgrade                   │
-│  GET  /events        │ Server-Sent Events                  │
-└─────────────────────────────────────────────────────────────┘
-```
+bunqueue also exposes an HTTP API on port 6790:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health + memory stats |
+| `/healthz` | GET | Kubernetes liveness |
+| `/ready` | GET | Kubernetes readiness |
+| `/prometheus` | GET | Prometheus metrics |
+| `/stats` | GET | JSON statistics |
+| `/queues/:queue/jobs` | POST | Add job |
+| `/queues/:queue/jobs` | GET | Pull job |
+| `/jobs/:id` | GET | Get job |
+| `/jobs/:id/ack` | POST | Acknowledge |
+| `/jobs/:id/fail` | POST | Fail |
+| `/ws` | GET | WebSocket |
+| `/events` | GET | Server-Sent Events |
