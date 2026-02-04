@@ -35,15 +35,23 @@ All notable changes to bunqueue are documented here.
   - `test/client-pipelining.test.ts` - 7 tests for client pipelining
   - `test/server-pipelining.test.ts` - 7 tests for server parallel processing
   - `test/backward-compat.test.ts` - 10 tests for backward compatibility
+- **Fair benchmark comparison** (`bench/comparison/run.ts`):
+  - Both bunqueue and BullMQ use identical parallel push strategy
+  - Queue cleanup with `obliterate()` between tests
+  - Results: **1.3x Push**, **3.2x Bulk Push**, **1.7x Process** vs BullMQ
+- **New ConnectionOptions** - Added `pingInterval`, `commandTimeout`, `pipelining`, `maxInFlight` to public API
 
 ### Fixed
 - **SQLITE_BUSY under high concurrency** - Added `PRAGMA busy_timeout = 5000` to wait for locks instead of failing immediately
 - **"Database has closed" errors during shutdown** - Added `stopped` flag to WriteBuffer to prevent flush attempts after stop()
+- **Critical: Worker pendingJobs race condition** - Concurrent `tryProcess()` calls could overwrite each other's job buffers, causing ~30% job loss under high concurrency. Now preserves existing buffered jobs when pulling new batches.
+- **Connection options not passed through** - Worker, Queue, and FlowProducer now correctly pass `pingInterval`, `commandTimeout`, `pipelining`, and `maxInFlight` options to the TCP connection pool.
 
 ### Changed
 - Schema version bumped to 5 (auto-migrates existing databases)
 - TCP client now includes `reqId` in all commands for response matching
 - Server processes multiple frames in parallel (max 50 concurrent per connection)
+- **Documentation**: Rewrote comparison page with real benchmark data and methodology explanation
 
 ## [2.0.9] - 2026-02-03
 
