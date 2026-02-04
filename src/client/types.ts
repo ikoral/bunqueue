@@ -126,8 +126,9 @@ export interface Job<T = unknown> {
   /**
    * Get the return values of all children jobs (BullMQ v5 compatible).
    * Returns a Record where keys are job keys (queueName:jobId) and values are return values.
+   * @template R - Type of the children return values
    */
-  getChildrenValues(): Promise<Record<string, unknown>>;
+  getChildrenValues<R = unknown>(): Promise<Record<string, R>>;
 
   // BullMQ v5 state check methods
   /** Check if job is in waiting state */

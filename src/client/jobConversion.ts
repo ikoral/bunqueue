@@ -304,8 +304,10 @@ export function createPublicJob<T>(opts: CreatePublicJobOptions): Job<T> {
     getState: () => (getState ? getState(id) : Promise.resolve('unknown' as JobStateType)),
     remove: () => (remove ? remove(id) : Promise.resolve()),
     retry: () => (retry ? retry(id) : Promise.resolve()),
-    getChildrenValues: () =>
-      getChildrenValues ? getChildrenValues(id) : Promise.resolve({} as Record<string, unknown>),
+    getChildrenValues: <R = unknown>() =>
+      (getChildrenValues ? getChildrenValues(id) : Promise.resolve({})) as Promise<
+        Record<string, R>
+      >,
 
     // BullMQ v5 mutation methods
     updateData: (data: T) => (updateData ? updateData(id, data) : Promise.resolve()),
@@ -412,8 +414,10 @@ export function toPublicJob<T>(opts: ToPublicJobOptions): Job<T> {
     getState: () => (getState ? getState(id) : Promise.resolve('unknown' as JobStateType)),
     remove: () => (remove ? remove(id) : Promise.resolve()),
     retry: () => (retry ? retry(id) : Promise.resolve()),
-    getChildrenValues: () =>
-      getChildrenValues ? getChildrenValues(id) : Promise.resolve({} as Record<string, unknown>),
+    getChildrenValues: <R = unknown>() =>
+      (getChildrenValues ? getChildrenValues(id) : Promise.resolve({})) as Promise<
+        Record<string, R>
+      >,
 
     // BullMQ v5 mutation methods
     updateData: (data: T) => (updateData ? updateData(id, data) : Promise.resolve()),

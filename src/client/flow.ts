@@ -154,7 +154,7 @@ export class FlowProducer {
   // ============================================================================
 
   /** Add a chain of jobs. Jobs execute sequentially: step[0] → step[1] → ... */
-  async addChain(steps: FlowStep[]): Promise<FlowResult> {
+  async addChain<T = unknown>(steps: FlowStep<T>[]): Promise<FlowResult> {
     if (steps.length === 0) return { jobIds: [] };
 
     const jobIds: string[] = [];
@@ -182,9 +182,9 @@ export class FlowProducer {
   }
 
   /** Add parallel jobs that converge to a final job. */
-  async addBulkThen(
-    parallel: FlowStep[],
-    final: FlowStep
+  async addBulkThen<T = unknown>(
+    parallel: FlowStep<T>[],
+    final: FlowStep<T>
   ): Promise<{ parallelIds: string[]; finalId: string }> {
     const parallelIds: string[] = [];
     try {
@@ -215,7 +215,7 @@ export class FlowProducer {
   }
 
   /** Add a tree of jobs where children depend on parent. */
-  async addTree(root: FlowStep): Promise<FlowResult> {
+  async addTree<T = unknown>(root: FlowStep<T>): Promise<FlowResult> {
     const jobIds: string[] = [];
     try {
       await this.addTreeNode(root, null, jobIds);
@@ -226,20 +226,27 @@ export class FlowProducer {
     return { jobIds };
   }
 
-  /** Get the result of a completed parent job (embedded only). */
-  getParentResult(parentId: string): unknown {
+  /**
+   * Get the result of a completed parent job (embedded only).
+   * @template R - Type of the job result
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
+  getParentResult<R = unknown>(parentId: string): R | undefined {
     if (!this.embedded) throw new Error('getParentResult is only available in embedded mode');
-    return getSharedManager().getResult(jobId(parentId));
+    return getSharedManager().getResult(jobId(parentId)) as R | undefined;
   }
 
-  /** Get results from multiple parent jobs (embedded only). */
-  getParentResults(parentIds: string[]): Map<string, unknown> {
+  /**
+   * Get results from multiple parent jobs (embedded only).
+   * @template R - Type of the job results
+   */
+  getParentResults<R = unknown>(parentIds: string[]): Map<string, R> {
     if (!this.embedded) throw new Error('getParentResults is only available in embedded mode');
     const manager = getSharedManager();
-    const results = new Map<string, unknown>();
+    const results = new Map<string, R>();
     for (const id of parentIds) {
       const result = manager.getResult(jobId(id));
-      if (result !== undefined) results.set(id, result);
+      if (result !== undefined) results.set(id, result as R);
     }
     return results;
   }
@@ -335,7 +342,7 @@ export class FlowProducer {
     node: FlowJob<T>,
     parentRef: { id: string; queue: string } | null
   ): Promise<JobNode<T>> {
-    const childNodes: JobNode[] = [];
+    const childNodes: JobNode<T>[] = [];
     const childIds: string[] = [];
 
     if (node.children && node.children.length > 0) {
@@ -369,8 +376,8 @@ export class FlowProducer {
     return { job, children: childNodes.length > 0 ? childNodes : undefined };
   }
 
-  private async addTreeNode(
-    step: FlowStep,
+  private async addTreeNode<T>(
+    step: FlowStep<T>,
     parentId: string | null,
     jobIds: string[]
   ): Promise<string> {

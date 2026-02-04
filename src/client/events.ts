@@ -6,6 +6,72 @@ import { EventEmitter } from 'events';
 import { getSharedManager } from './manager';
 import { EventType, type JobEvent } from '../domain/types/queue';
 
+/** Event payload for 'waiting' event */
+export interface WaitingEvent {
+  jobId: string;
+}
+
+/** Event payload for 'active' event */
+export interface ActiveEvent {
+  jobId: string;
+}
+
+/** Event payload for 'completed' event */
+export interface CompletedEvent<R = unknown> {
+  jobId: string;
+  returnvalue: R;
+}
+
+/** Event payload for 'failed' event */
+export interface FailedEvent {
+  jobId: string;
+  failedReason: string;
+}
+
+/** Event payload for 'progress' event */
+export interface ProgressEvent<P = unknown> {
+  jobId: string;
+  data: P;
+}
+
+/** Event payload for 'stalled' event */
+export interface StalledEvent {
+  jobId: string;
+}
+
+/** Event payload for 'removed' event */
+export interface RemovedEvent {
+  jobId: string;
+  prev: string;
+}
+
+/** Event payload for 'delayed' event */
+export interface DelayedEvent {
+  jobId: string;
+  delay: number;
+}
+
+/** Event payload for 'duplicated' event */
+export interface DuplicatedEvent {
+  jobId: string;
+}
+
+/** Event payload for 'retried' event */
+export interface RetriedEvent {
+  jobId: string;
+  prev: string;
+}
+
+/** Event payload for 'waiting-children' event */
+export interface WaitingChildrenEvent {
+  jobId: string;
+}
+
+/** Event payload for 'drained' event */
+export interface DrainedEvent {
+  id: string;
+}
+
 /**
  * QueueEvents class for listening to queue events
  * Provides a way to listen to events without processing jobs
@@ -24,8 +90,11 @@ import { EventType, type JobEvent } from '../domain/types/queue';
  * - waiting-children: job waiting for children to complete
  * - drained: queue has no more waiting jobs
  * - error: error occurred
+ *
+ * @template R - Type of the job result (for 'completed' event)
+ * @template P - Type of the progress data (for 'progress' event)
  */
-export class QueueEvents extends EventEmitter {
+export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
   readonly name: string;
   private running = false;
   private unsubscribe: (() => void) | null = null;
@@ -35,6 +104,44 @@ export class QueueEvents extends EventEmitter {
     super();
     this.name = name;
     this.start();
+  }
+
+  // ============ Typed Event Handlers ============
+
+  on(event: 'waiting', listener: (data: WaitingEvent) => void): this;
+  on(event: 'active', listener: (data: ActiveEvent) => void): this;
+  on(event: 'completed', listener: (data: CompletedEvent<R>) => void): this;
+  on(event: 'failed', listener: (data: FailedEvent) => void): this;
+  on(event: 'progress', listener: (data: ProgressEvent<P>) => void): this;
+  on(event: 'stalled', listener: (data: StalledEvent) => void): this;
+  on(event: 'removed', listener: (data: RemovedEvent) => void): this;
+  on(event: 'delayed', listener: (data: DelayedEvent) => void): this;
+  on(event: 'duplicated', listener: (data: DuplicatedEvent) => void): this;
+  on(event: 'retried', listener: (data: RetriedEvent) => void): this;
+  on(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
+  on(event: 'drained', listener: (data: DrainedEvent) => void): this;
+  on(event: 'error', listener: (error: Error) => void): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(event: string, listener: (...args: any[]) => void): this {
+    return super.on(event, listener);
+  }
+
+  once(event: 'waiting', listener: (data: WaitingEvent) => void): this;
+  once(event: 'active', listener: (data: ActiveEvent) => void): this;
+  once(event: 'completed', listener: (data: CompletedEvent<R>) => void): this;
+  once(event: 'failed', listener: (data: FailedEvent) => void): this;
+  once(event: 'progress', listener: (data: ProgressEvent<P>) => void): this;
+  once(event: 'stalled', listener: (data: StalledEvent) => void): this;
+  once(event: 'removed', listener: (data: RemovedEvent) => void): this;
+  once(event: 'delayed', listener: (data: DelayedEvent) => void): this;
+  once(event: 'duplicated', listener: (data: DuplicatedEvent) => void): this;
+  once(event: 'retried', listener: (data: RetriedEvent) => void): this;
+  once(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
+  once(event: 'drained', listener: (data: DrainedEvent) => void): this;
+  once(event: 'error', listener: (error: Error) => void): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  once(event: string, listener: (...args: any[]) => void): this {
+    return super.once(event, listener);
   }
 
   private start(): void {

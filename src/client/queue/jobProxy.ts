@@ -54,7 +54,7 @@ export function createJobProxy<T>(id: string, name: string, data: T, ctx: JobPro
     getState: () => ctx.getJobState(id),
     remove: () => ctx.removeAsync(id),
     retry: () => ctx.retryJob(id),
-    getChildrenValues: () => ctx.getChildrenValues(id),
+    getChildrenValues: <R = unknown>() => ctx.getChildrenValues(id) as Promise<Record<string, R>>,
 
     // State check methods
     isWaiting: async () => (await ctx.getJobState(id)) === 'waiting',
@@ -188,7 +188,7 @@ export function createSimpleJob<T>(
     getState: () => ctx.getJobState(id),
     remove: () => ctx.removeAsync(id),
     retry: () => ctx.retryJob(id),
-    getChildrenValues: () => ctx.getChildrenValues(id),
+    getChildrenValues: <R = unknown>() => ctx.getChildrenValues(id) as Promise<Record<string, R>>,
 
     // State check methods
     isWaiting: async () => (await ctx.getJobState(id)) === 'waiting',

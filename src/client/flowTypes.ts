@@ -24,7 +24,7 @@ export interface FlowStep<T = unknown> {
   /** Job options */
   opts?: JobOptions;
   /** Child steps (for tree structures) */
-  children?: FlowStep[];
+  children?: FlowStep<T>[];
 }
 
 /** Result of adding a flow (legacy bunqueue API) */
@@ -47,7 +47,7 @@ export interface FlowJob<T = unknown> {
   /** Job options */
   opts?: JobOptions;
   /** Child jobs (processed BEFORE this job) */
-  children?: FlowJob[];
+  children?: FlowJob<T>[];
 }
 
 /**
@@ -58,7 +58,7 @@ export interface JobNode<T = unknown> {
   /** The job instance */
   job: Job<T>;
   /** Child nodes (if any) */
-  children?: JobNode[];
+  children?: JobNode<T>[];
 }
 
 /**
