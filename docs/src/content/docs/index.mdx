@@ -28,7 +28,7 @@ import VersionBadges from '@components/VersionBadges.astro';
 
 <CardGrid>
   <Card title="Blazing Fast" icon="rocket">
-    **10M+ jobs/hour** on a single machine. Built on Bun's native SQLite with WAL mode for maximum throughput.
+    Built on Bun's native SQLite with WAL mode. Optimized data structures deliver sub-millisecond latency at scale.
   </Card>
   <Card title="Zero Dependencies" icon="approve-check-circle">
     No Redis, no external services. Just Bun and SQLite. Deploy anywhere in seconds.
@@ -40,6 +40,85 @@ import VersionBadges from '@components/VersionBadges.astro';
     Familiar API for easy migration. Drop-in replacement for most BullMQ use cases.
   </Card>
 </CardGrid>
+
+---
+
+## Deployment Modes
+
+bunqueue offers two deployment modes to fit your architecture. Choose based on your use case.
+
+<CardGrid>
+  <Card title="Embedded Mode" icon="seti:db">
+    Run bunqueue directly inside your application process. Zero network overhead, instant setup.
+
+    **Best for:**
+    - Single-process applications
+    - Serverless / Edge functions
+    - Prototyping and development
+    - Simple background job processing
+  </Card>
+  <Card title="TCP Server Mode" icon="server">
+    Run bunqueue as a standalone server. Multiple clients connect via TCP protocol.
+
+    **Best for:**
+    - Microservices architecture
+    - Multiple worker processes
+    - Language-agnostic clients (HTTP/TCP API)
+    - Centralized job management
+  </Card>
+</CardGrid>
+
+### Mode Comparison
+
+| Aspect | Embedded | TCP Server |
+|--------|----------|------------|
+| **Setup** | Zero config | Run `bunqueue start` |
+| **Network** | None (in-process) | TCP :6789 / HTTP :6790 |
+| **Option** | `embedded: true` | Default (no option) |
+| **Persistence** | `DATA_PATH` env var | `--data-path` flag |
+| **Scaling** | Single process | Multiple clients |
+| **Latency** | Lowest (~μs) | Low (~ms) |
+
+### Embedded Mode
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+// Both Queue and Worker must have embedded: true
+const queue = new Queue('tasks', { embedded: true });
+
+const worker = new Worker('tasks', async (job) => {
+  return await processJob(job.data);
+}, { embedded: true });
+```
+
+### TCP Server Mode
+
+```bash
+# Terminal 1: Start the server
+bunqueue start --data-path ./data/queue.db
+```
+
+```typescript
+// Terminal 2: Your application connects to the server
+import { Queue, Worker } from 'bunqueue/client';
+
+// No embedded option = connects to localhost:6789
+const queue = new Queue('tasks');
+const worker = new Worker('tasks', async (job) => {
+  return await processJob(job.data);
+});
+```
+
+:::caution[Mode Mismatch]
+Queue and Worker must use the **same mode**. Mixing embedded Queue with TCP Worker (or vice versa) causes connection timeouts.
+:::
+
+<div style="text-align: center; margin-top: 1rem;">
+  <a href="/bunqueue/guide/introduction/" style="color: var(--sl-color-text-accent);">
+    Learn more about deployment modes →
+  </a>
+</div>
 
 ---
 
@@ -70,15 +149,30 @@ import VersionBadges from '@components/VersionBadges.astro';
   </TabItem>
   <TabItem label="Server Mode">
     ```bash
-    # Start the server
+    # First, start the server
     bunqueue start --data-path ./data/queue.db
+    ```
 
-    # Push a job
-    bunqueue push emails '{"to":"user@test.com"}' --priority 10
+    ```typescript
+    // Then, in your application
+    import { Queue, Worker } from 'bunqueue/client';
 
-    # Pull and process
-    bunqueue pull emails
-    bunqueue ack <job-id>
+    // Create a queue (connects to localhost:6789)
+    const queue = new Queue('emails');
+
+    // Add jobs
+    await queue.add('welcome', {
+      to: 'user@example.com',
+      template: 'welcome'
+    });
+
+    // Process jobs
+    const worker = new Worker('emails', async (job) => {
+      await sendEmail(job.data);
+      return { sent: true };
+    });
+
+    worker.on('completed', (job) => console.log(`✓ ${job.id}`));
     ```
   </TabItem>
   <TabItem label="Docker">
