@@ -33,7 +33,7 @@ bunqueue webhook add https://api.example.com/webhooks/emails --queue emails
 
 # Add webhook for specific events only
 bunqueue webhook add https://api.example.com/webhooks/failures \
-  --events failed,stalled
+  --events job.failed,job.stalled
 ```
 
 ### List Webhooks
@@ -47,7 +47,7 @@ bunqueue webhook list
 URL                                        QUEUE    EVENTS
 https://api.example.com/webhooks/bunqueue  *        all
 https://api.example.com/webhooks/emails    emails   all
-https://api.example.com/webhooks/failures  *        failed,stalled
+https://api.example.com/webhooks/failures  *        job.failed,job.stalled
 ```
 
 ### Remove Webhook
@@ -60,14 +60,13 @@ bunqueue webhook remove https://api.example.com/webhooks/bunqueue
 
 | Event | Description | When Triggered |
 |-------|-------------|----------------|
-| `waiting` | Job added to queue | After `queue.add()` |
-| `active` | Job started processing | Worker picks up job |
-| `completed` | Job finished successfully | Worker calls `done()` |
-| `failed` | Job failed | Worker throws error |
-| `stalled` | Job became unresponsive | Heartbeat timeout |
-| `progress` | Progress updated | `job.updateProgress()` |
-| `delayed` | Job scheduled for later | Job with delay added |
-| `removed` | Job was removed | Manual deletion |
+| `job.waiting` | Job added to queue | After `queue.add()` |
+| `job.active` | Job started processing | Worker picks up job |
+| `job.completed` | Job finished successfully | Worker calls `done()` |
+| `job.failed` | Job failed | Worker throws error |
+| `job.stalled` | Job became unresponsive | Heartbeat timeout |
+| `job.progress` | Progress updated | `job.updateProgress()` |
+| `job.delayed` | Job scheduled for later | Job with delay added |
 
 ## Webhook Payload
 
@@ -79,13 +78,13 @@ bunqueue sends POST requests with JSON body:
 POST /webhooks/bunqueue HTTP/1.1
 Host: api.example.com
 Content-Type: application/json
-X-Webhook-Event: completed
+X-Webhook-Event: job.completed
 X-Webhook-Timestamp: 1704067200000
 X-Webhook-Signature: sha256=a1b2c3d4e5f6...
 X-Webhook-ID: wh_abc123
 
 {
-  "event": "completed",
+  "event": "job.completed",
   "timestamp": 1704067200000,
   "queue": "emails",
   "job": {
@@ -107,10 +106,10 @@ X-Webhook-ID: wh_abc123
 
 ### Event-Specific Payloads
 
-**completed**
+**job.completed**
 ```json
 {
-  "event": "completed",
+  "event": "job.completed",
   "timestamp": 1704067200000,
   "queue": "emails",
   "job": { "id": "1001", "name": "send-email", "data": {...} },
@@ -118,10 +117,10 @@ X-Webhook-ID: wh_abc123
 }
 ```
 
-**failed**
+**job.failed**
 ```json
 {
-  "event": "failed",
+  "event": "job.failed",
   "timestamp": 1704067200000,
   "queue": "emails",
   "job": { "id": "1001", "name": "send-email", "data": {...} },
@@ -134,10 +133,10 @@ X-Webhook-ID: wh_abc123
 }
 ```
 
-**progress**
+**job.progress**
 ```json
 {
-  "event": "progress",
+  "event": "job.progress",
   "timestamp": 1704067200000,
   "queue": "emails",
   "job": { "id": "1001", "name": "send-email", "data": {...} },
@@ -146,10 +145,10 @@ X-Webhook-ID: wh_abc123
 }
 ```
 
-**stalled**
+**job.stalled**
 ```json
 {
-  "event": "stalled",
+  "event": "job.stalled",
   "timestamp": 1704067200000,
   "queue": "emails",
   "job": { "id": "1001", "name": "send-email", "data": {...} },
@@ -336,13 +335,13 @@ app.post('/webhooks/bunqueue', verifySignature, async (c) => {
   console.log(`Received ${payload.event} event for job ${payload.job.id}`);
 
   switch (payload.event) {
-    case 'completed':
+    case 'job.completed':
       console.log('Job completed:', payload.result);
       // Notify downstream service
       await notifyCompletion(payload);
       break;
 
-    case 'failed':
+    case 'job.failed':
       console.error('Job failed:', payload.error.message);
       // Alert on failure
       await sendAlert({
@@ -353,13 +352,13 @@ app.post('/webhooks/bunqueue', verifySignature, async (c) => {
       });
       break;
 
-    case 'stalled':
+    case 'job.stalled':
       console.warn('Job stalled:', payload.job.id);
       // Log stall event
       await logStallEvent(payload);
       break;
 
-    case 'progress':
+    case 'job.progress':
       console.log(`Job ${payload.job.id}: ${payload.progress}%`);
       // Update UI or notify
       await broadcastProgress(payload);
@@ -417,10 +416,10 @@ app.post('/webhooks/bunqueue', verifySignature, async (req, res) => {
 
   console.log(`[${queue}] ${event}: Job ${job.id}`);
 
-  if (event === 'completed') {
+  if (event === 'job.completed') {
     // Handle completion
     console.log('Result:', result);
-  } else if (event === 'failed') {
+  } else if (event === 'job.failed') {
     // Handle failure
     console.error('Error:', error.message);
   }

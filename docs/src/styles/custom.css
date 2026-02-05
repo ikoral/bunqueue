@@ -496,10 +496,66 @@ starlight-menu-button button {
   color: var(--sl-color-text);
 }
 
-/* Logo */
+/* Logo & Site Title */
 .site-title {
-  font-weight: 700 !important;
-  letter-spacing: -0.025em;
+  font-weight: 650 !important;
+  letter-spacing: -0.03em;
+  font-size: 1.15rem !important;
+}
+
+.site-title img {
+  border-radius: 8px;
+  width: 28px !important;
+  height: 28px !important;
+}
+
+/* Sidebar header area */
+starlight-site-title a {
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* Sidebar group labels */
+nav.sidebar .top-level > li > details > summary,
+nav.sidebar .top-level > li > a {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sl-color-gray-3);
+  padding: 0.4rem 0.75rem;
+}
+
+/* Sidebar nested items */
+nav.sidebar ul ul a {
+  font-size: 0.875rem;
+  padding: 0.35rem 0.75rem 0.35rem 1.25rem;
+  color: var(--sl-color-gray-4);
+}
+
+nav.sidebar ul ul a:hover {
+  color: var(--sl-color-text);
+  background: var(--sl-color-accent-low);
+}
+
+/* Active page indicator */
+nav.sidebar a[aria-current='page'] {
+  background: var(--sl-color-accent-low) !important;
+  color: var(--sl-color-accent) !important;
+  font-weight: 600 !important;
+  border-left: 2px solid var(--sl-color-accent);
+  padding-left: calc(1.25rem - 2px);
+}
+
+/* Sidebar section separator */
+nav.sidebar .top-level > li {
+  border-bottom: 1px solid var(--sl-color-hairline-light);
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+nav.sidebar .top-level > li:last-child {
+  border-bottom: none;
 }
 
 /* Pagination */

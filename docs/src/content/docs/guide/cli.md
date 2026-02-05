@@ -108,6 +108,69 @@ Run at: 2024-01-15T10:30:05.000Z
 bunqueue push orders '{"orderId":"ORD-123"}' --job-id order-ORD-123
 ```
 
+```bash
+# With retry configuration
+bunqueue push emails '{"to":"user@example.com"}' --max-attempts 5 --backoff 2000
+```
+
+```bash
+# With TTL and timeout
+bunqueue push reports '{"type":"monthly"}' --ttl 3600000 --timeout 30000
+```
+
+```bash
+# With unique key for deduplication
+bunqueue push notifications '{"userId":"123"}' --unique-key user-123-notify
+# or short form
+bunqueue push notifications '{"userId":"123"}' -u user-123-notify
+```
+
+```bash
+# With dependencies (wait for other jobs)
+bunqueue push aggregate '{"type":"sum"}' --depends-on job-1,job-2,job-3
+```
+
+```bash
+# With tags for organization
+bunqueue push emails '{"to":"user@example.com"}' --tags marketing,campaign-q1
+```
+
+```bash
+# With group ID for correlation
+bunqueue push tasks '{"action":"sync"}' --group-id batch-2024-01
+# or short form
+bunqueue push tasks '{"action":"sync"}' -g batch-2024-01
+```
+
+```bash
+# LIFO ordering (last in, first out)
+bunqueue push urgent '{"data":"latest"}' --lifo
+```
+
+```bash
+# Auto-remove after completion or failure
+bunqueue push temp-tasks '{"data":"test"}' --remove-on-complete --remove-on-fail
+```
+
+#### Push Options Reference
+
+| Option | Short | Type | Default | Description |
+|--------|-------|------|---------|-------------|
+| `--priority` | `-P` | number | `0` | Higher = processed first |
+| `--delay` | `-d` | number | `0` | Delay in ms before processing |
+| `--job-id` | - | string | - | Custom ID for deduplication |
+| `--max-attempts` | - | number | `3` | Max retry attempts |
+| `--backoff` | - | number | `1000` | Backoff between retries (ms) |
+| `--ttl` | - | number | - | Time-to-live in ms |
+| `--timeout` | - | number | - | Processing timeout in ms |
+| `--unique-key` | `-u` | string | - | Deduplication key |
+| `--depends-on` | - | string | - | Comma-separated job IDs |
+| `--tags` | - | string | - | Comma-separated tags |
+| `--group-id` | `-g` | string | - | Group identifier |
+| `--lifo` | - | boolean | `false` | LIFO ordering |
+| `--remove-on-complete` | - | boolean | `false` | Auto-delete on completion |
+| `--remove-on-fail` | - | boolean | `false` | Auto-delete on failure |
+
 ### Pull Jobs
 
 Retrieve jobs for processing (typically used by workers).

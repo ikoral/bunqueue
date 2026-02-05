@@ -263,6 +263,196 @@ Prefix for backup files in S3.
 S3_BACKUP_PREFIX=bunqueue/production/ bunqueue start
 ```
 
+## Timeouts & Limits
+
+### `SHUTDOWN_TIMEOUT_MS`
+
+Timeout for graceful shutdown in milliseconds.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `30000` | `60000` |
+
+```bash
+SHUTDOWN_TIMEOUT_MS=60000 bunqueue start
+```
+
+### `STATS_INTERVAL_MS`
+
+Interval for stats logging in milliseconds.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `300000` (5 min) | `60000` |
+
+```bash
+STATS_INTERVAL_MS=60000 bunqueue start
+```
+
+### `WORKER_TIMEOUT_MS`
+
+Default timeout for job processing in milliseconds.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `30000` | `60000` |
+
+```bash
+WORKER_TIMEOUT_MS=60000 bunqueue start
+```
+
+### `LOCK_TIMEOUT_MS`
+
+Timeout for acquiring internal locks in milliseconds.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `5000` | `10000` |
+
+```bash
+LOCK_TIMEOUT_MS=10000 bunqueue start
+```
+
+### `WORKER_CLEANUP_INTERVAL_MS`
+
+Interval for cleaning up inactive worker registrations.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `60000` | `120000` |
+
+```bash
+WORKER_CLEANUP_INTERVAL_MS=120000 bunqueue start
+```
+
+## Webhooks
+
+### `WEBHOOK_MAX_RETRIES`
+
+Maximum retry attempts for webhook deliveries.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `3` | `5` |
+
+```bash
+WEBHOOK_MAX_RETRIES=5 bunqueue start
+```
+
+### `WEBHOOK_RETRY_DELAY_MS`
+
+Delay between webhook retry attempts in milliseconds.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `1000` | `5000` |
+
+```bash
+WEBHOOK_RETRY_DELAY_MS=5000 bunqueue start
+```
+
+## Rate Limiting (Server)
+
+### `RATE_LIMIT_MAX_REQUESTS`
+
+Maximum TCP requests per client within the rate limit window. Disabled when not set.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | (none) | `1000` |
+
+```bash
+RATE_LIMIT_MAX_REQUESTS=1000 bunqueue start
+```
+
+### `RATE_LIMIT_WINDOW_MS`
+
+Time window for rate limiting in milliseconds.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `60000` | `30000` |
+
+```bash
+RATE_LIMIT_WINDOW_MS=30000 bunqueue start
+```
+
+### `RATE_LIMIT_CLEANUP_MS`
+
+Interval for cleaning up rate limit tracking data.
+
+| Type | Default | Example |
+|------|---------|---------|
+| number | `60000` | `120000` |
+
+```bash
+RATE_LIMIT_CLEANUP_MS=120000 bunqueue start
+```
+
+## Security & Access
+
+### `METRICS_AUTH`
+
+Require authentication for metrics endpoints.
+
+| Type | Default | Values |
+|------|---------|--------|
+| boolean | `false` | `true`, `false` |
+
+```bash
+METRICS_AUTH=true bunqueue start
+```
+
+### `CORS_ALLOW_ORIGIN`
+
+Comma-separated list of allowed CORS origins.
+
+| Type | Default | Example |
+|------|---------|---------|
+| string | `*` | `https://app.example.com` |
+
+```bash
+CORS_ALLOW_ORIGIN=https://app.example.com,https://admin.example.com bunqueue start
+```
+
+## Client & CLI
+
+### `BUNQUEUE_EMBEDDED`
+
+Force embedded mode for client library.
+
+| Type | Default | Values |
+|------|---------|--------|
+| string | (none) | `1` |
+
+```bash
+BUNQUEUE_EMBEDDED=1 bun run worker.ts
+```
+
+### `SQLITE_PATH`
+
+Legacy alias for `DATA_PATH`.
+
+| Type | Default | Example |
+|------|---------|---------|
+| string | (none) | `./data/queue.db` |
+
+```bash
+SQLITE_PATH=./data/queue.db bunqueue start
+```
+
+### `NO_COLOR`
+
+Disable colored output in CLI.
+
+| Type | Default | Values |
+|------|---------|--------|
+| string | (none) | `1` |
+
+```bash
+NO_COLOR=1 bunqueue stats
+```
+
 ## Complete Examples
 
 ### Development
