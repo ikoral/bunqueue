@@ -64,6 +64,28 @@ bun add bunqueue
 
 > Requires [Bun](https://bun.sh) runtime. Node.js is not supported.
 
+## Server Mode (Docker)
+
+```bash
+# Start with persistent data
+docker run -d -p 6789:6789 -p 6790:6790 \
+  -v bunqueue-data:/app/data \
+  ghcr.io/egeominotti/bunqueue:latest
+```
+
+Connect from your app:
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue('tasks', { connection: { host: 'localhost', port: 6789 } });
+const worker = new Worker('tasks', async (job) => {
+  return { done: true };
+}, { connection: { host: 'localhost', port: 6789 } });
+
+await queue.add('process', { data: 'hello' });
+```
+
 ## Quick Example
 
 ```typescript
