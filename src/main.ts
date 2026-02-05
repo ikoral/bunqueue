@@ -163,7 +163,10 @@ function startServer(): void {
   }
 
   // Graceful shutdown
+  let shuttingDown = false;
   const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     serverLog.info(`Received ${signal}, shutting down...`);
 
     // Stop stats interval immediately
@@ -194,6 +197,22 @@ function startServer(): void {
 
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
+
+  process.on('uncaughtException', (err) => {
+    serverLog.error('Uncaught exception - initiating shutdown', {
+      error: err.message,
+      stack: err.stack,
+    });
+    void shutdown('uncaughtException');
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    serverLog.error('Unhandled promise rejection - initiating shutdown', {
+      reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    });
+    void shutdown('unhandledRejection');
+  });
 
   // Print stats periodically
   const statsInterval = setInterval(() => {
