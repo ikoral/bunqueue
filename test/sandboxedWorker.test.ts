@@ -115,15 +115,21 @@ describe('SandboxedWorker', () => {
       manager.push(queueName, { data: { value: 4 } }),
     ]);
 
-    // Wait for processing with polling
-    for (let i = 0; i < jobs.length; i++) {
-      let result: unknown;
-      for (let attempt = 0; attempt < 30; attempt++) {
-        await Bun.sleep(100);
-        result = manager.getResult(jobs[i].id);
-        if (result !== undefined) break;
-      }
-      expect(result).toEqual({ processed: true, value: (i + 1) * 2 });
+    // Wait for all jobs in parallel to avoid sequential timeout
+    const results = await Promise.all(
+      jobs.map(async (job, i) => {
+        let result: unknown;
+        for (let attempt = 0; attempt < 50; attempt++) {
+          await Bun.sleep(100);
+          result = manager.getResult(job.id);
+          if (result !== undefined) break;
+        }
+        return { result, expected: { processed: true, value: (i + 1) * 2 } };
+      })
+    );
+
+    for (const { result, expected } of results) {
+      expect(result).toEqual(expected);
     }
 
     await worker.stop();
