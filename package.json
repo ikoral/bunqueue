@@ -102,12 +102,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/egeominotti/bunQ.git"
+    "url": "git+https://github.com/egeominotti/bunqueue.git"
   },
   "bugs": {
-    "url": "https://github.com/egeominotti/bunQ/issues"
+    "url": "https://github.com/egeominotti/bunqueue/issues"
   },
-  "homepage": "https://github.com/egeominotti/bunQ#readme",
+  "homepage": "https://bunqueue.dev",
   "engines": {
     "node": ">=18.0.0",
     "bun": ">=1.0.0"

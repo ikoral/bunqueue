@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://egeominotti.github.io/bunqueue/">
+  <a href="https://bunqueue.dev/">
     <img src=".github/banner.svg" alt="bunqueue" width="400" />
   </a>
 </p>
@@ -17,8 +17,8 @@
 </p>
 
 <p align="center">
-  <a href="https://egeominotti.github.io/bunqueue/"><strong>Documentation</strong></a> ·
-  <a href="https://egeominotti.github.io/bunqueue/guide/benchmarks/"><strong>Benchmarks</strong></a>
+  <a href="https://bunqueue.dev/"><strong>Documentation</strong></a> ·
+  <a href="https://bunqueue.dev/guide/benchmarks/"><strong>Benchmarks</strong></a>
 </p>
 
 ---
@@ -35,7 +35,7 @@
 - **BullMQ-compatible API** — Same `Queue`, `Worker`, `QueueEvents`
 - **Zero dependencies** — No Redis, no MongoDB
 - **SQLite persistence** — Survives restarts, WAL mode for concurrent access
-- **Up to 286K ops/sec** — [Verified benchmarks](https://egeominotti.github.io/bunqueue/guide/benchmarks/)
+- **Up to 286K ops/sec** — [Verified benchmarks](https://bunqueue.dev/guide/benchmarks/)
 
 ## When to use bunqueue
 
@@ -138,7 +138,7 @@ SQLite handles surprisingly high throughput for single-node deployments:
 | Embedded | 286K ops/sec    | Same process        |
 | TCP      | 149K ops/sec    | Distributed workers |
 
-> Run `bun run bench` to verify on your hardware. [Full benchmark methodology →](https://egeominotti.github.io/bunqueue/guide/benchmarks/)
+> Run `bun run bench` to verify on your hardware. [Full benchmark methodology →](https://bunqueue.dev/guide/benchmarks/)
 
 ## Monitoring
 
@@ -152,14 +152,14 @@ docker compose --profile monitoring up -d
 
 ## Documentation
 
-**[Read the full documentation →](https://egeominotti.github.io/bunqueue/)**
+**[Read the full documentation →](https://bunqueue.dev/)**
 
-- [Quick Start](https://egeominotti.github.io/bunqueue/guide/quickstart/)
-- [Queue API](https://egeominotti.github.io/bunqueue/guide/queue/)
-- [Worker API](https://egeominotti.github.io/bunqueue/guide/worker/)
-- [Server Mode](https://egeominotti.github.io/bunqueue/guide/server/)
-- [Benchmarks](https://egeominotti.github.io/bunqueue/guide/benchmarks/)
-- [CLI Reference](https://egeominotti.github.io/bunqueue/guide/cli/)
+- [Quick Start](https://bunqueue.dev/guide/quickstart/)
+- [Queue API](https://bunqueue.dev/guide/queue/)
+- [Worker API](https://bunqueue.dev/guide/worker/)
+- [Server Mode](https://bunqueue.dev/guide/server/)
+- [Benchmarks](https://bunqueue.dev/guide/benchmarks/)
+- [CLI Reference](https://bunqueue.dev/guide/cli/)
 
 ## License
 
