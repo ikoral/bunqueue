@@ -1,5 +1,7 @@
 <p align="center">
-  <img src=".github/banner.svg" alt="bunqueue" width="400" />
+  <a href="https://egeominotti.github.io/bunqueue/">
+    <img src=".github/banner.svg" alt="bunqueue" width="400" />
+  </a>
 </p>
 <p align="center">
   <a href="https://github.com/egeominotti/bunqueue/stargazers"><img src="https://img.shields.io/github/stars/egeominotti/bunqueue?style=flat" alt="GitHub Stars"></a>
