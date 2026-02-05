@@ -1,12 +1,12 @@
 # bunqueue Documentation
-# https://egeominotti.github.io/bunqueue/
+# https://bunqueue.dev/
 
 User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://egeominotti.github.io/bunqueue/sitemap-index.xml
+Sitemap: https://bunqueue.dev/sitemap-index.xml
 
 # LLMs.txt for AI crawlers
 # https://llmstxt.org/
-# See: https://egeominotti.github.io/bunqueue/llms.txt
+# See: https://bunqueue.dev/llms.txt

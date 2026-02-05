@@ -5,7 +5,7 @@ head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/client-sdk.png
+      content: https://bunqueue.dev/og/client-sdk.png
 ---
 
 Create job flows with automatic dependency management: sequential chains, parallel execution with merge, and tree structures.

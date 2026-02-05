@@ -1,11 +1,11 @@
 ---
 title: Hono Integration
-description: Integrate bunqueue with Hono framework
+description: Add background job processing to your Hono app with bunqueue middleware for Bun
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/hono.png
+      content: https://bunqueue.dev/og/hono.png
 ---
 
 [Hono](https://hono.dev) is an ultrafast web framework for the Edge. Here's how to integrate bunqueue.

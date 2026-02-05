@@ -1,11 +1,11 @@
 ---
 title: Framework Integrations
-description: Integrate bunqueue with Hono and Elysia
+description: Integrate bunqueue job queue with Hono, Elysia, and other Bun web frameworks
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/integrations.png
+      content: https://bunqueue.dev/og/integrations.png
 ---
 
 Integrate bunqueue seamlessly with modern Bun-native frameworks.
@@ -18,8 +18,8 @@ All framework integrations use `embedded: true` for in-process queues. Without i
 
 | Framework | Description | Guide |
 |-----------|-------------|-------|
-| [Hono](https://hono.dev) | Ultrafast web framework for the Edge | [Hono Integration](/bunqueue/guide/hono/) |
-| [Elysia](https://elysiajs.com) | Ergonomic framework with end-to-end type safety | [Elysia Integration](/bunqueue/guide/elysia/) |
+| [Hono](https://hono.dev) | Ultrafast web framework for the Edge | [Hono Integration](/guide/hono/) |
+| [Elysia](https://elysiajs.com) | Ergonomic framework with end-to-end type safety | [Elysia Integration](/guide/elysia/) |
 
 ## Quick Comparison
 
@@ -123,5 +123,5 @@ process.on('SIGTERM', shutdown);
 
 ## Next Steps
 
-- [Hono Integration](/bunqueue/guide/hono/) - Complete guide with examples
-- [Elysia Integration](/bunqueue/guide/elysia/) - Production-ready REST API example with tests
+- [Hono Integration](/guide/hono/) - Complete guide with examples
+- [Elysia Integration](/guide/elysia/) - Production-ready REST API example with tests

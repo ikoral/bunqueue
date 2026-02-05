@@ -1,11 +1,11 @@
 ---
 title: Stall Detection
-description: Automatic recovery of unresponsive jobs
+description: Configure stall detection for automatic recovery of unresponsive jobs with heartbeat monitoring in bunqueue
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/client-sdk.png
+      content: https://bunqueue.dev/og/client-sdk.png
 ---
 
 

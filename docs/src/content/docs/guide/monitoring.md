@@ -1,6 +1,11 @@
 ---
 title: Monitoring
-description: Monitor bunqueue with Prometheus and Grafana
+description: Monitor bunqueue with Prometheus metrics, Grafana dashboards, alert rules, and health endpoints
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/server-mode.png
 ---
 
 bunqueue exposes Prometheus-compatible metrics for production monitoring. This guide covers the built-in metrics endpoint and a ready-to-use Grafana dashboard.

@@ -1,11 +1,11 @@
 ---
 title: Changelog
-description: Release notes and version history
+description: bunqueue release notes, version history, and migration notes for each update
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
+      content: https://bunqueue.dev/og/getting-started.png
 ---
 
 All notable changes to bunqueue are documented here.

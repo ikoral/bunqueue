@@ -1,11 +1,11 @@
 ---
 title: Queue Group
-description: Namespace isolation for related queues
+description: Organize related queues with namespace isolation using QueueGroup for multi-tenant applications
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/client-sdk.png
+      content: https://bunqueue.dev/og/client-sdk.png
 ---
 
 `QueueGroup` provides namespace isolation for related queues. All queues in a group share a common prefix.

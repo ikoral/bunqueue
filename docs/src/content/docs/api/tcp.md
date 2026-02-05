@@ -1,11 +1,11 @@
 ---
 title: TCP Protocol
-description: Binary TCP protocol reference
+description: Binary TCP protocol specification for bunqueue with wire format, pipelining, and command reference
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
+      content: https://bunqueue.dev/og/server-mode.png
 ---
 
 

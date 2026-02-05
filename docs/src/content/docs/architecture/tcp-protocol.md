@@ -1,6 +1,11 @@
 ---
-title: TCP Protocol
-description: Wire format, pipelining, commands, and connection management
+title: TCP Protocol Architecture
+description: Binary MessagePack wire format, request pipelining, connection pooling, and command reference
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 bunqueue uses a high-performance binary protocol over TCP with MessagePack serialization and optional pipelining.

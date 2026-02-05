@@ -1,6 +1,11 @@
 ---
 title: bunqueue vs BullMQ
 description: Fair performance comparison between bunqueue (TCP mode) and BullMQ (Redis)
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/benchmarks.png
 ---
 
 import { Card, CardGrid, Aside } from '@astrojs/starlight/components';
@@ -171,7 +176,7 @@ Both bunqueue and BullMQ use **identical test conditions**: same payload size (1
 
 ## Run the Benchmark Yourself
 
-The benchmark source code is available at [`bench/comparison/run.ts`](https://github.com/egeominotti/bunqueue/blob/main/bench/comparison/run.ts).
+The benchmark source code is available at [`bench/comparison/run.ts`](https://github.com/egeominotti/blob/main/bench/comparison/run.ts).
 
 ```bash
 # Clone the repository

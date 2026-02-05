@@ -1,6 +1,11 @@
 ---
 title: Architecture
-description: Deep dive into bunqueue's internal architecture and design decisions
+description: Deep dive into bunqueue's internal architecture, sharding, SQLite persistence, and design decisions
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 # Architecture Overview

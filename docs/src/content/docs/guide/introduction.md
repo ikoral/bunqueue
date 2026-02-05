@@ -1,11 +1,11 @@
 ---
-title: Introduction
-description: What is bunqueue and why use it
+title: Introduction to bunqueue
+description: High-performance SQLite job queue for Bun with zero Redis dependency and BullMQ-compatible API
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
+      content: https://bunqueue.dev/og/getting-started.png
 ---
 
 
@@ -110,5 +110,5 @@ Best for:
 
 ## Next Steps
 
-- [Installation](/bunqueue/guide/installation/) - Get bunqueue installed
-- [Quick Start](/bunqueue/guide/quickstart/) - Create your first queue
+- [Installation](/guide/installation/) - Get bunqueue installed
+- [Quick Start](/guide/quickstart/) - Create your first queue

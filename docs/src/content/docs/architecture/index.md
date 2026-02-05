@@ -1,6 +1,11 @@
 ---
 title: Architecture Overview
-description: High-level architecture and design decisions of bunqueue
+description: High-level architecture of bunqueue including sharding, TCP protocol, SQLite persistence, and background tasks
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 # Architecture Overview

@@ -1,11 +1,11 @@
 ---
 title: Elysia Integration
-description: Integrate bunqueue with Elysia framework
+description: Add background job processing to your Elysia app with bunqueue plugin for Bun
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/elysia.png
+      content: https://bunqueue.dev/og/elysia.png
 ---
 
 [Elysia](https://elysiajs.com) is an ergonomic framework for building backend servers. Here's the bunqueue integration.

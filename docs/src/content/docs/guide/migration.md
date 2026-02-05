@@ -5,7 +5,7 @@ head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/api-reference.png
+      content: https://bunqueue.dev/og/api-reference.png
 ---
 
 
@@ -259,5 +259,5 @@ await queue.add('task', data, {
 
 If you encounter issues during migration:
 
-- [GitHub Issues](https://github.com/egeominotti/bunqueue/issues)
-- [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions)
+- [GitHub Issues](https://github.com/egeominotti/issues)
+- [GitHub Discussions](https://github.com/egeominotti/discussions)

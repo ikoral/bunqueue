@@ -1,11 +1,11 @@
 ---
-title: Queue
-description: Queue class API reference
+title: Queue API
+description: Queue class API for adding jobs, batch operations, priorities, delays, and deduplication in bunqueue
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/queue.png
+      content: https://bunqueue.dev/og/queue.png
 ---
 
 The `Queue` class is used to add and manage jobs.
@@ -338,7 +338,7 @@ queue.setStallConfig({
 const config = queue.getStallConfig();
 ```
 
-See [Stall Detection](/bunqueue/guide/stall-detection/) for more details.
+See [Stall Detection](/guide/stall-detection/) for more details.
 
 ## DLQ Operations
 
@@ -377,7 +377,7 @@ queue.retryDlqByFilter({ reason: 'timeout', limit: 10 });
 queue.purgeDlq();
 ```
 
-See [Dead Letter Queue](/bunqueue/guide/dlq/) for more details.
+See [Dead Letter Queue](/guide/dlq/) for more details.
 
 ## Retry Completed Jobs
 

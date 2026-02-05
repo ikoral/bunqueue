@@ -1,6 +1,11 @@
 ---
 title: Domain Layer Architecture
-description: Sharding, priority queues, and core business logic flows
+description: Auto-scaled sharding, priority queues, and core business logic of bunqueue's domain layer
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 # Domain Layer Architecture

@@ -1,11 +1,11 @@
 ---
 title: Troubleshooting
-description: Common issues and solutions
+description: "Fix common bunqueue issues: SQLite locks, memory usage, timeouts, connection errors, and job failures"
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
+      content: https://bunqueue.dev/og/getting-started.png
 ---
 
 
@@ -406,8 +406,8 @@ tail -f /var/log/bunqueue.log
 
 If these solutions don't help:
 
-1. Check [GitHub Issues](https://github.com/egeominotti/bunqueue/issues)
-2. Search [Discussions](https://github.com/egeominotti/bunqueue/discussions)
+1. Check [GitHub Issues](https://github.com/egeominotti/issues)
+2. Search [Discussions](https://github.com/egeominotti/discussions)
 3. Open a new issue with:
    - bunqueue version
    - Bun version

@@ -1,11 +1,11 @@
 ---
 title: Rate Limiting
-description: Control job processing rates
+description: Configure per-queue rate limiting and concurrency control to protect downstream services in bunqueue
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/advanced.png
+      content: https://bunqueue.dev/og/advanced.png
 ---
 
 

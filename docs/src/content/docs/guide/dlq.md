@@ -5,7 +5,7 @@ head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/client-sdk.png
+      content: https://bunqueue.dev/og/client-sdk.png
 ---
 
 The Dead Letter Queue stores failed jobs with full metadata for debugging and recovery.

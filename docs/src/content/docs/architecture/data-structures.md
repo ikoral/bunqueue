@@ -1,6 +1,11 @@
 ---
 title: Data Structures
-description: Core algorithms powering bunqueue's performance
+description: Skip lists, MinHeap, LRU cache, and priority queues powering bunqueue's high-performance job processing
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 # Data Structures

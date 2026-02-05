@@ -1,10 +1,21 @@
 ---
 import { Badge } from '@astrojs/starlight/components';
-import pkg from '@root/package.json';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+let version = '0.0.0';
+try {
+  const pkg = JSON.parse(readFileSync(path.resolve(__dirname, '../../../package.json'), 'utf-8'));
+  version = pkg.version;
+} catch {
+  // Fallback for Vercel builds where root package.json is not available
+}
 ---
 
 <div class="badges-container">
-  <Badge text={`v${pkg.version}`} variant="success" size="large" />
+  <Badge text={`v${version}`} variant="success" size="large" />
   <span class="badge-separator">•</span>
   <Badge text="MIT License" variant="note" size="large" />
   <span class="badge-separator">•</span>

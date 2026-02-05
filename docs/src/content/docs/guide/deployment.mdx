@@ -1,6 +1,11 @@
 ---
 title: Production Deployment
-description: Deploy bunqueue in production environments
+description: Deploy bunqueue in production with Docker, systemd, health checks, and performance tuning
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/server-mode.png
 ---
 
 import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
@@ -247,8 +252,8 @@ RestartSec=5
 
 # Environment
 Environment=NODE_ENV=production
-Environment=DATA_PATH=/var/lib/bunqueue/bunq.db
-EnvironmentFile=/etc/bunqueue/env
+Environment=DATA_PATH=/var/lib/bunq.db
+EnvironmentFile=/etc/env
 
 # Security
 NoNewPrivileges=true
@@ -352,12 +357,12 @@ module.exports = {
     max_memory_restart: '512M',
     env: {
       NODE_ENV: 'production',
-      DATA_PATH: '/var/lib/bunqueue/bunq.db',
+      DATA_PATH: '/var/lib/bunq.db',
       TCP_PORT: 6789,
       HTTP_PORT: 6790,
     },
-    error_file: '/var/log/bunqueue/error.log',
-    out_file: '/var/log/bunqueue/out.log',
+    error_file: '/var/log/error.log',
+    out_file: '/var/log/out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     merge_logs: true,
   }]
@@ -382,7 +387,7 @@ module.exports = {
     max_memory_restart: '512M',
     env: {
       NODE_ENV: 'production',
-      DATA_PATH: '/var/lib/bunqueue/bunq.db',
+      DATA_PATH: '/var/lib/bunq.db',
       TCP_PORT: 6789,
       HTTP_PORT: 6790,
     },
@@ -711,8 +716,8 @@ AUTH_TOKENS=$(openssl rand -hex 32),$(openssl rand -hex 32)
 
 ```bash
 # Restrict database access
-chmod 600 /var/lib/bunqueue/bunq.db
-chown bunqueue:bunqueue /var/lib/bunqueue/bunq.db
+chmod 600 /var/lib/bunq.db
+chown bunqueue:bunqueue /var/lib/bunq.db
 ```
 
 ## Monitoring with Prometheus
@@ -738,9 +743,9 @@ scrape_configs:
 ## Example: Full Production Setup
 
 ```bash
-# /etc/bunqueue/env
+# /etc/env
 NODE_ENV=production
-DATA_PATH=/var/lib/bunqueue/bunq.db
+DATA_PATH=/var/lib/bunq.db
 TCP_PORT=6789
 HTTP_PORT=6790
 AUTH_TOKENS=prod-token-abc123,deploy-token-xyz789

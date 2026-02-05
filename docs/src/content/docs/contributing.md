@@ -1,11 +1,11 @@
 ---
 title: Contributing
-description: How to contribute to bunqueue
+description: "Contribute to bunqueue: development setup, coding guidelines, testing, and pull request workflow"
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
+      content: https://bunqueue.dev/og/getting-started.png
 ---
 
 
@@ -204,7 +204,7 @@ Update README.md for:
 
 ## Getting Help
 
-- [GitHub Discussions](https://github.com/egeominotti/bunqueue/discussions)
+- [GitHub Discussions](https://github.com/egeominotti/discussions)
 - [Discord](https://discord.gg/bunqueue)
 - [Twitter](https://twitter.com/bunqueue)
 

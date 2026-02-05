@@ -1,11 +1,11 @@
 ---
 title: Cron Jobs
-description: Schedule recurring jobs
+description: Schedule recurring background jobs with cron expressions, intervals, and timezone support in bunqueue
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/advanced.png
+      content: https://bunqueue.dev/og/advanced.png
 ---
 
 

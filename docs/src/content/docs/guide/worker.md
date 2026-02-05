@@ -1,11 +1,11 @@
 ---
-title: Worker
-description: Worker class API reference
+title: Worker API
+description: Worker class API for job processing, concurrency control, heartbeat, events, and sandboxed workers
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/worker.png
+      content: https://bunqueue.dev/og/worker.png
 ---
 
 The `Worker` class processes jobs from a queue.
@@ -157,7 +157,7 @@ const worker = new Worker('queue', processor, {
 
 **Tip:** The `heartbeatInterval` should be less than the queue's `stallInterval` to avoid false positives.
 
-See [Stall Detection](/bunqueue/guide/stall-detection/) for more details.
+See [Stall Detection](/guide/stall-detection/) for more details.
 
 ## Lock-Based Ownership
 

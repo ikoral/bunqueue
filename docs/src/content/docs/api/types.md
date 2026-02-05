@@ -5,7 +5,7 @@ head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/api-reference.png
+      content: https://bunqueue.dev/og/api-reference.png
 ---
 
 bunqueue is written in TypeScript and provides comprehensive type definitions.

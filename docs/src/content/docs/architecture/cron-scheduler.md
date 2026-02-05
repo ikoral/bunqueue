@@ -1,6 +1,11 @@
 ---
-title: Cron Scheduler
-description: Deep dive into bunqueue's cron job scheduling system
+title: Cron Scheduler Architecture
+description: MinHeap-based cron scheduling system with lazy deletion and timezone support in bunqueue
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 # Cron Scheduler Architecture

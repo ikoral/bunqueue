@@ -1,6 +1,11 @@
 ---
 title: MCP Server
-description: Use bunqueue with AI assistants via Model Context Protocol
+description: Manage bunqueue job queues with AI assistants like Claude via Model Context Protocol (MCP)
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/integrations.png
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
@@ -269,7 +274,7 @@ Configure with environment variable:
       "command": "bunx",
       "args": ["bunqueue-mcp"],
       "env": {
-        "DATA_PATH": "/var/lib/bunqueue/queue.db"
+        "DATA_PATH": "/var/lib/queue.db"
       }
     }
   }

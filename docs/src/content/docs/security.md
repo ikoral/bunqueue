@@ -1,11 +1,11 @@
 ---
 title: Security
-description: Security policy and best practices
+description: "bunqueue security practices: token authentication, rate limiting, and vulnerability reporting"
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/advanced.png
+      content: https://bunqueue.dev/og/advanced.png
 ---
 
 
@@ -18,7 +18,7 @@ bunqueue takes security seriously. This document outlines our security practices
 Please report security issues to: **security@bunqueue.dev**
 
 Or use GitHub's private vulnerability reporting:
-1. Go to the [Security tab](https://github.com/egeominotti/bunqueue/security)
+1. Go to the [Security tab](https://github.com/egeominotti/security)
 2. Click "Report a vulnerability"
 3. Provide details about the issue
 

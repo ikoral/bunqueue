@@ -1,11 +1,11 @@
 ---
 title: Server Mode
-description: Running bunqueue as a standalone server
+description: Deploy bunqueue as a standalone TCP/HTTP server with authentication and multi-client support
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
+      content: https://bunqueue.dev/og/server-mode.png
 ---
 
 
@@ -101,7 +101,7 @@ const worker = new Worker('tasks', handler, {
 - **Embedded Mode**: Use `embedded: true` - no server needed, runs in-process
 - **Server Mode**: No option needed - connects to bunqueue server via TCP
 
-See [Quick Start](/bunqueue/guide/quickstart/) for a comparison.
+See [Quick Start](/guide/quickstart/) for a comparison.
 :::
 
 ## Graceful Shutdown

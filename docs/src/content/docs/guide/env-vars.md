@@ -5,7 +5,7 @@ head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
+      content: https://bunqueue.dev/og/server-mode.png
 ---
 
 
@@ -87,10 +87,10 @@ Path to SQLite database file.
 
 | Type | Default | Example |
 |------|---------|---------|
-| string | `./data/bunq.db` | `/var/lib/bunqueue/queue.db` |
+| string | `./data/bunq.db` | `/var/lib/queue.db` |
 
 ```bash
-DATA_PATH=/var/lib/bunqueue/queue.db bunqueue start
+DATA_PATH=/var/lib/queue.db bunqueue start
 ```
 
 ### `AUTH_TOKENS`
@@ -282,7 +282,7 @@ LOG_FORMAT=text
 # .env.production
 TCP_PORT=6789
 HTTP_PORT=6790
-DATA_PATH=/var/lib/bunqueue/production.db
+DATA_PATH=/var/lib/production.db
 LOG_LEVEL=info
 LOG_FORMAT=json
 AUTH_TOKENS=prod-token-abc123,prod-token-xyz789

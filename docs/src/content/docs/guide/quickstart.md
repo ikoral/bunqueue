@@ -1,11 +1,11 @@
 ---
 title: Quick Start
-description: Get up and running in 5 minutes
+description: Create your first job queue with bunqueue in 5 minutes using embedded or server mode
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
+      content: https://bunqueue.dev/og/getting-started.png
 ---
 
 
@@ -22,7 +22,7 @@ bunqueue supports two deployment modes:
 | **Option needed** | `embedded: true` | None (default) |
 | **Persistence** | `DATA_PATH` env var | `--data-path` flag |
 
-**This guide covers Embedded Mode** (most common). For TCP Server Mode, see [Server Guide](/bunqueue/guide/server/).
+**This guide covers Embedded Mode** (most common). For TCP Server Mode, see [Server Guide](/guide/server/).
 
 :::danger[Common Mistake]
 If `Queue` has `embedded: true` but `Worker` doesn't (or vice versa), the Worker will try to connect to a non-existent TCP server and **timeout with "Command timeout" error**.
@@ -189,7 +189,7 @@ Without `DATA_PATH`, bunqueue runs in-memory (no persistence).
 
 ## Next Steps
 
-- [Queue API](/bunqueue/guide/queue/) - Full queue operations
-- [Worker API](/bunqueue/guide/worker/) - Worker configuration
-- [Stall Detection](/bunqueue/guide/stall-detection/) - Handle unresponsive jobs
-- [DLQ](/bunqueue/guide/dlq/) - Dead letter queue management
+- [Queue API](/guide/queue/) - Full queue operations
+- [Worker API](/guide/worker/) - Worker configuration
+- [Stall Detection](/guide/stall-detection/) - Handle unresponsive jobs
+- [DLQ](/guide/dlq/) - Dead letter queue management

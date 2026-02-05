@@ -1,11 +1,85 @@
 ---
 title: FAQ
-description: Frequently asked questions about bunqueue
+description: Frequently asked questions about bunqueue job queue - performance, scaling, persistence, migration from BullMQ
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
+      content: https://bunqueue.dev/og/getting-started.png
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is bunqueue?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "bunqueue is a high-performance job queue for Bun that uses SQLite for persistence instead of Redis. It provides a BullMQ-compatible API, making migration easy."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why SQLite instead of Redis?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "SQLite offers simplicity (no external service), performance (Bun's native SQLite is fast), built-in persistence, zero hosting costs, and portability as a single file database."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is bunqueue production-ready?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. bunqueue includes stall detection, dead letter queues, automatic retries with backoff, S3 backups for disaster recovery, and rate limiting with concurrency control."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How many jobs can bunqueue handle?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "On typical hardware (M2 Pro, 16GB RAM): Push 125,000 jobs/second, Pull 100,000 jobs/second, with 0.1-0.5ms p99 latency."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What's the difference between embedded and server mode?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Embedded mode runs the queue in the same process as your app with no network overhead, best for single-process apps. Server mode runs as a separate server where multiple workers connect via TCP, best for distributed systems."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens if a worker crashes?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "With stall detection enabled, when a worker misses its heartbeat the job is marked as stalled and retried automatically. If max stalls are exceeded, the job is sent to the Dead Letter Queue."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I migrate from BullMQ?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. bunqueue provides a BullMQ-compatible API. Key differences: no Redis connection needed, backoff configuration is simplified, and rate limiting is on the queue level instead of the worker."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Why doesn't bunqueue work with Node.js?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "bunqueue uses Bun-specific APIs: bun:sqlite for database access, Bun.serve for HTTP server, and Bun.listen for TCP server. These APIs are not available in Node.js."
+            }
+          }
+        ]
+      }
 ---
 
 ## General
@@ -288,7 +362,7 @@ queue.clean(3600000); // 1 hour
 
 ### Can I migrate from BullMQ?
 
-Yes. See the [Migration Guide](/bunqueue/guide/migration/).
+Yes. See the [Migration Guide](/guide/migration/).
 
 Key differences:
 - No Redis connection needed
@@ -312,9 +386,9 @@ await queue.addBulk(jobs.map(j => ({
 
 ### How can I contribute?
 
-1. Report bugs on [GitHub Issues](https://github.com/egeominotti/bunqueue/issues)
+1. Report bugs on [GitHub Issues](https://github.com/egeominotti/issues)
 2. Submit PRs for bug fixes
-3. Propose features in [Discussions](https://github.com/egeominotti/bunqueue/discussions)
+3. Propose features in [Discussions](https://github.com/egeominotti/discussions)
 4. Improve documentation
 
 ### What's the development setup?

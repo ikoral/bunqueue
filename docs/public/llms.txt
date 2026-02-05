@@ -1,5 +1,5 @@
 # bunqueue - High-Performance Job Queue for Bun
-# https://egeominotti.github.io/bunqueue/
+# https://bunqueue.dev/
 
 > bunqueue is a high-performance job queue written in TypeScript for the Bun runtime.
 > It uses SQLite for persistence instead of Redis, providing a BullMQ-compatible API.
@@ -108,4 +108,4 @@ const worker = new Worker('emails', async (job) => {
 
 - GitHub: https://github.com/egeominotti/bunqueue
 - npm: https://www.npmjs.com/package/bunqueue
-- Documentation: https://egeominotti.github.io/bunqueue/
+- Documentation: https://bunqueue.dev/

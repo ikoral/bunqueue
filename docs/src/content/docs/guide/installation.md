@@ -1,11 +1,11 @@
 ---
 title: Installation
-description: How to install bunqueue
+description: Install bunqueue job queue for Bun via npm or from source with TypeScript support
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/getting-started.png
+      content: https://bunqueue.dev/og/getting-started.png
 ---
 
 
@@ -72,4 +72,4 @@ import type {
 
 ## Next Steps
 
-- [Quick Start](/bunqueue/guide/quickstart/) - Create your first queue and worker
+- [Quick Start](/guide/quickstart/) - Create your first queue and worker

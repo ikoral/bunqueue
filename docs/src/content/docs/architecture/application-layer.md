@@ -1,6 +1,11 @@
 ---
 title: Application Layer Architecture
-description: Operations orchestration and background task flows
+description: Operations orchestration, background task scheduling, and DLQ management flows in bunqueue
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 # Application Layer Architecture

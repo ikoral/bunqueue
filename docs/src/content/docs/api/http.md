@@ -1,11 +1,11 @@
 ---
 title: HTTP API
-description: REST API reference
+description: Complete HTTP REST API reference for bunqueue with endpoints, authentication, and health checks
 head:
   - tag: meta
     attrs:
       property: og:image
-      content: https://egeominotti.github.io/bunqueue/og/server-mode.png
+      content: https://bunqueue.dev/og/server-mode.png
 ---
 
 

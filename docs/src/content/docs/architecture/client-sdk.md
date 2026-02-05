@@ -1,6 +1,11 @@
 ---
 title: Client SDK Architecture
-description: Connection handling, job submission, and worker processing flows
+description: Connection handling, job submission, and worker processing flows in bunqueue's TypeScript client
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og-image.png
 ---
 
 # Client SDK Architecture
