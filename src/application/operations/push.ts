@@ -271,6 +271,15 @@ export async function pushJobBatch(
   if (jobsToInsert.length > 0) {
     ctx.storage?.insertJobsBatch(jobsToInsert);
     ctx.totalPushed.value += BigInt(jobsToInsert.length);
+
+    for (const job of jobsToInsert) {
+      ctx.broadcast({
+        eventType: 'pushed' as EventType,
+        queue: job.queue,
+        jobId: job.id,
+        timestamp: now,
+      });
+    }
   }
 
   return resultIds;
