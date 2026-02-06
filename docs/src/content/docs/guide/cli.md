@@ -34,7 +34,7 @@ AUTH_TOKENS=secret-token bunqueue start
 
 **Output:**
 ```
-bunqueue v1.9.6
+bunqueue v2.1.8
 TCP server listening on port 6789
 HTTP server listening on port 6790
 Database: ./data/bunq.db
@@ -696,7 +696,7 @@ bunqueue stats
 bunqueue Server Statistics
 ==========================
 Uptime: 2d 5h 30m
-Version: 1.9.6
+Version: 2.1.8
 
 Queues: 5
 Total Jobs: 156,234
@@ -740,7 +740,7 @@ bunqueue health
 {
   "status": "healthy",
   "uptime": 185400,
-  "version": "1.9.6",
+  "version": "2.1.8",
   "database": {
     "status": "ok",
     "size": 47409152,

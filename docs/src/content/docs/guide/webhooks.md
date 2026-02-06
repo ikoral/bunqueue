@@ -25,15 +25,17 @@ When you register a webhook URL, bunqueue sends HTTP POST requests to that URL w
 ### Add Webhook
 
 ```bash
-# Add webhook for all events
-bunqueue webhook add https://api.example.com/webhooks/bunqueue
+# Add webhook for specific events (--events is required)
+bunqueue webhook add https://api.example.com/webhooks/bunqueue \
+  --events job.completed,job.failed
 
-# Add webhook for specific queue
-bunqueue webhook add https://api.example.com/webhooks/emails --queue emails
+# Add webhook for a specific queue
+bunqueue webhook add https://api.example.com/webhooks/emails \
+  --events job.completed,job.failed,job.progress --queue emails
 
-# Add webhook for specific events only
+# Add webhook with a signing secret
 bunqueue webhook add https://api.example.com/webhooks/failures \
-  --events job.failed,job.stalled
+  --events job.failed --secret my-webhook-secret
 ```
 
 ### List Webhooks
@@ -53,19 +55,19 @@ https://api.example.com/webhooks/failures  *        job.failed,job.stalled
 ### Remove Webhook
 
 ```bash
-bunqueue webhook remove https://api.example.com/webhooks/bunqueue
+# Remove webhook by its ID (shown in webhook list output)
+bunqueue webhook remove wh_abc123
 ```
 
 ## Event Types
 
 | Event | Description | When Triggered |
 |-------|-------------|----------------|
-| `job.waiting` | Job added to queue | After `queue.add()` |
-| `job.active` | Job started processing | Worker picks up job |
-| `job.completed` | Job finished successfully | Worker calls `done()` |
+| `job.completed` | Job finished successfully | Worker completes job |
 | `job.failed` | Job failed | Worker throws error |
-| `job.stalled` | Job became unresponsive | Heartbeat timeout |
 | `job.progress` | Progress updated | `job.updateProgress()` |
+| `job.active` | Job started processing | Worker picks up job |
+| `job.waiting` | Job added to queue | After `queue.add()` |
 | `job.delayed` | Job scheduled for later | Job with delay added |
 
 ## Webhook Payload
@@ -80,26 +82,16 @@ Host: api.example.com
 Content-Type: application/json
 X-Webhook-Event: job.completed
 X-Webhook-Timestamp: 1704067200000
-X-Webhook-Signature: sha256=a1b2c3d4e5f6...
-X-Webhook-ID: wh_abc123
+X-Webhook-Signature: a1b2c3d4e5f6...
 
 {
   "event": "job.completed",
   "timestamp": 1704067200000,
+  "jobId": "1001",
   "queue": "emails",
-  "job": {
-    "id": "1001",
-    "name": "send-email",
-    "data": {
-      "to": "user@example.com",
-      "subject": "Welcome"
-    },
-    "attemptsMade": 1,
-    "progress": 100
-  },
-  "result": {
-    "messageId": "msg-abc123",
-    "delivered": true
+  "data": {
+    "to": "user@example.com",
+    "subject": "Welcome"
   }
 }
 ```
@@ -111,9 +103,9 @@ X-Webhook-ID: wh_abc123
 {
   "event": "job.completed",
   "timestamp": 1704067200000,
+  "jobId": "1001",
   "queue": "emails",
-  "job": { "id": "1001", "name": "send-email", "data": {...} },
-  "result": { "messageId": "msg-abc123" }
+  "data": { "to": "user@example.com", "subject": "Welcome" }
 }
 ```
 
@@ -122,14 +114,10 @@ X-Webhook-ID: wh_abc123
 {
   "event": "job.failed",
   "timestamp": 1704067200000,
+  "jobId": "1001",
   "queue": "emails",
-  "job": { "id": "1001", "name": "send-email", "data": {...} },
-  "error": {
-    "message": "SMTP connection timeout",
-    "stack": "Error: SMTP connection timeout\n    at ..."
-  },
-  "attemptsMade": 3,
-  "willRetry": false
+  "data": { "to": "user@example.com", "subject": "Welcome" },
+  "error": "SMTP connection timeout"
 }
 ```
 
@@ -138,38 +126,28 @@ X-Webhook-ID: wh_abc123
 {
   "event": "job.progress",
   "timestamp": 1704067200000,
+  "jobId": "1001",
   "queue": "emails",
-  "job": { "id": "1001", "name": "send-email", "data": {...} },
-  "progress": 75,
-  "message": "Sending to recipients..."
-}
-```
-
-**job.stalled**
-```json
-{
-  "event": "job.stalled",
-  "timestamp": 1704067200000,
-  "queue": "emails",
-  "job": { "id": "1001", "name": "send-email", "data": {...} },
-  "stallCount": 2,
-  "maxStalls": 3
+  "data": { "to": "user@example.com", "subject": "Welcome" },
+  "progress": 75
 }
 ```
 
 ## Signature Verification
 
-bunqueue signs all webhook payloads using HMAC-SHA256. Always verify signatures to ensure requests are authentic.
+When a webhook is registered with a `--secret` flag, bunqueue signs all payloads using HMAC-SHA256. Always verify signatures to ensure requests are authentic.
 
 :::caution[Security Warning]
-If `WEBHOOK_SECRET` is not set, webhooks are sent **without signatures**. This means anyone could forge webhook requests to your endpoint. Always set a secret in production.
+If a webhook is registered without `--secret`, payloads are sent **without signatures**. This means anyone could forge webhook requests to your endpoint. Always set a per-webhook secret in production.
 :::
 
 ### Setting the Secret
 
+Secrets are configured per-webhook when adding them via the `--secret` flag:
+
 ```bash
-# Set webhook secret (REQUIRED for production)
-WEBHOOK_SECRET=your-secret-key bunqueue start
+bunqueue webhook add https://api.example.com/webhooks/bunqueue \
+  --events job.completed,job.failed --secret your-secret-key
 ```
 
 ### Verifying Signatures
@@ -183,18 +161,18 @@ function verifyWebhookSignature(
   signature: string,
   secret: string
 ): boolean {
-  const expectedSignature = createHmac('sha256', secret)
+  const expected = createHmac('sha256', secret)
     .update(payload)
     .digest('hex');
 
-  const expected = Buffer.from(`sha256=${expectedSignature}`);
-  const received = Buffer.from(signature);
+  const expectedBuf = Buffer.from(expected);
+  const receivedBuf = Buffer.from(signature);
 
-  if (expected.length !== received.length) {
+  if (expectedBuf.length !== receivedBuf.length) {
     return false;
   }
 
-  return timingSafeEqual(expected, received);
+  return timingSafeEqual(expectedBuf, receivedBuf);
 }
 
 // Usage in webhook handler
@@ -202,7 +180,7 @@ app.post('/webhooks/bunqueue', (req, res) => {
   const signature = req.headers['x-webhook-signature'] as string;
   const payload = JSON.stringify(req.body);
 
-  if (!verifyWebhookSignature(payload, signature, process.env.WEBHOOK_SECRET!)) {
+  if (!verifyWebhookSignature(payload, signature, MY_WEBHOOK_SECRET)) {
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
@@ -217,7 +195,7 @@ import hmac
 import hashlib
 
 def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> bool:
-    expected = 'sha256=' + hmac.new(
+    expected = hmac.new(
         secret.encode(),
         payload,
         hashlib.sha256
@@ -231,7 +209,7 @@ def handle_webhook():
     signature = request.headers.get('X-Webhook-Signature')
     payload = request.get_data()
 
-    if not verify_webhook_signature(payload, signature, WEBHOOK_SECRET):
+    if not verify_webhook_signature(payload, signature, MY_WEBHOOK_SECRET):
         return jsonify({'error': 'Invalid signature'}), 401
 
     # Process webhook...
@@ -249,7 +227,7 @@ import (
 func verifyWebhookSignature(payload []byte, signature, secret string) bool {
     mac := hmac.New(sha256.New, []byte(secret))
     mac.Write(payload)
-    expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+    expected := hex.EncodeToString(mac.Sum(nil))
 
     return hmac.Equal([]byte(expected), []byte(signature))
 }
@@ -257,17 +235,15 @@ func verifyWebhookSignature(payload []byte, signature, secret string) bool {
 
 ## Retry Behavior
 
-bunqueue automatically retries failed webhook deliveries:
+bunqueue automatically retries failed webhook deliveries with linear backoff. The number of retries is controlled by the `WEBHOOK_MAX_RETRIES` environment variable (default: 3) and the base delay by `WEBHOOK_RETRY_DELAY_MS` (default: 1000ms):
 
 | Attempt | Delay |
 |---------|-------|
 | 1 | Immediate |
-| 2 | 10 seconds |
-| 3 | 30 seconds |
-| 4 | 1 minute |
-| 5 | 5 minutes |
+| 2 | 1 second (`WEBHOOK_RETRY_DELAY_MS * 1`) |
+| 3 | 2 seconds (`WEBHOOK_RETRY_DELAY_MS * 2`) |
 
-After 5 failed attempts, the webhook delivery is abandoned and logged.
+After all attempts are exhausted, the webhook delivery is abandoned and logged.
 
 ### Success Criteria
 
@@ -277,18 +253,7 @@ A webhook delivery is considered successful if:
 
 ### Failure Handling
 
-Webhook failures are logged but don't affect job processing. Monitor webhook delivery status:
-
-```bash
-bunqueue webhook status
-```
-
-**Output:**
-```
-URL                                        DELIVERED   FAILED   LAST_ERROR
-https://api.example.com/webhooks/bunqueue  15,234      12       Connection timeout
-https://api.example.com/webhooks/emails    5,102       0        -
-```
+Webhook failures are logged but don't affect job processing. Use `bunqueue webhook list` to review registered webhooks.
 
 ## Example Webhook Server
 
@@ -300,7 +265,8 @@ import { createHmac, timingSafeEqual } from 'crypto';
 
 const app = new Hono();
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'your-secret';
+// The secret you used when registering the webhook with --secret
+const MY_WEBHOOK_SECRET = process.env.MY_WEBHOOK_SECRET || 'your-secret';
 
 // Signature verification middleware
 async function verifySignature(c: any, next: any) {
@@ -311,7 +277,7 @@ async function verifySignature(c: any, next: any) {
     return c.json({ error: 'Missing signature' }, 401);
   }
 
-  const expected = 'sha256=' + createHmac('sha256', WEBHOOK_SECRET)
+  const expected = createHmac('sha256', MY_WEBHOOK_SECRET)
     .update(body)
     .digest('hex');
 
@@ -332,34 +298,28 @@ async function verifySignature(c: any, next: any) {
 app.post('/webhooks/bunqueue', verifySignature, async (c) => {
   const payload = c.get('webhookPayload');
 
-  console.log(`Received ${payload.event} event for job ${payload.job.id}`);
+  console.log(`Received ${payload.event} event for job ${payload.jobId}`);
 
   switch (payload.event) {
     case 'job.completed':
-      console.log('Job completed:', payload.result);
+      console.log('Job completed:', payload.jobId);
       // Notify downstream service
       await notifyCompletion(payload);
       break;
 
     case 'job.failed':
-      console.error('Job failed:', payload.error.message);
+      console.error('Job failed:', payload.error);
       // Alert on failure
       await sendAlert({
         type: 'job_failed',
-        jobId: payload.job.id,
+        jobId: payload.jobId,
         queue: payload.queue,
-        error: payload.error.message,
+        error: payload.error,
       });
       break;
 
-    case 'job.stalled':
-      console.warn('Job stalled:', payload.job.id);
-      // Log stall event
-      await logStallEvent(payload);
-      break;
-
     case 'job.progress':
-      console.log(`Job ${payload.job.id}: ${payload.progress}%`);
+      console.log(`Job ${payload.jobId}: ${payload.progress}%`);
       // Update UI or notify
       await broadcastProgress(payload);
       break;
@@ -390,7 +350,8 @@ app.use(express.json({
   }
 }));
 
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET!;
+// The secret you used when registering the webhook with --secret
+const MY_WEBHOOK_SECRET = process.env.MY_WEBHOOK_SECRET!;
 
 function verifySignature(req: any, res: any, next: any) {
   const signature = req.headers['x-webhook-signature'];
@@ -399,8 +360,8 @@ function verifySignature(req: any, res: any, next: any) {
     return res.status(401).json({ error: 'Missing signature' });
   }
 
-  const expected = 'sha256=' + crypto
-    .createHmac('sha256', WEBHOOK_SECRET)
+  const expected = crypto
+    .createHmac('sha256', MY_WEBHOOK_SECRET)
     .update(req.rawBody)
     .digest('hex');
 
@@ -412,16 +373,16 @@ function verifySignature(req: any, res: any, next: any) {
 }
 
 app.post('/webhooks/bunqueue', verifySignature, async (req, res) => {
-  const { event, job, queue, result, error } = req.body;
+  const { event, jobId, queue, data, error } = req.body;
 
-  console.log(`[${queue}] ${event}: Job ${job.id}`);
+  console.log(`[${queue}] ${event}: Job ${jobId}`);
 
   if (event === 'job.completed') {
     // Handle completion
-    console.log('Result:', result);
+    console.log('Completed job:', jobId);
   } else if (event === 'job.failed') {
     // Handle failure
-    console.error('Error:', error.message);
+    console.error('Error:', error);
   }
 
   res.json({ received: true });
@@ -456,19 +417,20 @@ app.post('/webhooks/bunqueue', verifySignature, async (c) => {
 
 ### 3. Handle Duplicates
 
-Webhooks may be delivered multiple times. Use `X-Webhook-ID` to deduplicate:
+Webhooks may be delivered multiple times due to retries. Use the `jobId` and `event` combination to deduplicate:
 
 ```typescript
 const processedWebhooks = new Set<string>();
 
 app.post('/webhooks/bunqueue', verifySignature, async (c) => {
-  const webhookId = c.req.header('x-webhook-id');
+  const payload = c.get('webhookPayload');
+  const dedupeKey = `${payload.jobId}:${payload.event}`;
 
-  if (processedWebhooks.has(webhookId)) {
+  if (processedWebhooks.has(dedupeKey)) {
     return c.json({ received: true, duplicate: true });
   }
 
-  processedWebhooks.add(webhookId);
+  processedWebhooks.add(dedupeKey);
   // Process webhook...
 });
 ```
@@ -483,10 +445,9 @@ app.post('/webhooks/bunqueue', verifySignature, async (c) => {
 
   console.log(JSON.stringify({
     timestamp: new Date().toISOString(),
-    webhookId: c.req.header('x-webhook-id'),
     event: payload.event,
     queue: payload.queue,
-    jobId: payload.job.id,
+    jobId: payload.jobId,
   }));
 
   // Process...
@@ -495,15 +456,11 @@ app.post('/webhooks/bunqueue', verifySignature, async (c) => {
 
 ### 5. Monitor Delivery
 
-Set up alerts for webhook failures:
+Monitor webhook registrations and server logs for delivery issues:
 
 ```bash
-#!/bin/bash
-# Check webhook health
-FAILED=$(bunqueue webhook status --json | jq '.[0].failed')
-if [ "$FAILED" -gt 100 ]; then
-  echo "ALERT: High webhook failure rate"
-fi
+# Review registered webhooks
+bunqueue webhook list
 ```
 
 ## Troubleshooting

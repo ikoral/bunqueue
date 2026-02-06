@@ -10,6 +10,84 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.1.8] - 2026-02-06
+
+### Fixed
+- **pushJobBatch event emission** - `pushJobBatch` was silently dropping event broadcasts, causing subscribers and webhooks to miss all batch-pushed jobs. Added broadcast loop after batch insert to match single `pushJob` behavior.
+
+### Added
+- 4 regression tests for batch push event emission fix
+
+### Changed
+- Navbar simplified to show only logo without title text
+
+## [2.1.7] - 2026-02-05
+
+### Fixed
+- **WriteBuffer silent data loss during shutdown** - `WriteBuffer.stop()` swallowed flush errors and silently dropped buffered jobs. Added `reportLostJobs()` to notify via `onCriticalError` callback when jobs cannot be persisted during shutdown.
+- **Queue name consistency in TCP tests** - Fixed port hardcoding in queue-name-consistency test.
+
+### Added
+- **2,664 new tests across 37 files** - Comprehensive test coverage increase from 1,083 to 3,747 tests (+246%) with zero failures. Coverage spans core operations, data structures, managers, client TCP layer, server handlers, domain types, MCP handlers, and more.
+
+## [2.1.6] - 2026-02-05
+
+### Fixed
+- **S3 backup hardening** - 10 bug fixes with 33 new tests:
+  - Replace silent catch in cleanup with proper logging
+  - Reject retention < 1 and intervalMs < 60s in config validation
+  - Validate SQLite magic bytes before restore to prevent data corruption
+  - Guard cleanup against retention=0 deleting all backups
+  - Add S3 list pagination to handle >100 backups
+  - Run WAL checkpoint before backup to include uncheckpointed data
+  - Replace blocking gzipSync/gunzipSync with async CompressionStream
+- **Flaky sandboxedWorker concurrent test** - Poll all 4 job results in parallel instead of sequentially to avoid exceeding the 5s test timeout.
+
+### Added
+- 33 new S3 backup tests covering config validation, backup/restore operations, cleanup, and manager lifecycle
+- Documentation for gzip compression, SHA256 checksums, `.meta.json` files, scheduling details, AWS env var aliases, and restore safety notes
+
+## [2.1.5] - 2026-02-05
+
+### Fixed
+- **uncaughtException and unhandledRejection handlers** - Previously, any uncaught error in background tasks or unhandled promise rejections would crash the server immediately without cleanup (write buffer not flushed, SQLite not closed, locks not released). Now the server performs graceful shutdown: logs the error with stack trace, stops TCP/HTTP servers, waits for active jobs, flushes the write buffer, and exits cleanly.
+- Broken GitHub links in documentation (missing `/bunqueue` in paths)
+- Stray separator in index.mdx causing build error
+
+### Changed
+- Migrated documentation from GitHub Pages to Vercel deployment
+- SEO optimization across all 45 pages with improved titles and descriptions
+- Documentation errors fixed, missing content added, and navbar modernized
+
+## [2.1.4] - 2026-02-05
+
+### Changed
+- README split into Embedded and Server mode sections
+- Added Docker server mode quick start with persistence documentation
+
+## [2.1.3] - 2026-02-05
+
+### Added
+- **Type safety improvements** across client SDK
+- Deployment modes section and fixed quick start examples in documentation
+
+### Changed
+- README improved with use cases, benchmarks, and BullMQ comparison
+
+## [2.1.2] - 2026-02-04
+
+### Fixed
+- **Queue name consistency** - Fixed benchmark tests using different queue names for worker and queue in both embedded and TCP modes
+
+### Changed
+- Stats interval changed to 5 minutes with timestamp
+- Removed verbose info/warn logs, keeping only errors
+- Downgraded TypeScript to 5.7.3 for CI compatibility
+
+### Added
+- Queue name consistency tests to prevent regression
+- Monitoring documentation added to sidebar Production section
+
 ## [2.1.1] - 2026-02-04
 
 ### Added

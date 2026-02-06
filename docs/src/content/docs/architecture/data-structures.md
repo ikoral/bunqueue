@@ -30,7 +30,7 @@ Used for priority queues and cron scheduling.
 │                  WHY 4-ARY VS BINARY?                        │
 │                                                              │
 │  Binary Heap:                                               │
-│  • Height: log₂(n) = 15 levels for 65k items               │
+│  • Height: log₂(n) = 16 levels for 65k items               │
 │  • 2 children per node                                      │
 │  • More memory indirections                                 │
 │                                                              │

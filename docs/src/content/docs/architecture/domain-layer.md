@@ -211,7 +211,8 @@ Job fails with attempts >= maxAttempts
 │                                                              │
 │  DlqEntry:                                                  │
 │  ├─ job: original job                                       │
-│  ├─ reason: max_attempts | timeout | stalled | explicit_fail│
+│  ├─ reason: explicit_fail | max_attempts_exceeded | timeout │
+│  │          | stalled | ttl_expired | worker_lost | unknown │
 │  ├─ error: error message                                    │
 │  ├─ attempts: full history [{attempt, error, duration}]     │
 │  ├─ enteredAt: timestamp                                    │

@@ -16,14 +16,24 @@ The application layer orchestrates all queue operations, coordinating between th
 
 ```
 src/application/
-├── queueManager.ts      # Central orchestrator
-├── operations/          # PUSH, PULL, ACK, Query
-├── dlqManager.ts        # Dead letter queue
-├── eventsManager.ts     # Event pub/sub
-├── workerManager.ts     # Worker tracking
-├── backgroundTasks.ts   # Task orchestration
-├── stallDetection.ts    # Stall detection
-└── dependencyProcessor.ts # Dependency resolution
+├── queueManager.ts        # Central orchestrator
+├── operations/            # PUSH, PULL, ACK, Query
+├── backgroundTasks.ts     # Task orchestration
+├── cleanupTasks.ts        # Memory cleanup, orphan removal
+├── clientTracking.ts      # Client connection tracking
+├── contextFactory.ts      # Context creation helpers
+├── dependencyProcessor.ts # Dependency resolution
+├── dlqManager.ts          # Dead letter queue
+├── eventsManager.ts       # Event pub/sub
+├── jobLogsManager.ts      # Job logs management
+├── lockManager.ts         # Lock management
+├── lockOperations.ts      # Lock acquire/release ops
+├── metricsExporter.ts     # Prometheus metrics export
+├── stallDetection.ts      # Stall detection
+├── statsManager.ts        # Queue statistics
+├── types.ts               # Shared type definitions
+├── webhookManager.ts      # Webhook notifications
+└── workerManager.ts       # Worker tracking
 ```
 
 ## QueueManager Orchestration

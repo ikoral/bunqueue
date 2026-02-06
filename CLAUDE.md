@@ -127,7 +127,7 @@ try {
 | jobLogs       | 10,000   | LRU        |
 | customIdMap   | 50,000   | LRU        |
 
-Cleanup runs every 10s. Evicts 50% when full.
+Cleanup runs every 10s. Evicts 10% when full.
 
 ## Environment Variables
 
@@ -267,7 +267,7 @@ CREATE INDEX idx_jobs_run_at ON jobs(run_at) WHERE state IN ('waiting','delayed'
 ## Testing
 
 ```bash
-bun test                           # All tests (706 tests)
+bun test                           # All tests (3751 tests)
 bun scripts/tcp/run-all-tests.ts   # TCP tests (24 suites)
 bun run bench                      # Benchmarks
 ```
@@ -308,4 +308,4 @@ const mem = queueManager.getMemoryStats();
 | Stall check     | 5s       | Detect unresponsive jobs       |
 | Dependency      | 100ms    | Process job dependencies       |
 | DLQ maintenance | 60s      | Auto-retry, expiration         |
-| Lock expiration | 10s      | Remove expired locks           |
+| Lock expiration | 5s       | Remove expired locks           |

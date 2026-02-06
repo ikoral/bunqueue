@@ -92,7 +92,7 @@ bunqueue uses SQLite with WAL mode for persistence, optimized for high-throughpu
 ┌─────────────────────────────────────────────────────────────┐
 │                    TABLES                                    │
 │                                                              │
-│  jobs (23 columns)                                          │
+│  jobs (28 columns)                                          │
 │  ├─ id: TEXT PRIMARY KEY (UUIDv7)                          │
 │  ├─ queue: TEXT                                             │
 │  ├─ data: BLOB (MessagePack)                               │
@@ -100,13 +100,17 @@ bunqueue uses SQLite with WAL mode for persistence, optimized for high-throughpu
 │  ├─ state: TEXT                                            │
 │  ├─ run_at: INTEGER                                        │
 │  ├─ attempts: INTEGER                                       │
-│  └─ ... (20 more fields)                                   │
+│  └─ ... (21 more fields)                                   │
 │                                                              │
 │  Indexes:                                                   │
 │  ├─ (queue, state) ──► PULL queries                        │
 │  ├─ (run_at) ──► Delayed job scheduler                     │
 │  ├─ (queue, unique_key) ──► Deduplication                  │
-│  └─ (custom_id) ──► Idempotency                            │
+│  ├─ (custom_id) ──► Idempotency                            │
+│  ├─ (parent_id) ──► Parent job lookup                      │
+│  ├─ (state, started_at) ──► Stall detection                │
+│  ├─ (group_id) ──► Group operations                        │
+│  └─ (queue, state, priority, run_at) ──► Priority pull     │
 │                                                              │
 │  job_results                                                │
 │  ├─ job_id: TEXT PRIMARY KEY                               │
@@ -114,17 +118,19 @@ bunqueue uses SQLite with WAL mode for persistence, optimized for high-throughpu
 │  └─ completed_at: INTEGER                                  │
 │                                                              │
 │  dlq                                                        │
-│  ├─ id: TEXT PRIMARY KEY                                   │
+│  ├─ id: INTEGER PRIMARY KEY AUTOINCREMENT                  │
 │  ├─ job_id: TEXT                                           │
 │  ├─ queue: TEXT                                            │
-│  └─ entry: BLOB (full DlqEntry, MessagePack)               │
+│  ├─ entry: BLOB (full DlqEntry, MessagePack)               │
+│  └─ entered_at: INTEGER                                    │
 │                                                              │
 │  cron_jobs                                                  │
 │  ├─ name: TEXT PRIMARY KEY                                 │
 │  ├─ queue: TEXT                                            │
 │  ├─ schedule: TEXT                                         │
 │  ├─ next_run: INTEGER                                      │
-│  └─ executions: INTEGER                                    │
+│  ├─ executions: INTEGER                                    │
+│  └─ timezone: TEXT                                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 

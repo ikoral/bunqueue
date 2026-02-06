@@ -123,9 +123,9 @@ await queue.add('task', { secretRef: 'vault:api-key' });
 
 | Version | Supported |
 |---------|-----------|
-| 1.6.x | ✅ |
-| 1.5.x | ✅ |
-| < 1.5 | ❌ |
+| 2.1.x | ✅ |
+| 2.0.x | ✅ |
+| < 2.0 | ❌ |
 
 ## Security Updates
 

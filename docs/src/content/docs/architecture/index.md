@@ -71,10 +71,9 @@ bunqueue is a high-performance job queue built for Bun with SQLite persistence. 
 | [Client SDK](/architecture/client-sdk/) | TCP connection, job submission, worker processing |
 | [Domain Layer](/architecture/domain-layer/) | Sharding, priority queues, DLQ logic |
 | [Application Layer](/architecture/application-layer/) | Operations flow, background tasks |
-| [Infrastructure](/architecture/infrastructure/) | Persistence, servers, scheduling |
+| [Persistence](/architecture/persistence/) | SQLite configuration, write buffering, servers |
 | [Data Structures](/architecture/data-structures/) | Core algorithms and complexities |
 | [TCP Protocol](/architecture/tcp-protocol/) | Wire format and commands |
-| [Persistence](/architecture/persistence/) | SQLite configuration, write buffering |
 
 ## Key Design Decisions
 
@@ -101,7 +100,7 @@ shardIndex = fnv1aHash(queueName) & SHARD_MASK
 Each shard contains a 4-ary heap instead of binary:
 
 - Better cache locality (children fit in cache line)
-- Fewer tree levels (8 vs 15 for 65k items)
+- Fewer tree levels (8 vs 16 for 65k items)
 - O(log₄ n) operations
 
 ### Write Buffer
@@ -145,6 +144,7 @@ Acquire in order to prevent deadlocks:
 |------------|-------|----------|
 | completedJobs | 50,000 | FIFO batch |
 | jobResults | 5,000 | LRU |
+| jobLogs | 10,000 | LRU |
 | customIdMap | 50,000 | LRU |
 | DLQ per queue | 10,000 | FIFO |
 

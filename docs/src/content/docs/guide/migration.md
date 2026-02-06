@@ -167,18 +167,25 @@ await queue.add('task', data, {
 backoff: { type: 'exponential', delay: 1000 }
 backoff: { type: 'fixed', delay: 5000 }
 
-// bunqueue only supports exponential backoff
-backoff: 1000 // Base delay in ms
+// bunqueue supports both fixed and exponential backoff
+backoff: { type: 'exponential', delay: 1000 } // Same as BullMQ
+backoff: { type: 'fixed', delay: 5000 }       // Same as BullMQ
+backoff: 1000 // Shorthand: base delay with exponential backoff
 ```
 
-:::note[Exponential Only]
-bunqueue uses exponential backoff exclusively. The value is the base delay:
+:::note[Backoff Options]
+bunqueue supports both `fixed` and `exponential` backoff types, matching BullMQ's behavior:
+
+**Exponential** (`type: 'exponential'`):
 - Attempt 1 fails → wait 1000ms (1s)
 - Attempt 2 fails → wait 2000ms (2s)
 - Attempt 3 fails → wait 4000ms (4s)
 - Formula: `delay * 2^(attempt-1)`
 
-If you need fixed delays, implement custom retry logic in your processor.
+**Fixed** (`type: 'fixed'`):
+- Every retry waits the same delay (e.g., 5000ms each time)
+
+You can also pass a plain number as shorthand for exponential backoff with that base delay.
 :::
 
 ### Rate Limiting

@@ -162,9 +162,23 @@ curl -X POST http://localhost:6790/queues/emails/jobs \
   -d '{"data": {"to": "user@example.com"}}'
 ```
 
-<Aside type="note">
-There is no programmatic SDK client for server mode. Use the CLI, HTTP API, or embedded mode.
+<Aside type="tip">
+The `Queue` and `Worker` classes from `bunqueue/client` connect to the TCP server by default (when `embedded` is not set to `true`). You can also use the CLI or HTTP API.
 </Aside>
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+// Connects to localhost:6789 by default
+const queue = new Queue('emails');
+await queue.add('send', { to: 'user@example.com' });
+
+// Worker also connects to the server
+const worker = new Worker('emails', async (job) => {
+  await sendEmail(job.data);
+  return { sent: true };
+});
+```
 
 ## Docker Deployment
 
@@ -486,7 +500,7 @@ bunqueue exposes health endpoints:
 ```bash
 # HTTP health check (detailed)
 curl http://localhost:6790/health
-# {"ok":true,"status":"healthy","uptime":3600,"version":"1.9.6",
+# {"ok":true,"status":"healthy","uptime":3600,"version":"2.1.8",
 #  "queues":{"waiting":5,"active":2},"connections":{"ws":0,"sse":0},
 #  "memory":{"heapUsed":45,"heapTotal":64,"rss":128}}
 

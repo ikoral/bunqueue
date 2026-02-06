@@ -229,7 +229,6 @@ Each job runs in a separate Bun Worker thread. If a job crashes (OOM, infinite l
 import { SandboxedWorker } from 'bunqueue/client';
 
 const worker = new SandboxedWorker('cpu-intensive', {
-  embedded: true,               // Required for embedded mode
   processor: './processor.ts',  // Path to processor file
   concurrency: 4,               // 4 parallel worker processes
   timeout: 60000,               // 60s timeout per job (default: 30000)

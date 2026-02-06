@@ -3,8 +3,8 @@
 :root {
   /* Bun-style brand colors - Light theme default */
   --sl-color-accent-low: #fdf2f8;
-  --sl-color-accent: #ec4899;
-  --sl-color-accent-high: #be185d;
+  --sl-color-accent: #db2777;
+  --sl-color-accent-high: #9d174d;
 
   /* Text colors */
   --sl-color-white: #ffffff;
@@ -22,7 +22,7 @@
   --sl-color-bg-nav: rgba(255, 255, 255, 0.9);
 
   --sl-color-text: #18181b;
-  --sl-color-text-accent: #ec4899;
+  --sl-color-text-accent: #db2777;
 
   --sl-color-hairline: #e4e4e7;
   --sl-color-hairline-light: #f4f4f5;
@@ -34,23 +34,6 @@
   /* Sizing */
   --sl-content-width: 50rem;
   --sl-sidebar-width: 18rem;
-}
-
-/* Light theme - Default */
-:root[data-theme='light'] {
-  --sl-color-accent-low: #fdf2f8;
-  --sl-color-accent: #ec4899;
-  --sl-color-accent-high: #be185d;
-
-  --sl-color-bg: #ffffff;
-  --sl-color-bg-sidebar: #fafafa;
-  --sl-color-bg-nav: rgba(255, 255, 255, 0.9);
-
-  --sl-color-text: #18181b;
-  --sl-color-text-accent: #ec4899;
-
-  --sl-color-hairline: #e4e4e7;
-  --sl-color-hairline-light: #f4f4f5;
 }
 
 /* Dark theme */
@@ -138,7 +121,7 @@ pre code {
 
 :root[data-theme='light'] :not(pre) > code {
   background: #fdf2f8;
-  color: #be185d;
+  color: #9d174d;
 }
 
 :root[data-theme='dark'] :not(pre) > code {
@@ -157,7 +140,7 @@ pre code {
 .card:hover {
   border-color: var(--sl-color-accent);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px -5px rgba(236, 72, 153, 0.15);
+  box-shadow: 0 8px 25px -5px rgba(219, 39, 119, 0.15);
 }
 
 /* Starlight card grid */
@@ -165,12 +148,12 @@ pre code {
   border: 1px solid var(--sl-color-hairline) !important;
   border-radius: 12px !important;
   background: var(--sl-color-bg) !important;
-  transition: all 0.2s ease !important;
+  transition: all 0.2s ease;
 }
 
 .sl-link-card:hover {
   border-color: var(--sl-color-accent) !important;
-  box-shadow: 0 8px 25px -5px rgba(236, 72, 153, 0.15) !important;
+  box-shadow: 0 8px 25px -5px rgba(219, 39, 119, 0.15) !important;
 }
 
 /* Starlight Cards */
@@ -253,12 +236,6 @@ nav.sidebar a:hover {
   background: var(--sl-color-bg-sidebar);
 }
 
-nav.sidebar a[aria-current='page'] {
-  background: var(--sl-color-accent-low);
-  color: var(--sl-color-accent);
-  font-weight: 500;
-}
-
 /* Navigation */
 header.header {
   backdrop-filter: blur(12px);
@@ -269,9 +246,9 @@ header.header {
 /* Buttons */
 .sl-link-button {
   border-radius: 8px !important;
-  font-weight: 600 !important;
-  transition: all 0.2s ease !important;
-  text-transform: none !important;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  text-transform: none;
 }
 
 .sl-link-button[data-variant='primary'] {
@@ -282,7 +259,7 @@ header.header {
 .sl-link-button[data-variant='primary']:hover {
   background: var(--sl-color-accent-high) !important;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.4);
+  box-shadow: 0 4px 12px rgba(219, 39, 119, 0.4);
 }
 
 .sl-link-button[data-variant='minimal'] {
@@ -308,7 +285,7 @@ header.header {
 
 .pagefind-ui__search-input:focus {
   border-color: var(--sl-color-accent) !important;
-  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2) !important;
+  box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.2) !important;
 }
 
 /* Footer */
@@ -359,9 +336,11 @@ hr {
     font-size: 0.875rem;
   }
 
-  /* Mobile code blocks */
+  /* Mobile code blocks - prevent overflow */
   pre {
     font-size: 0.8rem !important;
+    max-width: 100vw;
+    overflow-x: auto;
   }
 
   pre code {
@@ -380,6 +359,70 @@ hr {
 
   h3 {
     font-size: 1.25rem;
+  }
+
+  /* Touch targets - minimum 44x44px for interactive elements */
+  nav.sidebar a,
+  nav.sidebar summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  nav.sidebar ul ul a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem 0.5rem 1.25rem;
+  }
+
+  nav.sidebar .top-level > li > details > summary,
+  nav.sidebar .top-level > li > a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Pagination touch targets */
+  .pagination-links a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Table of contents touch targets */
+  starlight-toc a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Mobile menu button touch target */
+  starlight-menu-button button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Cards stack properly on mobile */
+  .card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem;
+  }
+
+  /* Blockquote mobile padding */
+  blockquote {
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+  }
+
+  /* Social icons touch targets */
+  .social-icons a {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -403,7 +446,7 @@ hr {
   color: #ffffff;
 }
 
-/* Chart/SVG centering */
+/* Chart/SVG centering - !important needed to override inline styles */
 .sl-markdown-content > div[style*="display: flex"] {
   display: flex !important;
   justify-content: center !important;
@@ -473,7 +516,7 @@ starlight-toc a[aria-current='true'] {
 
 .starlight-aside--tip {
   border-color: var(--sl-color-accent);
-  background: rgba(236, 72, 153, 0.05);
+  background: rgba(219, 39, 119, 0.05);
 }
 
 .starlight-aside--note {
@@ -540,9 +583,9 @@ nav.sidebar ul ul a:hover {
 
 /* Active page indicator */
 nav.sidebar a[aria-current='page'] {
-  background: var(--sl-color-accent-low) !important;
-  color: var(--sl-color-accent) !important;
-  font-weight: 600 !important;
+  background: var(--sl-color-accent-low);
+  color: var(--sl-color-accent);
+  font-weight: 600;
   border-left: 2px solid var(--sl-color-accent);
   padding-left: calc(1.25rem - 2px);
 }
