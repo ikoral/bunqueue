@@ -56,7 +56,7 @@ export default defineConfig({
       description: 'High-performance job queue for Bun. SQLite persistence, DLQ, cron jobs, S3 backups.',
       logo: {
         src: './src/assets/logo.svg',
-        replacesTitle: false,
+        replacesTitle: true,
       },
       social: {
         github: 'https://github.com/egeominotti/bunqueue',
