@@ -69,8 +69,8 @@ interface ServerConfig {
 /** Load configuration from environment variables */
 function loadConfig(): ServerConfig {
   return {
-    tcpPort: parseInt(Bun.env.TCP_PORT ?? '6789'),
-    httpPort: parseInt(Bun.env.HTTP_PORT ?? '6790'),
+    tcpPort: parseInt(Bun.env.TCP_PORT ?? '6789', 10),
+    httpPort: parseInt(Bun.env.HTTP_PORT ?? '6790', 10),
     hostname: Bun.env.HOST ?? '0.0.0.0',
     tcpSocketPath: Bun.env.TCP_SOCKET_PATH,
     httpSocketPath: Bun.env.HTTP_SOCKET_PATH,
@@ -119,12 +119,11 @@ ${dim}────────────────────────�
   ${yellow}●${reset} Socket ${socketDisplay}
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
-  ${yellow}●${reset} Backup ${config.s3BackupEnabled ? `${green}S3 enabled${reset}` : `${dim}disabled${reset}`}
+  ${yellow}●${reset} S3 Backup ${config.s3BackupEnabled ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
   ${dim}●${reset} Shards ${bold}${SHARD_COUNT}${reset} ${dim}(${navigator.hardwareConcurrency} CPU cores)${reset}
 
 ${dim}─────────────────────────────────────────────────${reset}
 
-  ${dim}Press ${bold}Ctrl+C${reset}${dim} to stop${reset}
 `);
 }
 
@@ -221,7 +220,7 @@ function startServer(): void {
     const workerStats = queueManager.workerManager.getStats();
     const mem = process.memoryUsage();
     const now = new Date();
-    const timestamp = now.toLocaleTimeString('it-IT', {
+    const timestamp = now.toLocaleTimeString('en-GB', {
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
