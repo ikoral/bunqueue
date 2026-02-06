@@ -1,0 +1,25 @@
+name: Question
+description: Ask a question about usage or configuration
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question? Check the [documentation](https://bunqueue.dev) first.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What do you need help with?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Any relevant code, config, or setup details.
+      render: typescript
+    validations:
+      required: false
