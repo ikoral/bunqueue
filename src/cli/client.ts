@@ -7,6 +7,7 @@ import type { Socket } from 'bun';
 import { formatOutput, formatError } from './output';
 import { pack, unpack } from 'msgpackr';
 import { FrameParser, FrameSizeError } from '../infrastructure/server/protocol';
+import { CommandError } from './commands/types';
 
 /** Client options */
 export interface ClientOptions {
@@ -164,7 +165,9 @@ export async function executeCommand(
         token: options.token,
       });
       if (!authResponse.ok) {
-        console.error(formatError('Authentication failed', options.json));
+        const errMsg = typeof authResponse.error === 'string' ? authResponse.error : '';
+        const detail = errMsg ? `: ${errMsg}` : '';
+        console.error(formatError(`Authentication failed${detail}`, options.json));
         process.exit(1);
       }
     }
@@ -187,7 +190,7 @@ export async function executeCommand(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error(formatError(message, options.json));
-    process.exit(1);
+    process.exit(err instanceof CommandError ? 2 : 1);
   } finally {
     connection?.close();
   }
@@ -233,6 +236,7 @@ async function buildCommand(
     case 'stats':
     case 'metrics':
     case 'health':
+    case 'ping':
       return buildMonitorCommand(command);
     default:
       return null;

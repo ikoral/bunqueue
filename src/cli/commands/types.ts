@@ -32,11 +32,10 @@ export function parseJsonArg(value: string, name: string): unknown {
 /** Parse number argument */
 export function parseNumberArg(value: string | undefined, name: string): number | undefined {
   if (value === undefined) return undefined;
-  const num = parseInt(value, 10);
-  if (isNaN(num)) {
+  if (!/^-?\d+$/.test(value)) {
     throw new CommandError(`Invalid number for ${name}: ${value}`);
   }
-  return num;
+  return parseInt(value, 10);
 }
 
 /** Parse bigint argument (for job IDs) */

@@ -13,6 +13,8 @@ export function buildMonitorCommand(command: string): Record<string, unknown> {
     case 'health':
       // Health uses the same Stats command - the output formatter handles it
       return { cmd: 'Stats' };
+    case 'ping':
+      return { cmd: 'Ping' };
     default:
       return { cmd: 'Stats' };
   }

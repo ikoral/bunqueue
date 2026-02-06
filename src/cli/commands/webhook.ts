@@ -70,8 +70,12 @@ function buildAddWebhook(args: string[]): Record<string, unknown> {
 
   // Validate URL
   try {
-    new URL(url);
-  } catch {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new CommandError(`Webhook URL must use http or https protocol: ${url}`);
+    }
+  } catch (err) {
+    if (err instanceof CommandError) throw err;
     throw new CommandError(`Invalid URL: ${url}`);
   }
 

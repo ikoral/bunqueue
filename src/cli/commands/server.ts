@@ -16,6 +16,16 @@ interface ServerOptions {
   authTokens: string[];
 }
 
+/** Validate port number */
+function validatePort(value: string, name: string, defaultPort: number): number {
+  const port = parseInt(value, 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    console.warn(`Warning: Invalid ${name} "${value}". Using default ${defaultPort}.`);
+    return defaultPort;
+  }
+  return port;
+}
+
 /** Parse server arguments */
 function parseServerArgs(args: string[]): ServerOptions {
   const { values } = parseArgs({
@@ -32,8 +42,16 @@ function parseServerArgs(args: string[]): ServerOptions {
   });
 
   return {
-    tcpPort: parseInt((values['tcp-port'] as string) ?? Bun.env.TCP_PORT ?? '6789', 10),
-    httpPort: parseInt((values['http-port'] as string) ?? Bun.env.HTTP_PORT ?? '6790', 10),
+    tcpPort: validatePort(
+      (values['tcp-port'] as string) ?? Bun.env.TCP_PORT ?? '6789',
+      'TCP port',
+      6789
+    ),
+    httpPort: validatePort(
+      (values['http-port'] as string) ?? Bun.env.HTTP_PORT ?? '6790',
+      'HTTP port',
+      6790
+    ),
     host: (values.host as string) ?? Bun.env.HOST ?? '0.0.0.0',
     dataPath: (values['data-path'] as string) ?? Bun.env.DATA_PATH,
     authTokens:
@@ -77,17 +95,27 @@ export async function runServer(args: string[], showHelp: boolean): Promise<void
   const authTokens = options.authTokens.length > 0 ? options.authTokens : undefined;
 
   // Start TCP and HTTP servers
-  const tcpServer = createTcpServer(qm, {
-    port: options.tcpPort,
-    hostname: options.host,
-    authTokens,
-  });
+  let tcpServer: ReturnType<typeof createTcpServer>;
+  let httpServer: ReturnType<typeof createHttpServer>;
 
-  const httpServer = createHttpServer(qm, {
-    port: options.httpPort,
-    hostname: options.host,
-    authTokens,
-  });
+  try {
+    tcpServer = createTcpServer(qm, {
+      port: options.tcpPort,
+      hostname: options.host,
+      authTokens,
+    });
+
+    httpServer = createHttpServer(qm, {
+      port: options.httpPort,
+      hostname: options.host,
+      authTokens,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`Failed to start server: ${msg}`);
+    qm.shutdown();
+    process.exit(1);
+  }
 
   serverLog.info('bunqueue server started', {
     tcpPort: options.tcpPort,
