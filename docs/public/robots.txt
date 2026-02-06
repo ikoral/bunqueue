@@ -1,8 +1,11 @@
 # bunqueue Documentation
 # https://bunqueue.dev/
 
+# All crawlers
 User-agent: *
 Allow: /
+Disallow: /pagefind/
+Disallow: /404
 
 # Sitemap
 Sitemap: https://bunqueue.dev/sitemap-index.xml
