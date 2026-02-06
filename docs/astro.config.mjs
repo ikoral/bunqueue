@@ -400,6 +400,46 @@ export default defineConfig({
       // Table of contents depth
       tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 },
     }),
-    sitemap(),
+    sitemap({
+      serialize(item) {
+        // Set lastmod for all pages
+        item.lastmod = new Date();
+
+        const url = item.url.replace('https://bunqueue.dev', '');
+
+        // Homepage - highest priority
+        if (url === '/' || url === '') {
+          item.priority = 1.0;
+          item.changefreq = 'weekly';
+        }
+        // Getting started guides - high priority
+        else if (url.match(/^\/(guide\/(introduction|installation|quickstart))\//)) {
+          item.priority = 0.9;
+          item.changefreq = 'weekly';
+        }
+        // Core SDK docs and API reference - high priority
+        else if (url.match(/^\/(guide\/(queue|worker|flow|server|cron|dlq)|api)\//)) {
+          item.priority = 0.8;
+          item.changefreq = 'weekly';
+        }
+        // Advanced guides, integrations, performance - medium priority
+        else if (url.match(/^\/(guide\/|architecture\/)/)) {
+          item.priority = 0.7;
+          item.changefreq = 'monthly';
+        }
+        // Examples, migration, FAQ - medium priority
+        else if (url.match(/^\/(examples|faq|troubleshooting)\//)) {
+          item.priority = 0.6;
+          item.changefreq = 'monthly';
+        }
+        // Changelog, security, contributing - lower priority
+        else {
+          item.priority = 0.5;
+          item.changefreq = 'monthly';
+        }
+
+        return item;
+      },
+    }),
   ],
 });
