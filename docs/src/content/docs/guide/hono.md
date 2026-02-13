@@ -1,5 +1,5 @@
 ---
-title: Hono Integration
+title: Hono Framework Integration
 description: Integrate bunqueue with Hono for background jobs in Bun. Add queues, workers, and job status endpoints with middleware pattern and graceful shutdown.
 head:
   - tag: meta
@@ -270,3 +270,8 @@ app.post('/api/notify', async (c) => {
   return c.json({ jobId: job.id });
 });
 ```
+
+:::tip[Related Integrations]
+- [Elysia Framework Integration](/guide/elysia/) - Alternative framework integration
+- [Framework Integrations Overview](/guide/integrations/) - All supported frameworks
+:::

@@ -379,6 +379,14 @@ export default defineConfig({
             href: '/apple-touch-icon.png',
           },
         },
+        // Web App Manifest
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'manifest',
+            href: '/manifest.webmanifest',
+          },
+        },
         // DNS prefetch for external resources
         {
           tag: 'link',

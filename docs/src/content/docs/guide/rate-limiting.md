@@ -1,5 +1,5 @@
 ---
-title: Rate Limiting
+title: "Rate Limiting & Concurrency Control"
 description: Control job processing rates in bunqueue with per-queue rate limits and concurrency controls. Protect downstream services from overload via CLI or HTTP API
 head:
   - tag: meta
@@ -61,3 +61,9 @@ const worker = new Worker('emails', async (job) => {
   await sendEmail(job.data);
 }, { embedded: true });
 ```
+
+:::tip[Related Guides]
+- [Queue API](/guide/queue/) - Queue configuration options
+- [Worker API](/guide/worker/) - Worker concurrency settings
+- [Environment Variables](/guide/env-vars/) - Server-side rate limit defaults
+:::

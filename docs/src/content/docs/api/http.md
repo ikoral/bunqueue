@@ -1,5 +1,5 @@
 ---
-title: HTTP API
+title: HTTP API Reference
 description: Complete HTTP REST API reference for bunqueue job queue server. Covers endpoints for job push/pull, health checks, WebSocket events, and authentication.
 head:
   - tag: meta
@@ -865,3 +865,9 @@ ws.onmessage = (event) => {
 | `GET` | `/events/queues/:queue` | Yes | SSE stream (filtered by queue) |
 | -- | `/ws` | Yes | WebSocket (all queues) |
 | -- | `/ws/queues/:queue` | Yes | WebSocket (filtered by queue) |
+
+:::tip[Related]
+- [TCP Protocol Reference](/api/tcp/) - Binary TCP protocol alternative
+- [TypeScript Types](/api/types/) - Type definitions for all APIs
+- [Server Mode](/guide/server/) - Run the HTTP API server
+:::

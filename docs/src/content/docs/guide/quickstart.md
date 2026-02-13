@@ -1,5 +1,5 @@
 ---
-title: Quick Start
+title: Quick Start Tutorial
 description: Get started with bunqueue in 5 minutes. Create queues, add jobs, and process them with workers in embedded mode. Includes SQLite persistence setup
 head:
   - tag: meta
@@ -193,3 +193,9 @@ Without `DATA_PATH`, bunqueue runs in-memory (no persistence).
 - [Worker API](/guide/worker/) - Worker configuration
 - [Stall Detection](/guide/stall-detection/) - Handle unresponsive jobs
 - [DLQ](/guide/dlq/) - Dead letter queue management
+
+:::tip[Next Steps]
+- [Code Examples & Recipes](/examples/) - More complete examples
+- [Production Use Cases](/guide/use-cases/) - Real-world patterns
+- [Server Mode](/guide/server/) - Run bunqueue as a standalone server
+:::

@@ -1,5 +1,5 @@
 ---
-title: S3 Backup
+title: "S3 Backup & Automated Recovery"
 description: Automated S3 backups for bunqueue SQLite database. Works with AWS, Cloudflare R2, MinIO, and DigitalOcean Spaces with retention policies.
 head:
   - tag: meta

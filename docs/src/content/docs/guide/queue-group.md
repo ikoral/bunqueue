@@ -1,5 +1,5 @@
 ---
-title: Queue Group
+title: Queue Group API
 description: Bunqueue QueueGroup for namespace isolation in Bun apps. Organize related queues with prefixes for multi-tenant systems and microservice domains.
 head:
   - tag: meta

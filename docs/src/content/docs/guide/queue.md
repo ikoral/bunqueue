@@ -1,5 +1,5 @@
 ---
-title: Queue API
+title: Queue API Reference
 description: Master bunqueue Queue API for adding jobs with priorities, delays, retries, and deduplication. Includes bulk operations, durable writes, and DLQ config
 head:
   - tag: meta
@@ -624,3 +624,10 @@ Retrying all completed jobs can re-queue a large number of jobs at once. Conside
 // Close TCP connection (no-op in embedded mode)
 queue.close();
 ```
+
+:::tip[Related Guides]
+- [Rate Limiting & Concurrency Control](/guide/rate-limiting/) - Control job processing rates
+- [Dead Letter Queue](/guide/dlq/) - Handle failed jobs
+- [Worker API](/guide/worker/) - Process jobs from queues
+- [Queue Group](/guide/queue-group/) - Manage multiple queues
+:::

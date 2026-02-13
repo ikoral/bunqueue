@@ -1,5 +1,5 @@
 ---
-title: TCP Protocol
+title: TCP Protocol Reference
 description: High-performance binary TCP protocol specification for bunqueue job queue. Covers wire format, MessagePack encoding, pipelining, and all command references.
 head:
   - tag: meta
@@ -1615,3 +1615,9 @@ Job data payloads are limited to **10 MB** when serialized.
 | **Logs** | `AddLog` | Add job log entry |
 | | `GetLogs` | Get job logs |
 | **Auth** | `Auth` | Authenticate connection |
+
+:::tip[Related]
+- [HTTP API Reference](/api/http/) - REST API alternative
+- [TypeScript Types](/api/types/) - Type definitions
+- [TCP Protocol Architecture](/architecture/tcp-protocol/) - Protocol internals
+:::

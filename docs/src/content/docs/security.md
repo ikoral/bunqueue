@@ -135,3 +135,9 @@ Security updates are released as patch versions and announced via:
 - Twitter [@bunqueue](https://twitter.com/bunqueue)
 
 Always keep bunqueue updated to the latest version.
+
+:::tip[Related]
+- [Server Mode](/guide/server/) - Server configuration
+- [Environment Variables](/guide/env-vars/) - Auth token configuration
+- [Production Deployment](/guide/deployment/) - Secure deployment guide
+:::

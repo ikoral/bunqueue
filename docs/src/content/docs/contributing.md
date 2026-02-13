@@ -1,5 +1,5 @@
 ---
-title: Contributing Guide
+title: Contributing to bunqueue
 description: Learn how to contribute to bunqueue - development environment setup, coding standards, testing guidelines, and pull request workflow for Bun job queue.
 head:
   - tag: meta
@@ -214,4 +214,9 @@ Contributors are listed in:
 - GitHub contributors page
 - README.md acknowledgments
 
-Thank you for contributing! 🎉
+Thank you for contributing!
+
+:::tip[Related]
+- [Architecture & System Design](/architecture/) - Understand the codebase
+- [Security Best Practices](/security/) - Security guidelines
+:::

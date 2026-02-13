@@ -1,5 +1,5 @@
 ---
-title: Flow Producer
+title: "Flow Producer & Job Dependencies"
 description: Build complex job workflows in bunqueue with FlowProducer. Create sequential chains, parallel execution with merge, and hierarchical tree structures
 head:
   - tag: meta
@@ -222,3 +222,8 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 ```
+
+:::tip[Related Guides]
+- [Queue API](/guide/queue/) - Job options and queue configuration
+- [Worker API](/guide/worker/) - Process flow jobs with workers
+:::

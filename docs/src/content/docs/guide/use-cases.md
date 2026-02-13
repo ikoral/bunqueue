@@ -1,5 +1,5 @@
 ---
-title: Use Cases
+title: "Production Use Cases & Patterns"
 description: Production-ready bunqueue patterns for Bun apps. Email delivery, report generation, webhooks, image processing, payments, and multi-tenant queues.
 head:
   - tag: meta

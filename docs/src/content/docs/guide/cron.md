@@ -1,5 +1,5 @@
 ---
-title: Cron Jobs
+title: "Cron Jobs & Scheduled Tasks"
 description: Schedule recurring jobs in bunqueue using cron expressions or intervals. Supports IANA timezones, repeatable jobs, and both server and embedded modes
 head:
   - tag: meta
@@ -102,3 +102,9 @@ await queue.add('heartbeat', {}, {
   }
 });
 ```
+
+:::tip[Related Guides]
+- [Queue API](/guide/queue/) - Job options for cron-created jobs
+- [Server Mode](/guide/server/) - Cron scheduling in server mode
+- [CLI Commands](/guide/cli/) - Manage cron jobs via CLI
+:::

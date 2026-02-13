@@ -1,5 +1,5 @@
 ---
-title: Webhooks
+title: "Webhooks & Event Notifications"
 description: Bunqueue webhooks for job events with HMAC-SHA256 signatures. Receive HTTP callbacks on completion, failure, progress, and stall with auto-retry.
 head:
   - tag: meta
@@ -490,3 +490,9 @@ bunqueue webhook list
 1. Check event filter: `--events` flag
 2. Verify queue filter: `--queue` flag
 3. Check job options (some jobs skip events)
+
+:::tip[Related Guides]
+- [Queue API](/guide/queue/) - Queue events and configuration
+- [Environment Variables](/guide/env-vars/) - Webhook retry configuration
+- [Server Mode](/guide/server/) - Webhooks require server mode
+:::

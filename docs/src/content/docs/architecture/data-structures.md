@@ -1,5 +1,5 @@
 ---
-title: Core Data Structures
+title: Core Data Structures & Algorithms
 description: Core data structures powering bunqueue Bun job queue. Covers 4-ary MinHeap, skip lists, LRU cache, FNV-1a hashing, and read-write locks with complexities.
 head:
   - tag: meta

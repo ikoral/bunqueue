@@ -1,5 +1,5 @@
 ---
-title: Architecture Overview
+title: Architecture & System Design
 description: High-level architecture overview of bunqueue Bun job queue. Covers auto-scaling shards, TCP protocol, SQLite WAL persistence, and background task scheduling.
 head:
   - tag: meta
@@ -158,3 +158,10 @@ Acquire in order to prevent deadlocks:
 | ACK batch | O(shards) |
 | Job lookup | O(1) |
 | Stats | O(1) |
+
+:::tip[Related]
+- [Client SDK Architecture](/architecture/client-sdk/) - Queue, Worker, and connection pool
+- [TCP Protocol Architecture](/architecture/tcp-protocol/) - Binary protocol and commands
+- [SQLite Persistence Layer](/architecture/persistence/) - Write buffer and WAL mode
+- [Core Data Structures](/architecture/data-structures/) - Skip lists, heaps, and LRU caches
+:::

@@ -1,6 +1,6 @@
 ---
-title: Monitoring
-description: Monitor bunqueue with Prometheus metrics and Grafana dashboards. Set up alerts for DLQ, failure rates, queue backlogs, and worker health endpoints
+title: "Monitoring & Prometheus Metrics"
+description: Set up Prometheus metrics, Grafana dashboards, and health checks for bunqueue. Monitor queue backlogs, failure rates, DLQ alerts, and worker status
 head:
   - tag: meta
     attrs:
@@ -285,3 +285,9 @@ Log levels are filtered at runtime. Only messages at or above the configured lev
 4. **Per-queue monitoring**: Use `{queue="..."}` labels to filter dashboards per queue
 5. **Latency SLOs**: Set alerts on histogram quantiles (e.g., `histogram_quantile(0.99, bunqueue_push_duration_ms_bucket) > 50`)
 6. **Throughput rates**: Monitor `pushPerSec` and `pullPerSec` from `/stats` for real-time throughput
+
+:::tip[Related Guides]
+- [Telemetry & OpenTelemetry](/guide/telemetry/) - Distributed tracing setup
+- [Troubleshooting](/troubleshooting/) - Diagnose common issues
+- [Production Deployment](/guide/deployment/) - Deploy with monitoring
+:::

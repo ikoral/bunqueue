@@ -1,6 +1,6 @@
 ---
-title: Telemetry
-description: Built-in telemetry for bunqueue - latency histograms, throughput tracking, per-queue metrics, and log level configuration
+title: "Telemetry & OpenTelemetry"
+description: Configure OpenTelemetry traces, distributed tracing, and observability for bunqueue. Includes latency histograms, throughput tracking, and per-queue metrics
 head:
   - tag: meta
     attrs:

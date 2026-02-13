@@ -1,5 +1,5 @@
 ---
-title: Persistence Layer
+title: SQLite Persistence Layer
 description: SQLite WAL mode configuration, write buffering, read-through cache, and S3 backup flows in bunqueue
 head:
   - tag: meta

@@ -1,5 +1,5 @@
 ---
-title: Code Examples
+title: Code Examples & Recipes
 description: Production-ready code examples for bunqueue - email queues, image processing pipelines, scheduled reports, webhooks, ETL workflows, and more patterns.
 head:
   - tag: meta
@@ -615,3 +615,9 @@ worker.on('error', (error) => {
   console.error('Worker error:', error);
 });
 ```
+
+:::tip[Related]
+- [Quick Start Tutorial](/guide/quickstart/) - Getting started basics
+- [Production Use Cases](/guide/use-cases/) - Real-world patterns
+- [Migration Guide from BullMQ](/guide/migration/) - Moving from BullMQ
+:::

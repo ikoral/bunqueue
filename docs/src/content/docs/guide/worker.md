@@ -1,5 +1,5 @@
 ---
-title: Worker API
+title: Worker API Reference
 description: Learn bunqueue Worker API for job processing. Configure concurrency, heartbeats, batch pulling, lock-based ownership, and sandboxed workers for isolation
 head:
   - tag: meta
@@ -285,6 +285,12 @@ await worker.stop();
 ## CPU-Intensive Workers (TCP)
 
 When processing CPU-heavy jobs over TCP, synchronous work can block the event loop and cause connection drops. See the dedicated [CPU-Intensive Workers](/guide/cpu-intensive-workers/) guide for connection tuning, yield patterns, and timeout reference.
+
+:::tip[Related Guides]
+- [Monitoring & Prometheus Metrics](/guide/monitoring/) - Monitor worker events and performance
+- [Stall Detection & Recovery](/guide/stall-detection/) - Handle unresponsive workers
+- [CPU-Intensive Workers](/guide/cpu-intensive-workers/) - Handle CPU-heavy jobs over TCP
+:::
 
 ## Complete Example
 

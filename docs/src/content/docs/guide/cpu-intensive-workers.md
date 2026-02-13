@@ -1,5 +1,5 @@
 ---
-title: CPU-Intensive Workers
+title: CPU-Intensive Workers over TCP
 description: Handle CPU-heavy jobs over TCP without dropping connections. Configure ping intervals, command timeouts, and yield patterns for reliable processing
 head:
   - tag: meta
@@ -87,3 +87,9 @@ async function findNthPrime(n: number): Promise<number> {
 ## Alternative: SandboxedWorker
 
 For truly CPU-bound work, consider using [`SandboxedWorker`](/guide/worker/#sandboxedworker) instead. It runs each job in an isolated Bun Worker thread, so the main event loop is never blocked. This eliminates all TCP timeout issues without requiring connection tuning.
+
+:::tip[Related Guides]
+- [Worker API](/guide/worker/) - Full worker configuration options
+- [Stall Detection & Recovery](/guide/stall-detection/) - Handle stalled workers
+- [Monitoring & Prometheus Metrics](/guide/monitoring/) - Monitor CPU-heavy workloads
+:::

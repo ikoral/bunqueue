@@ -1,5 +1,5 @@
 ---
-title: Stall Detection
+title: "Stall Detection & Recovery"
 description: Configure stall detection in bunqueue to automatically recover unresponsive jobs. Set heartbeat intervals, max stalls, and grace periods for workers
 head:
   - tag: meta
@@ -122,3 +122,9 @@ Filter DLQ by stalled reason:
 ```typescript
 const stalledJobs = queue.getDlq({ reason: 'stalled' });
 ```
+
+:::tip[Related Guides]
+- [Dead Letter Queue](/guide/dlq/) - Where stalled jobs end up after max retries
+- [Worker API](/guide/worker/) - Configure heartbeat intervals
+- [CPU-Intensive Workers](/guide/cpu-intensive-workers/) - Prevent stalls in CPU-heavy workloads
+:::

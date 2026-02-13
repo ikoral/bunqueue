@@ -1,5 +1,5 @@
 ---
-title: Server Mode
+title: "Server Mode (TCP & HTTP)"
 description: Run bunqueue as a standalone server with TCP and HTTP APIs. Multi-client support, token authentication, Docker deployment, and graceful shutdown.
 head:
   - tag: meta
@@ -112,3 +112,10 @@ The server handles `SIGINT` and `SIGTERM`:
 2. Waits for active jobs to complete (30s timeout)
 3. Flushes data to disk
 4. Exits cleanly
+
+:::tip[Related Guides]
+- [Environment Variables](/guide/env-vars/) - All server configuration options
+- [CLI Commands](/guide/cli/) - Manage the server via CLI
+- [Security Best Practices](/security/) - Secure your deployment
+- [Monitoring & Prometheus Metrics](/guide/monitoring/) - Monitor server health
+:::

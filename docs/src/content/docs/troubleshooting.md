@@ -1,5 +1,5 @@
 ---
-title: Troubleshooting Guide
+title: Troubleshooting & Common Issues
 description: Solve common bunqueue problems including SQLite database locks, memory leaks, connection timeouts, job processing failures, and embedded mode issues.
 head:
   - tag: meta
@@ -414,3 +414,9 @@ If these solutions don't help:
    - OS and hardware
    - Error message and stack trace
    - Minimal reproduction code
+
+:::tip[Related Guides]
+- [Monitoring & Prometheus Metrics](/guide/monitoring/) - Set up monitoring to prevent issues
+- [FAQ](/faq/) - Frequently asked questions
+- [Stall Detection & Recovery](/guide/stall-detection/) - Debug stalled jobs
+:::
