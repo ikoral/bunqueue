@@ -110,6 +110,7 @@ export default defineConfig({
           items: [
             { label: 'Queue', link: '/guide/queue/' },
             { label: 'Worker', link: '/guide/worker/' },
+            { label: 'CPU-Intensive Workers', link: '/guide/cpu-intensive-workers/' },
             { label: 'Queue Group', link: '/guide/queue-group/' },
             { label: 'Flow Producer', link: '/guide/flow/' },
             { label: 'Stall Detection', link: '/guide/stall-detection/' },

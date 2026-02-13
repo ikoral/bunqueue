@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.4.2] - 2026-02-13
+
+### Added
+- **CPU-Intensive Workers guide** - New dedicated docs page for handling CPU-heavy jobs over TCP
+  - Explains the ping health check failure chain that causes job loss after ~90s of CPU load
+  - Connection tuning: `pingInterval: 0`, `commandTimeout: 60000`
+  - Non-blocking CPU patterns with `await Bun.sleep(0)` yield
+  - Default timeouts reference table
+  - SandboxedWorker as alternative for truly CPU-bound work
+- **CPU stress test script** - `scripts/stress-cpu-intensive.ts` (500 jobs, 5 CPU task types, concurrency 3)
+
 ## [2.4.1] - 2026-02-12
 
 ### Changed

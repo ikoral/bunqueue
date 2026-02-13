@@ -282,6 +282,10 @@ const stats = worker.getStats();
 await worker.stop();
 ```
 
+## CPU-Intensive Workers (TCP)
+
+When processing CPU-heavy jobs over TCP, synchronous work can block the event loop and cause connection drops. See the dedicated [CPU-Intensive Workers](/guide/cpu-intensive-workers/) guide for connection tuning, yield patterns, and timeout reference.
+
 ## Complete Example
 
 ```typescript
