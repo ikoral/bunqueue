@@ -207,7 +207,10 @@ async function tryPullFromShard(queue: string, idx: number, ctx: PullContext): P
       const result = tryDequeueNextJob(shard, queue, now, ctx);
 
       if (result.status === 'job') return result.job;
-      if (result.status === 'stop') return null;
+      if (result.status === 'stop') {
+        shard.releaseConcurrency(queue);
+        return null;
+      }
       // status === 'skip': continue loop
     }
   });
@@ -279,10 +282,12 @@ async function tryPullBatchFromShard(
 
       if (result.status === 'job') {
         jobs.push(result.job);
-      } else if (result.status === 'stop') {
-        break;
+      } else {
+        // 'stop' or 'skip': release the concurrency slot since no job was taken
+        shard.releaseConcurrency(queue);
+        if (result.status === 'stop') break;
+        // 'skip': continue loop to try next job
       }
-      // status === 'skip': continue loop
     }
 
     return jobs;

@@ -159,7 +159,7 @@ export async function promoteJob(jobId: JobId, ctx: JobManagementContext): Promi
     const job = q.find(jobId);
     if (!job || job.runAt <= Date.now()) return false;
 
-    job.runAt = Date.now();
+    q.updateRunAt(jobId, Date.now());
     return true;
   });
 }

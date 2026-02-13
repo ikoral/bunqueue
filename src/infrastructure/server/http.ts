@@ -253,7 +253,27 @@ async function routeRequest(
       } catch {
         return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400, corsOrigins);
       }
-      const cmd = { cmd: 'PUSH' as const, queue, ...body } as Parameters<typeof handleCommand>[0];
+      const cmd = {
+        cmd: 'PUSH' as const,
+        queue,
+        data: body.data,
+        priority: body.priority,
+        delay: body.delay,
+        attempts: body.attempts,
+        backoff: body.backoff,
+        timeout: body.timeout,
+        jobId: body.jobId,
+        removeOnComplete: body.removeOnComplete,
+        removeOnFail: body.removeOnFail,
+        durable: body.durable,
+        ttl: body.ttl,
+        uniqueKey: body.uniqueKey,
+        groupId: body.groupId,
+        dependsOn: body.dependsOn,
+        tags: body.tags,
+        lifo: body.lifo,
+        repeat: body.repeat,
+      } as Parameters<typeof handleCommand>[0];
       const response = await handleCommand(cmd, ctx);
       return jsonResponse(response, response.ok ? 200 : 400, corsOrigins);
     }

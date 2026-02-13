@@ -109,7 +109,6 @@ describe('CleanupTasks', () => {
 
       // Job should have been removed from processing
       expect(ctx.processingShards[procIdx].has(pulled!.id)).toBe(false);
-      // Job should have been removed from jobIndex
       expect(ctx.jobIndex.has(pulled!.id)).toBe(false);
     });
 
