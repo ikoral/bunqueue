@@ -10,6 +10,7 @@ import { withWriteLock } from '../../shared/lock';
 import { shardIndex, processingShardIndex } from '../../shared/hash';
 import type { SetLike, MapLike } from '../../shared/lru';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
+import { throughputTracker } from '../throughputTracker';
 
 /** Extracted job with optional result */
 export interface ExtractedJob<T = unknown> {
@@ -169,6 +170,7 @@ export interface FinalizeContext {
   onJobsCompleted?: (jobIds: JobId[]) => void;
   needsBroadcast?: () => boolean;
   hasPendingDeps?: () => boolean;
+  onRepeat?: (job: Job) => void;
 }
 
 /**
@@ -242,6 +244,22 @@ export function finalizeBatchAck<T>(
   } else if (hasPendingDeps) {
     for (let i = 0; i < jobCount; i++) {
       ctx.onJobCompleted(extractedJobs[i].id);
+    }
+  }
+
+  // Throughput tracking
+  throughputTracker.completeRate.increment(jobCount);
+
+  // Schedule repeat jobs
+  if (ctx.onRepeat) {
+    for (let i = 0; i < jobCount; i++) {
+      const job = extractedJobs[i].job;
+      if (job.repeat) {
+        const shouldRepeat = job.repeat.limit === undefined || job.repeat.count < job.repeat.limit;
+        if (shouldRepeat) {
+          ctx.onRepeat(job);
+        }
+      }
     }
   }
 }

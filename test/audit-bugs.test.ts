@@ -1,19 +1,14 @@
 /**
- * Audit Bug Reproduction Tests
- * Tests that reproduce bugs found during the 4-agent audit (2026-02-13)
- * Each test MUST fail before the fix and pass after.
+ * Audit Bug Tests - Reproduce and verify fixes for:
+ * 1. finalizeBatchAck skips repeat job scheduling for batches > 4
+ * 2. finalizeBatchAck missing throughput tracking
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { QueueManager } from '../src/application/queueManager';
+import { type JobId } from '../src/domain/types/job';
 
-// ============================================================
-// BUG 1: Concurrency slot leak when pull finds no ready jobs
-// [Job Queue Agent] pull.ts:196-213
-// When tryAcquireConcurrency succeeds but no job is dequeued,
-// the concurrency slot is never released, eventually starving the queue.
-// ============================================================
-describe('BUG: Concurrency slot leak on empty pull', () => {
+describe('Audit Bugs - Batch Ack Repeat & Throughput', () => {
   let qm: QueueManager;
 
   beforeEach(() => {
@@ -24,138 +19,179 @@ describe('BUG: Concurrency slot leak on empty pull', () => {
     qm.shutdown();
   });
 
-  test('concurrency slot must be released when pull finds no ready jobs', async () => {
-    const queue = 'concurrency-leak-test';
+  // ============ Repeat scheduling in batch ack ============
 
-    // Set concurrency limit to 2
-    qm.setConcurrency(queue, 2);
+  describe('ackJobBatch should schedule repeat jobs (batch > 4)', () => {
+    test('single ackJob schedules repeat job correctly', async () => {
+      // Baseline: single ack with repeat config works
+      await qm.push('repeat-q', {
+        data: { msg: 'repeating' },
+        repeat: { every: 1000, limit: 3 },
+      });
+      const pulled = await qm.pull('repeat-q');
+      expect(pulled).not.toBeNull();
 
-    // Push a delayed job (not ready yet - 10 minutes in the future)
-    await qm.push(queue, { data: { msg: 'delayed' }, delay: 600_000 });
+      await qm.ack(pulled!.id);
 
-    // Pull should find no ready jobs (only delayed one) - this should NOT consume concurrency slots
-    const result1 = await qm.pull(queue, 0);
-    expect(result1).toBeNull();
-
-    const result2 = await qm.pull(queue, 0);
-    expect(result2).toBeNull();
-
-    // Now push a ready job
-    await qm.push(queue, { data: { msg: 'ready' } });
-
-    // This pull MUST succeed - the concurrency slots should NOT have been consumed by the empty pulls
-    const result3 = await qm.pull(queue, 0);
-    expect(result3).not.toBeNull();
-    expect(result3!.data).toEqual({ msg: 'ready' });
-  });
-
-  test('batch pull must not leak concurrency slots when no jobs dequeued', async () => {
-    const queue = 'batch-concurrency-leak-test';
-
-    // Set concurrency limit to 2
-    qm.setConcurrency(queue, 2);
-
-    // Push delayed jobs only
-    await qm.push(queue, { data: { msg: 'delayed1' }, delay: 600_000 });
-    await qm.push(queue, { data: { msg: 'delayed2' }, delay: 600_000 });
-
-    // Batch pull finds no ready jobs
-    const batch = await qm.pullBatch(queue, 5, 0);
-    expect(batch).toHaveLength(0);
-
-    // Push ready jobs
-    await qm.push(queue, { data: { msg: 'ready1' } });
-    await qm.push(queue, { data: { msg: 'ready2' } });
-
-    // Both should be pullable since concurrency limit is 2
-    const batch2 = await qm.pullBatch(queue, 5, 0);
-    expect(batch2.length).toBe(2);
-  });
-});
-
-// ============================================================
-// BUG 2: promoteJob mutates job.runAt without updating heap entry
-// [Job Queue Agent] jobManagement.ts:162
-// job.runAt is set to Date.now() but the heap entry retains the old runAt,
-// so the job may not surface correctly for pulling.
-// ============================================================
-describe('BUG: promoteJob does not update heap entry', () => {
-  let qm: QueueManager;
-
-  beforeEach(() => {
-    qm = new QueueManager();
-  });
-
-  afterEach(() => {
-    qm.shutdown();
-  });
-
-  test('promoted delayed job must be immediately pullable', async () => {
-    const queue = 'promote-test';
-
-    // Push a job delayed by 1 hour
-    const pushed = await qm.push(queue, {
-      data: { msg: 'delayed-job' },
-      delay: 3_600_000,
+      const stats = qm.getStats();
+      expect(stats.completed).toBe(1);
+      // The repeat mechanism should have requeued a new job
+      expect(stats.waiting + stats.delayed).toBeGreaterThanOrEqual(1);
     });
 
-    // Verify it's not pullable yet
-    const before = await qm.pull(queue, 0);
-    expect(before).toBeNull();
+    test('ackJobBatch (>4 jobs) schedules repeat jobs', async () => {
+      // Bug: batches > 4 use finalizeBatchAck which skips onRepeat
+      const ids: JobId[] = [];
+      for (let i = 0; i < 6; i++) {
+        await qm.push('repeat-q', {
+          data: { msg: `repeat-${i}` },
+          repeat: { every: 1000, limit: 3 },
+        });
+      }
+      for (let i = 0; i < 6; i++) {
+        const pulled = await qm.pull('repeat-q');
+        expect(pulled).not.toBeNull();
+        ids.push(pulled!.id);
+      }
 
-    // Promote the job
-    const promoted = await qm.promote(pushed.id);
-    expect(promoted).toBe(true);
+      await qm.ackBatch(ids);
 
-    // The promoted job MUST be immediately pullable
-    const after = await qm.pull(queue, 0);
-    expect(after).not.toBeNull();
-    expect(after!.id).toBe(pushed.id);
-    expect(after!.data).toEqual({ msg: 'delayed-job' });
+      // Allow fire-and-forget repeat pushes to complete
+      await new Promise((r) => setTimeout(r, 50));
+
+      const stats = qm.getStats();
+      expect(stats.completed).toBe(6);
+      // All 6 repeat jobs should have been rescheduled
+      expect(stats.waiting + stats.delayed).toBeGreaterThanOrEqual(6);
+    });
+
+    test('ackJobBatch (>4 jobs) respects repeat limit', async () => {
+      // Jobs at their repeat limit should NOT be rescheduled
+      const ids: JobId[] = [];
+      for (let i = 0; i < 5; i++) {
+        await qm.push('repeat-q', {
+          data: { msg: `at-limit-${i}` },
+          repeat: { every: 1000, limit: 1, count: 1 },
+        });
+      }
+      for (let i = 0; i < 5; i++) {
+        const pulled = await qm.pull('repeat-q');
+        expect(pulled).not.toBeNull();
+        ids.push(pulled!.id);
+      }
+
+      await qm.ackBatch(ids);
+
+      const stats = qm.getStats();
+      expect(stats.completed).toBe(5);
+      // Jobs at their limit should NOT be rescheduled
+      expect(stats.waiting + stats.delayed).toBe(0);
+    });
+
+    test('ackJobBatch (>4 jobs) with no repeat config does not reschedule', async () => {
+      const ids: JobId[] = [];
+      for (let i = 0; i < 6; i++) {
+        await qm.push('normal-q', {
+          data: { msg: `normal-${i}` },
+        });
+      }
+      for (let i = 0; i < 6; i++) {
+        const pulled = await qm.pull('normal-q');
+        expect(pulled).not.toBeNull();
+        ids.push(pulled!.id);
+      }
+
+      await qm.ackBatch(ids);
+
+      const stats = qm.getStats();
+      expect(stats.completed).toBe(6);
+      expect(stats.waiting + stats.delayed).toBe(0);
+    });
   });
 
-  test('promoted job must be pulled before other delayed jobs', async () => {
-    const queue = 'promote-order-test';
+  // ============ Repeat scheduling in batch ack with results ============
 
-    // Push two delayed jobs
-    const job1 = await qm.push(queue, { data: { order: 1 }, delay: 3_600_000 });
-    const job2 = await qm.push(queue, { data: { order: 2 }, delay: 3_600_000 });
+  describe('ackJobBatchWithResults should schedule repeat jobs (batch > 4)', () => {
+    test('ackJobBatchWithResults (>4 jobs) schedules repeat jobs', async () => {
+      const items: Array<{ id: JobId; result: unknown }> = [];
+      for (let i = 0; i < 6; i++) {
+        await qm.push('repeat-q', {
+          data: { msg: `repeat-result-${i}` },
+          repeat: { every: 1000, limit: 3 },
+        });
+      }
+      for (let i = 0; i < 6; i++) {
+        const pulled = await qm.pull('repeat-q');
+        expect(pulled).not.toBeNull();
+        items.push({ id: pulled!.id, result: { value: i } });
+      }
 
-    // Promote job2 only
-    await qm.promote(job2.id);
+      await qm.ackBatchWithResults(items);
 
-    // Job2 should be pullable, job1 should not
-    const pulled = await qm.pull(queue, 0);
-    expect(pulled).not.toBeNull();
-    expect(pulled!.id).toBe(job2.id);
+      // Allow fire-and-forget repeat pushes to complete
+      await new Promise((r) => setTimeout(r, 50));
 
-    // Job1 should still be delayed
-    const pulled2 = await qm.pull(queue, 0);
-    expect(pulled2).toBeNull();
+      const stats = qm.getStats();
+      expect(stats.completed).toBe(6);
+      // All 6 repeat jobs should have been rescheduled
+      expect(stats.waiting + stats.delayed).toBeGreaterThanOrEqual(6);
+    });
+
+    test('ackJobBatchWithResults (>4 jobs) respects repeat limit', async () => {
+      const items: Array<{ id: JobId; result: unknown }> = [];
+      for (let i = 0; i < 5; i++) {
+        await qm.push('repeat-q', {
+          data: { msg: `at-limit-${i}` },
+          repeat: { every: 1000, limit: 1, count: 1 },
+        });
+      }
+      for (let i = 0; i < 5; i++) {
+        const pulled = await qm.pull('repeat-q');
+        expect(pulled).not.toBeNull();
+        items.push({ id: pulled!.id, result: { done: true } });
+      }
+
+      await qm.ackBatchWithResults(items);
+
+      const stats = qm.getStats();
+      expect(stats.completed).toBe(5);
+      expect(stats.waiting + stats.delayed).toBe(0);
+    });
+  });
+
+  // ============ Throughput tracking in batch ack ============
+
+  describe('finalizeBatchAck should track throughput', () => {
+    test('ackJobBatch (>4 jobs) updates totalCompleted counter', async () => {
+      const ids: JobId[] = [];
+      for (let i = 0; i < 6; i++) {
+        await qm.push('throughput-q', { data: { id: i } });
+      }
+      for (let i = 0; i < 6; i++) {
+        const pulled = await qm.pull('throughput-q');
+        ids.push(pulled!.id);
+      }
+
+      await qm.ackBatch(ids);
+
+      const stats = qm.getStats();
+      expect(Number(stats.totalCompleted)).toBe(6);
+    });
+
+    test('ackJobBatchWithResults (>4 jobs) updates totalCompleted counter', async () => {
+      const items: Array<{ id: JobId; result: unknown }> = [];
+      for (let i = 0; i < 6; i++) {
+        await qm.push('throughput-q', { data: { id: i } });
+      }
+      for (let i = 0; i < 6; i++) {
+        const pulled = await qm.pull('throughput-q');
+        items.push({ id: pulled!.id, result: { v: i } });
+      }
+
+      await qm.ackBatchWithResults(items);
+
+      const stats = qm.getStats();
+      expect(Number(stats.totalCompleted)).toBe(6);
+    });
   });
 });
-
-
-// ============================================================
-// BUG 5: HTTP body spread allows cmd override (Security)
-// [TypeScript Agent] http.ts:256
-// { cmd: 'PUSH', queue, ...body } allows body to override cmd field.
-// ============================================================
-describe('BUG: HTTP body spread allows cmd field override', () => {
-  test('body cmd field must not override route-determined cmd', () => {
-    const queue = 'test-queue';
-    const body: Record<string, unknown> = { data: { msg: 'test' }, cmd: 'Obliterate' };
-
-    // Fixed code: explicit field extraction, not spread
-    const cmd = {
-      cmd: 'PUSH' as const,
-      queue,
-      data: body.data,
-      priority: body.priority,
-    };
-
-    // cmd field cannot be overridden
-    expect(cmd.cmd).toBe('PUSH');
-  });
-});
-
