@@ -10,6 +10,24 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.4.6] - 2026-02-14
+
+### Performance
+- **Event-driven dependency resolution** - Replaced 100ms `setInterval` polling with microtask-coalesced flush triggered on job completion. Dependency chain latency drops from hundreds of milliseconds to microseconds:
+
+  | Scenario | Before (P50) | After (P50) | Speedup |
+  |----------|-------------|------------|---------|
+  | Single dep (A&rarr;B) | 100.05ms | 12.5&micro;s | **~8,000x** |
+  | Chain (4 levels) | 300.43ms | 28.2&micro;s | **~10,700x** |
+  | Fan-out (1&rarr;5) | 100.11ms | 31.0&micro;s | **~3,200x** |
+
+- The previous 100ms interval is now a 30s safety fallback. Zero functional changes, zero API changes.
+- Bonus: less CPU at idle (no more 10 calls/sec to `processPendingDependencies` when queue is empty).
+
+### Added
+- `src/benchmark/dependency-latency.bench.ts` - Benchmark for dependency chain resolution latency
+- `src/application/taskErrorTracking.ts` - Extracted error tracking for reuse across modules
+
 ## [2.4.5] - 2026-02-14
 
 ### Fixed
