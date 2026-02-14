@@ -10,7 +10,7 @@ head:
 
 All notable changes to bunqueue are documented here.
 
-## [2.4.4] - 2026-02-14
+## [2.4.5] - 2026-02-14
 
 ### Fixed
 - **Backoff jitter** - `calculateBackoff()` now applies jitter to prevent thundering herd when many jobs retry simultaneously. Exponential backoff uses ±50% jitter, fixed backoff uses ±20% jitter around the configured delay.
