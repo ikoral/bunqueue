@@ -10,8 +10,8 @@ export class WaiterManager {
   /** Waiter entries with cancellation flag for O(1) cleanup */
   private readonly waiters: Array<{ resolve: () => void; cancelled: boolean }> = [];
 
-  /** Pending notification flag - set when notify() is called with no waiters */
-  private pendingNotification = false;
+  /** Pending notification counter - incremented when notify() is called with no waiters */
+  private pendingNotifications = 0;
 
   /** Notify that jobs are available - wakes first non-cancelled waiter */
   notify(): void {
@@ -25,8 +25,8 @@ export class WaiterManager {
     if (waiter && !waiter.cancelled) {
       waiter.resolve();
     } else {
-      // No active waiter - set pending flag so next waitForJob returns immediately
-      this.pendingNotification = true;
+      // No active waiter - increment pending counter so next waitForJob returns immediately
+      this.pendingNotifications++;
     }
 
     // Periodic full cleanup when array grows too large
@@ -39,9 +39,9 @@ export class WaiterManager {
   waitForJob(timeoutMs: number): Promise<void> {
     if (timeoutMs <= 0) return Promise.resolve();
 
-    // Check for pending notification - if set, clear it and return immediately
-    if (this.pendingNotification) {
-      this.pendingNotification = false;
+    // Check for pending notifications - if any, decrement and return immediately
+    if (this.pendingNotifications > 0) {
+      this.pendingNotifications--;
       return Promise.resolve();
     }
 

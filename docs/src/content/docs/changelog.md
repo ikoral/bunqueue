@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.4.3] - 2026-02-14
+
+### Fixed
+- **Batch push now wakes all waiting workers** - `pushJobBatch` previously called `notify()` only once, causing only 1 of N waiting workers to wake up immediately. Others had to wait for their poll timeout (up to 30s with long-poll). Now each inserted job triggers a separate notification, waking all idle workers instantly.
+- **Pending notifications counter** - `WaiterManager.pendingNotification` was a boolean flag, silently losing notifications when multiple pushes occurred with no waiting workers. Changed to an integer counter (`pendingNotifications`) so each notification is tracked and consumed individually.
+
 ## [2.4.2] - 2026-02-13
 
 ### Added

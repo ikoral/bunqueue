@@ -119,31 +119,39 @@ describe('Fix Verification: Lost Notification TOCTOU (pull.ts:185-199)', () => {
     console.log('FIX VERIFIED: waitForJob returned immediately due to pendingNotification flag');
   });
 
-  test('pendingNotification is cleared after waitForJob consumes it', async () => {
-    // Verify that pendingNotification is a one-time flag
+  test('pendingNotifications are consumed one at a time by waitForJob', async () => {
+    // Verify that pendingNotifications is a counter, not a boolean flag.
+    // Each notify() increments the counter, each waitForJob() decrements it.
     const shard = new Shard();
     const WAIT_TIMEOUT = 50;
 
-    // Call notify() twice with no waiters - only one pending notification should be stored
+    // Call notify() twice with no waiters - both notifications should be stored
     shard.notify();
     shard.notify();
 
-    // First waitForJob should return immediately (consumes pending notification)
+    // First waitForJob should return immediately (consumes one pending notification)
     const start1 = Date.now();
     await shard.waitForJob(WAIT_TIMEOUT);
     const duration1 = Date.now() - start1;
 
-    // Second waitForJob should wait the full timeout (no pending notification)
+    // Second waitForJob should also return immediately (consumes second pending notification)
     const start2 = Date.now();
     await shard.waitForJob(WAIT_TIMEOUT);
     const duration2 = Date.now() - start2;
 
+    // Third waitForJob should wait the full timeout (no pending notifications left)
+    const start3 = Date.now();
+    await shard.waitForJob(WAIT_TIMEOUT);
+    const duration3 = Date.now() - start3;
+
     console.log('\n--- Pending Notification Consumption Test ---');
     console.log(`First wait duration: ${duration1}ms (expected: <10ms)`);
-    console.log(`Second wait duration: ${duration2}ms (expected: ~${WAIT_TIMEOUT}ms)`);
+    console.log(`Second wait duration: ${duration2}ms (expected: <10ms)`);
+    console.log(`Third wait duration: ${duration3}ms (expected: ~${WAIT_TIMEOUT}ms)`);
 
     expect(duration1).toBeLessThan(10); // Should return immediately
-    expect(duration2).toBeGreaterThanOrEqual(WAIT_TIMEOUT - 10); // Should wait full timeout
+    expect(duration2).toBeLessThan(10); // Should also return immediately
+    expect(duration3).toBeGreaterThanOrEqual(WAIT_TIMEOUT - 10); // Should wait full timeout
   });
 
   test('STRESS: multiple pulls racing with pushes - all jobs should be consumed', async () => {

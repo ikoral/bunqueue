@@ -196,6 +196,10 @@ const worker = new Worker('queue', processor, {
 });
 ```
 
+:::tip[Batch push and worker wakeup]
+When jobs are pushed via `addBulk()` or `pushBatch`, each inserted job triggers a notification to waiting workers. This means if you push 100 jobs and 20 workers are idle with `pollTimeout`, all 20 workers wake up immediately — no need to wait for the poll timeout to expire.
+:::
+
 ## Error Handling
 
 ```typescript
