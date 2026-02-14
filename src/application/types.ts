@@ -35,7 +35,7 @@ export const DEFAULT_CONFIG = {
   maxWaitingDeps: 10_000,
   cleanupIntervalMs: 10_000,
   jobTimeoutCheckMs: 5_000,
-  dependencyCheckMs: 100, // Reduced from 1000ms for faster chain dependency resolution
+  dependencyCheckMs: 30_000, // Safety fallback only; event-driven handles fast path
   stallCheckMs: 5_000,
   dlqMaintenanceMs: 60_000,
 };

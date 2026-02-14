@@ -12,68 +12,11 @@ import { checkExpiredLocks } from './lockManager';
 import { cleanup } from './cleanupTasks';
 import { checkStalledJobs } from './stallDetection';
 import { processPendingDependencies } from './dependencyProcessor';
+import { handleTaskError, handleTaskSuccess, getTaskErrorStats } from './taskErrorTracking';
 import type { BackgroundContext, LockContext } from './types';
 import type { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
 
-// ============ Error Tracking ============
-
-/** Maximum consecutive failures before critical warning */
-const MAX_CONSECUTIVE_FAILURES = 5;
-
-/** Track consecutive failures per task type */
-interface TaskErrorState {
-  consecutiveFailures: number;
-  lastError?: string;
-  lastFailureAt?: number;
-}
-
-const taskErrors: Record<string, TaskErrorState> = {
-  cleanup: { consecutiveFailures: 0 },
-  dependency: { consecutiveFailures: 0 },
-  lockExpiration: { consecutiveFailures: 0 },
-};
-
-/**
- * Handle task error with tracking and circuit breaker pattern
- */
-function handleTaskError(taskName: string, err: unknown): void {
-  const state = taskErrors[taskName];
-  if (!state) return;
-
-  state.consecutiveFailures++;
-  state.lastError = String(err);
-  state.lastFailureAt = Date.now();
-
-  queueLog.error(`${taskName} task failed`, {
-    error: state.lastError,
-    consecutiveFailures: state.consecutiveFailures,
-    willRetry: state.consecutiveFailures < MAX_CONSECUTIVE_FAILURES,
-  });
-
-  if (state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-    queueLog.error(`CRITICAL: Background ${taskName} repeatedly failing`, {
-      consecutiveFailures: state.consecutiveFailures,
-      lastError: state.lastError,
-    });
-  }
-}
-
-/**
- * Reset error state on successful task completion
- */
-function handleTaskSuccess(taskName: string): void {
-  const state = taskErrors[taskName];
-  if (state) {
-    state.consecutiveFailures = 0;
-  }
-}
-
-/**
- * Get error statistics for monitoring
- */
-export function getTaskErrorStats(): Record<string, TaskErrorState> {
-  return { ...taskErrors };
-}
+export { getTaskErrorStats };
 
 /** Background task handles for cleanup */
 export interface BackgroundTaskHandles {
@@ -108,7 +51,9 @@ export function startBackgroundTasks(
     checkJobTimeouts(ctx);
   }, ctx.config.jobTimeoutCheckMs);
 
+  // Safety fallback: event-driven path in queueManager handles the fast path
   const depCheckInterval = setInterval(() => {
+    if (ctx.pendingDepChecks.size === 0) return;
     processPendingDependencies(ctx)
       .then(() => {
         handleTaskSuccess('dependency');

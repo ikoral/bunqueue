@@ -313,6 +313,45 @@ Payload: 111 bytes
 
 ---
 
+## Dependency Chain Latency
+
+Jobs with dependencies (`dependsOn`, `FlowProducer`, parent-child workflows) benefit from event-driven dependency resolution via microtask coalescing, replacing the previous 100ms polling interval.
+
+### Before (polling 100ms via setInterval)
+
+| Scenario | Avg | P50 | P95 | P99 |
+|----------|-----|-----|-----|-----|
+| **Single dep (A&rarr;B)** | 100.09ms | 100.05ms | 101.91ms | 103.90ms |
+| **Chain dep (4 levels)** | 300.83ms | 300.43ms | 304.19ms | 306.72ms |
+| **Fan-out (1&rarr;5)** | 100.21ms | 100.11ms | 101.88ms | 105.37ms |
+
+### After (event-driven via microtask)
+
+| Scenario | Avg | P50 | P95 | P99 |
+|----------|-----|-----|-----|-----|
+| **Single dep (A&rarr;B)** | 21.9&micro;s | 12.5&micro;s | 48.7&micro;s | 121.6&micro;s |
+| **Chain dep (4 levels)** | 30.4&micro;s | 28.2&micro;s | 47.9&micro;s | 64.3&micro;s |
+| **Fan-out (1&rarr;5)** | 33.2&micro;s | 31.0&micro;s | 46.3&micro;s | 64.9&micro;s |
+
+### Improvement
+
+| Scenario | Before P50 | After P50 | Speedup |
+|----------|-----------|----------|---------|
+| **Single dep (A&rarr;B)** | 100.05ms | 0.012ms | **~8,000x** |
+| **Chain (4 levels)** | 300.43ms | 0.028ms | **~10,700x** |
+| **Fan-out (1&rarr;5)** | 100.11ms | 0.031ms | **~3,200x** |
+
+<Aside type="tip">
+Dependency chain latency dropped from **hundreds of milliseconds** to **microseconds**. This means multi-step pipelines (ETL, workflows, map-reduce) resolve nearly instantly instead of waiting for polling intervals.
+</Aside>
+
+```bash
+# Run the dependency latency benchmark
+bun run src/benchmark/dependency-latency.bench.ts
+```
+
+---
+
 ## Other Benchmarks
 
 The repository includes additional specialized benchmarks:
@@ -325,6 +364,7 @@ The repository includes additional specialized benchmarks:
 | **Worker** | Realistic worker simulation | [`bench/worker.bench.ts`](https://github.com/egeominotti/bunqueue/blob/main/bench/worker.bench.ts) |
 | **Stress** | Production validation | [`bench/stress.bench.ts`](https://github.com/egeominotti/bunqueue/blob/main/bench/stress.bench.ts) |
 | **Million Jobs** | High-volume integrity test | [`bench/million-jobs.bench.ts`](https://github.com/egeominotti/bunqueue/blob/main/bench/million-jobs.bench.ts) |
+| **Dependency Latency** | Dependency chain resolution speed | [`src/benchmark/dependency-latency.bench.ts`](https://github.com/egeominotti/bunqueue/blob/main/src/benchmark/dependency-latency.bench.ts) |
 
 ```bash
 # Run BullMQ comparison (requires Redis)

@@ -33,6 +33,8 @@ import * as lockMgr from './lockManager';
 import * as bgTasks from './backgroundTasks';
 import * as statsMgr from './statsManager';
 import { ContextFactory, type ContextDependencies, type ContextCallbacks } from './contextFactory';
+import { processPendingDependencies } from './dependencyProcessor';
+import { handleTaskError, handleTaskSuccess } from './taskErrorTracking';
 
 export type { QueueManagerConfig };
 
@@ -61,6 +63,10 @@ export class QueueManager {
 
   // Two-phase stall detection
   private readonly stalledCandidates = new Set<JobId>();
+
+  // Event-driven dependency flush state
+  private depFlushScheduled = false;
+  private depFlushRunning = false;
 
   // Lock-based job ownership tracking
   private readonly jobLocks = new Map<JobId, JobLock>();
@@ -702,10 +708,47 @@ export class QueueManager {
 
   private onJobCompleted(completedId: JobId): void {
     this.pendingDepChecks.add(completedId);
+    this.scheduleDependencyFlush();
   }
 
   private onJobsCompleted(completedIds: JobId[]): void {
     for (const id of completedIds) this.pendingDepChecks.add(id);
+    this.scheduleDependencyFlush();
+  }
+
+  /**
+   * Schedule dependency flush on next microtask.
+   * Coalesces multiple onJobCompleted calls in the same tick.
+   */
+  private scheduleDependencyFlush(): void {
+    if (this.depFlushScheduled) return;
+    this.depFlushScheduled = true;
+    queueMicrotask(() => {
+      this.depFlushScheduled = false;
+      if (this.depFlushRunning) return;
+      void this.runDependencyFlush();
+    });
+  }
+
+  /**
+   * Run dependency flush with reentrancy loop.
+   * The while-loop handles new completions arriving during async lock waits.
+   */
+  private async runDependencyFlush(): Promise<void> {
+    this.depFlushRunning = true;
+    try {
+      while (this.pendingDepChecks.size > 0) {
+        await processPendingDependencies(this.contextFactory.getBackgroundContext());
+        handleTaskSuccess('dependency');
+      }
+    } catch (err) {
+      handleTaskError('dependency', err);
+    } finally {
+      this.depFlushRunning = false;
+      if (this.pendingDepChecks.size > 0) {
+        this.scheduleDependencyFlush();
+      }
+    }
   }
 
   private hasPendingDeps(): boolean {
