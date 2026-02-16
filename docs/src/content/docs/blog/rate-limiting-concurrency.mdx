@@ -1,0 +1,233 @@
+---
+title: "Rate Limiting and Concurrency Control"
+description: "How to use bunqueue's rate limiting and concurrency controls to protect downstream services. Per-queue limits, global concurrency, and backpressure strategies."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/server-mode.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-13"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "rate limiting job queue, concurrency control, backpressure queue, api rate limit worker, circuit breaker pattern, queue throttling, adaptive concurrency"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Processing jobs as fast as possible isn't always the goal. External APIs have rate limits, databases have connection limits, and downstream services can be overwhelmed by burst traffic. bunqueue gives you fine-grained control over **how fast** and **how many** jobs run simultaneously.
+
+## Two Types of Limits
+
+| Type | What It Controls | Use Case |
+|------|-----------------|----------|
+| **Rate Limit** | Jobs per time window | API rate limits (e.g., 100 req/min) |
+| **Concurrency Limit** | Simultaneous active jobs | Database connections, CPU-bound tasks |
+
+## Rate Limiting
+
+Limit how many jobs are processed per time window:
+
+```typescript
+const queue = new Queue('api-calls', { embedded: true });
+
+// Max 100 jobs per minute
+queue.setGlobalRateLimit(100, 60_000);
+
+// Max 10 jobs per second
+queue.setGlobalRateLimit(10, 1_000);
+```
+
+When the rate limit is hit, workers automatically pause and resume when the window resets. No jobs are lost - they just wait in the queue.
+
+### Worker-Side Rate Limiting
+
+Workers can also control their own rate:
+
+```typescript
+const worker = new Worker('api-calls', processor, {
+  embedded: true,
+  concurrency: 5,
+  limiter: {
+    max: 50,           // Max 50 jobs
+    duration: 60_000,  // Per minute
+  },
+});
+```
+
+<Aside type="tip">
+  Use queue-level rate limits for global protection (all workers combined) and worker-level limits for per-instance control.
+</Aside>
+
+### Dynamic Rate Limiting
+
+Adjust limits at runtime in response to API feedback:
+
+```typescript
+const worker = new Worker('external-api', async (job) => {
+  const response = await callExternalAPI(job.data);
+
+  // Check rate limit headers
+  const remaining = response.headers.get('X-RateLimit-Remaining');
+  if (parseInt(remaining) < 10) {
+    // Slow down - we're approaching the limit
+    await worker.rateLimit(30_000); // Pause for 30 seconds
+  }
+
+  return response.data;
+}, { embedded: true, concurrency: 3 });
+```
+
+## Concurrency Control
+
+Limit how many jobs run at the same time:
+
+```typescript
+const queue = new Queue('heavy-processing', { embedded: true });
+
+// Max 5 jobs active simultaneously across all workers
+queue.setGlobalConcurrency(5);
+```
+
+This is essential for:
+- **Database-heavy jobs** - prevent connection pool exhaustion
+- **CPU-intensive tasks** - prevent system overload
+- **Memory-intensive operations** - prevent OOM kills
+
+### Worker Concurrency
+
+Each worker also has its own concurrency setting:
+
+```typescript
+// This worker processes up to 3 jobs at a time
+const worker = new Worker('tasks', processor, {
+  embedded: true,
+  concurrency: 3,
+});
+```
+
+Global concurrency and worker concurrency work together:
+- Global: 10 max across all workers
+- Worker A: concurrency 5
+- Worker B: concurrency 5
+- If Worker A has 8 active, Worker B can only have 2
+
+## Combining Rate Limits and Concurrency
+
+For APIs with both rate limits and connection limits:
+
+```typescript
+const queue = new Queue('stripe-api', { embedded: true });
+
+// Stripe rate limit: 100 requests/second
+queue.setGlobalRateLimit(100, 1_000);
+
+// But also limit concurrent connections
+queue.setGlobalConcurrency(25);
+
+const worker = new Worker('stripe-api', async (job) => {
+  const result = await stripe.charges.create(job.data);
+  return result;
+}, {
+  embedded: true,
+  concurrency: 10,  // Per worker limit
+});
+```
+
+## Removing Limits
+
+Clear limits when they're no longer needed:
+
+```typescript
+// Remove rate limit
+queue.removeGlobalConcurrency();
+
+// Check current state
+const isMaxed = await queue.isMaxed();
+const ttl = await queue.getRateLimitTtl();
+const isLimited = await worker.isRateLimited();
+```
+
+## Backpressure Patterns
+
+When downstream services are slow, queue depth grows. Here's how to handle it:
+
+### Pattern 1: Monitor Queue Depth
+
+```typescript
+setInterval(async () => {
+  const counts = await queue.getJobCountsAsync();
+
+  if (counts.waiting > 10_000) {
+    console.warn('Queue backlog growing:', counts.waiting);
+    // Consider: reduce producers, increase workers, alert team
+  }
+}, 30_000);
+```
+
+### Pattern 2: Adaptive Concurrency
+
+```typescript
+const worker = new Worker('tasks', async (job) => {
+  const startTime = Date.now();
+  const result = await processJob(job.data);
+  const duration = Date.now() - startTime;
+
+  // If jobs are taking too long, reduce concurrency
+  if (duration > 5_000) {
+    queue.setGlobalConcurrency(Math.max(1, currentConcurrency - 1));
+  }
+
+  return result;
+}, { embedded: true, concurrency: 10 });
+```
+
+### Pattern 3: Circuit Breaker with DLQ
+
+```typescript
+let consecutiveFailures = 0;
+
+const worker = new Worker('external-api', async (job) => {
+  try {
+    const result = await callAPI(job.data);
+    consecutiveFailures = 0;  // Reset on success
+    return result;
+  } catch (err) {
+    consecutiveFailures++;
+
+    if (consecutiveFailures > 10) {
+      // Circuit breaker: pause the queue
+      await queue.pause();
+      console.error('Circuit breaker triggered - queue paused');
+
+      // Resume after 60 seconds
+      setTimeout(() => {
+        queue.resume();
+        consecutiveFailures = 0;
+      }, 60_000);
+    }
+
+    throw err;  // Job will retry or go to DLQ
+  }
+}, { embedded: true, concurrency: 5 });
+```
+
+<Aside type="caution">
+  Don't set concurrency too high. Each active job holds memory for its data, stack trace, and worker context. 100 concurrent jobs with 1MB payloads = 100MB just for active jobs.
+</Aside>
+
+## Best Practices
+
+1. **Start conservative** - begin with low concurrency and increase based on metrics
+2. **Match external limits** - if your API allows 100 req/min, set your rate limit to 80/min (leave headroom)
+3. **Monitor queue depth** - a growing backlog is the first sign of trouble
+4. **Use global concurrency for shared resources** - database connections, API quotas
+5. **Use worker concurrency for CPU/memory** - prevent any single worker from consuming too many resources
+6. **Implement circuit breakers** for external dependencies - pause queues when downstream is unhealthy

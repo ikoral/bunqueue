@@ -1,0 +1,178 @@
+---
+title: "Getting Started with bunqueue in 5 Minutes"
+description: "A quick tutorial to set up bunqueue, create queues, add jobs, and process them with workers in embedded or TCP mode. From zero to running in 5 minutes."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/getting-started.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-02"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "bunqueue tutorial, bun job queue setup, getting started bunqueue, job queue typescript, background jobs bun, queue worker tutorial"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+You can go from zero to processing background jobs in under 5 minutes. This guide covers both embedded mode (simplest) and TCP server mode (for distributed systems).
+
+## Embedded Mode: The Simplest Setup
+
+Embedded mode runs the queue engine inside your application process. No server needed.
+
+<Steps>
+
+1. **Install bunqueue**
+
+   ```bash
+   bun add bunqueue
+   ```
+
+2. **Create a queue and add jobs**
+
+   ```typescript
+   import { Queue } from 'bunqueue/client';
+
+   interface EmailJob {
+     to: string;
+     subject: string;
+     body: string;
+   }
+
+   const queue = new Queue<EmailJob>('emails', { embedded: true });
+
+   await queue.add('welcome', {
+     to: 'user@example.com',
+     subject: 'Welcome!',
+     body: 'Thanks for signing up.',
+   });
+   ```
+
+3. **Create a worker to process jobs**
+
+   ```typescript
+   import { Worker } from 'bunqueue/client';
+
+   const worker = new Worker<EmailJob>(
+     'emails',
+     async (job) => {
+       console.log(`Sending email to ${job.data.to}`);
+       // Your email sending logic here
+       await job.updateProgress(100);
+       return { sent: true };
+     },
+     { embedded: true, concurrency: 3 }
+   );
+
+   worker.on('completed', (job, result) => {
+     console.log(`Job ${job.id} completed:`, result);
+   });
+
+   worker.on('failed', (job, err) => {
+     console.error(`Job ${job.id} failed:`, err.message);
+   });
+   ```
+
+4. **Run your application**
+
+   ```bash
+   bun run app.ts
+   ```
+
+</Steps>
+
+That's it. Jobs are persisted to SQLite automatically. If your app crashes and restarts, pending jobs are recovered.
+
+## Adding Job Options
+
+Jobs support priorities, delays, retries, and timeouts:
+
+```typescript
+// High priority job - processed before lower priority jobs
+await queue.add('urgent-alert', data, { priority: 10 });
+
+// Delayed job - processed after 30 seconds
+await queue.add('reminder', data, { delay: 30_000 });
+
+// Custom retry configuration
+await queue.add('payment', data, {
+  attempts: 5,
+  backoff: { type: 'exponential', delay: 1000 },
+  timeout: 60_000,
+});
+
+// Idempotent job - same jobId won't be added twice
+await queue.add('daily-report', data, { jobId: 'report-2024-01-15' });
+```
+
+## TCP Server Mode
+
+For multi-process architectures, run bunqueue as a standalone server:
+
+```bash
+# Start the server
+bunqueue start --tcp-port 6789 --data-path ./data/queue.db
+```
+
+Then connect from your application:
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+// Producer - connects via TCP
+const queue = new Queue<EmailJob>('emails', {
+  connection: { host: 'localhost', port: 6789 },
+});
+
+await queue.add('send', { to: 'user@example.com', subject: 'Hello' });
+
+// Worker - also connects via TCP
+const worker = new Worker<EmailJob>(
+  'emails',
+  async (job) => {
+    // process job
+    return { sent: true };
+  },
+  { connection: { host: 'localhost', port: 6789 }, concurrency: 5 }
+);
+```
+
+<Aside type="note">
+  TCP mode uses msgpack binary protocol with connection pooling. The auto-batching system automatically groups concurrent `add()` calls into bulk operations for better throughput.
+</Aside>
+
+## Monitoring Jobs
+
+Check job status and queue health:
+
+```typescript
+// Get job counts by state
+const counts = await queue.getJobCountsAsync();
+console.log(counts);
+// { waiting: 10, active: 3, completed: 150, failed: 2, delayed: 5 }
+
+// Get a specific job
+const job = await queue.getJob('job-id-here');
+console.log(job?.data, job?.progress);
+
+// Queue control
+await queue.pause();   // Stop processing
+await queue.resume();  // Resume processing
+```
+
+## What to Explore Next
+
+Now that you have the basics running, check out:
+
+- [Workers](/guide/worker/) - concurrency, heartbeat, stall detection
+- [Dead Letter Queue](/guide/dlq/) - handling failed jobs
+- [Cron Jobs](/guide/cron/) - scheduled recurring jobs
+- [Flow Producer](/guide/flow/) - job dependencies and pipelines

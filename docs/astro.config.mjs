@@ -175,6 +175,24 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Blog',
+          items: [
+            { label: 'Why bunqueue: SQLite Over Redis', link: '/blog/why-bunqueue/' },
+            { label: 'Getting Started in 5 Minutes', link: '/blog/getting-started-five-minutes/' },
+            { label: 'Sharding Architecture Deep Dive', link: '/blog/sharding-deep-dive/' },
+            { label: 'bunqueue vs BullMQ Benchmarks', link: '/blog/benchmarks-vs-bullmq/' },
+            { label: 'Reliable Workers & Stall Detection', link: '/blog/reliable-workers/' },
+            { label: 'Dead Letter Queues', link: '/blog/dead-letter-queues/' },
+            { label: 'Cron Jobs & Scheduling', link: '/blog/cron-scheduling/' },
+            { label: 'Auto-Batching: 3x Throughput', link: '/blog/auto-batching/' },
+            { label: 'Production Deployment', link: '/blog/production-deployment/' },
+            { label: 'Hono & Elysia Integrations', link: '/blog/framework-integrations/' },
+            { label: 'S3 Backup & Disaster Recovery', link: '/blog/s3-backup-recovery/' },
+            { label: 'Job Pipelines with FlowProducer', link: '/blog/job-pipelines-flows/' },
+            { label: 'Rate Limiting & Concurrency', link: '/blog/rate-limiting-concurrency/' },
+          ],
+        },
+        {
           label: 'Resources',
           items: [
             { label: 'FAQ', link: '/faq/' },
@@ -441,6 +459,11 @@ export default defineConfig({
         else if (url.match(/^\/(examples|faq|troubleshooting)\//)) {
           item.priority = 0.6;
           item.changefreq = 'monthly';
+        }
+        // Blog posts - good for SEO, frequent updates
+        else if (url.match(/^\/blog\//)) {
+          item.priority = 0.7;
+          item.changefreq = 'weekly';
         }
         // Changelog, security, contributing - lower priority
         else {

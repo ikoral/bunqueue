@@ -1,0 +1,225 @@
+---
+title: "Deploying bunqueue to Production"
+description: "Production deployment patterns for bunqueue with Docker, systemd, and PM2. Health checks, resource limits, backup strategies, and monitoring setup."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/server-mode.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-09"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "bunqueue production deployment, docker job queue, systemd job queue, job queue monitoring, bun production, sqlite queue deployment, health check queue"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+bunqueue is designed as a **single-instance** job queue. This simplifies deployment significantly - no clustering, no leader election, no split-brain concerns. Here's how to deploy it reliably.
+
+## Docker Deployment
+
+The recommended approach for most teams:
+
+```dockerfile
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+# Install bunqueue globally
+RUN bun add -g bunqueue
+
+# Create data directory
+RUN mkdir -p /data
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:6790/health || exit 1
+
+EXPOSE 6789 6790
+
+CMD ["bunqueue", "start", \
+  "--tcp-port", "6789", \
+  "--http-port", "6790", \
+  "--data-path", "/data/bunqueue.db"]
+```
+
+Run with a persistent volume:
+
+```bash
+docker run -d \
+  --name bunqueue \
+  -p 6789:6789 \
+  -p 6790:6790 \
+  -v bunqueue-data:/data \
+  --restart unless-stopped \
+  bunqueue-server
+```
+
+<Aside type="caution">
+  Always mount the data directory as a Docker volume. Without it, your SQLite database (and all jobs) are lost when the container restarts.
+</Aside>
+
+## systemd Service
+
+For bare-metal or VPS deployments:
+
+```ini
+[Unit]
+Description=bunqueue Job Queue Server
+After=network.target
+
+[Service]
+Type=simple
+User=bunqueue
+Group=bunqueue
+WorkingDirectory=/opt/bunqueue
+ExecStart=/usr/local/bin/bun run bunqueue start \
+  --tcp-port 6789 \
+  --data-path /var/lib/bunqueue/queue.db
+Restart=always
+RestartSec=5
+
+# Resource limits
+LimitNOFILE=65535
+MemoryMax=1G
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/bunqueue
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable bunqueue
+sudo systemctl start bunqueue
+sudo systemctl status bunqueue
+```
+
+## Environment Variables
+
+Configure bunqueue through environment variables in production:
+
+```bash
+# Server
+TCP_PORT=6789
+HTTP_PORT=6790
+HOST=0.0.0.0
+DATA_PATH=/var/lib/bunqueue/queue.db
+
+# Authentication
+AUTH_TOKENS=your-secret-token-here
+
+# Timeouts
+SHUTDOWN_TIMEOUT_MS=30000
+WORKER_TIMEOUT_MS=30000
+
+# S3 Backup
+S3_BACKUP_ENABLED=1
+S3_BUCKET=my-bunqueue-backups
+S3_ACCESS_KEY_ID=your-key
+S3_SECRET_ACCESS_KEY=your-secret
+S3_REGION=us-east-1
+S3_BACKUP_INTERVAL=21600000  # Every 6 hours
+S3_BACKUP_RETENTION=7         # Keep 7 days
+```
+
+## Health Checks
+
+bunqueue exposes HTTP health endpoints:
+
+```bash
+# Basic health check
+curl http://localhost:6790/health
+# Returns: { "status": "ok", "uptime": 3600, "memory": {...} }
+
+# TCP ping (from your application)
+const queue = new Queue('test', {
+  connection: { host: 'localhost', port: 6789 },
+});
+await queue.waitUntilReady(); // Pings the server
+```
+
+Use the HTTP health endpoint for load balancer checks, Docker HEALTHCHECK, and Kubernetes liveness probes.
+
+## Graceful Shutdown
+
+bunqueue handles SIGTERM for graceful shutdown:
+
+<Steps>
+
+1. Stop accepting new connections
+2. Wait for active jobs to complete (up to `SHUTDOWN_TIMEOUT_MS`)
+3. Flush the write buffer to SQLite
+4. Close the database
+5. Exit cleanly
+
+</Steps>
+
+```bash
+# Docker stop sends SIGTERM, waits 10s, then SIGKILL
+docker stop bunqueue
+
+# For longer running jobs, increase stop timeout
+docker stop -t 60 bunqueue
+```
+
+<Aside type="tip">
+  Set `SHUTDOWN_TIMEOUT_MS` to match your longest-running job. If a payment processing job takes up to 60 seconds, set the timeout to at least 65000ms.
+</Aside>
+
+## Resource Sizing
+
+bunqueue's memory usage scales with the number of in-flight jobs:
+
+| In-Flight Jobs | Approximate RAM |
+|---------------|-----------------|
+| 1,000 | ~50 MB |
+| 10,000 | ~200 MB |
+| 100,000 | ~800 MB |
+| 1,000,000 | ~3 GB |
+
+The SQLite database size depends on job data size and retention settings. A typical deployment with `removeOnComplete: true` stays compact.
+
+## Monitoring Checklist
+
+Essential metrics to track in production:
+
+```bash
+# Queue metrics (via HTTP API)
+curl http://localhost:6790/metrics
+
+# Prometheus format
+curl http://localhost:6790/prometheus
+```
+
+Key metrics to alert on:
+- **DLQ size growing** - indicates systematic failures
+- **Active jobs count > expected** - jobs may be stalled
+- **Memory usage approaching limit** - adjust `maxEntries` settings
+- **Waiting queue depth** - add more workers or increase concurrency
+
+## Backup Strategy
+
+Enable S3 backup for disaster recovery:
+
+```bash
+S3_BACKUP_ENABLED=1
+S3_BACKUP_INTERVAL=21600000  # Every 6 hours
+S3_BACKUP_RETENTION=7         # Keep 7 days of backups
+```
+
+For critical deployments, also consider:
+- Filesystem-level snapshots (LVM, ZFS, or cloud provider snapshots)
+- Replicating the SQLite file to a secondary location
+- Monitoring backup success/failure with alerts

@@ -1,0 +1,227 @@
+---
+title: "Cron Jobs and Scheduling in bunqueue"
+description: "How to use bunqueue's built-in cron scheduler for recurring jobs. Cron expressions, repeat intervals, timezone support, and execution limits."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/server-mode.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-07"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "cron job queue, scheduled jobs bun, recurring tasks typescript, cron expression scheduler, job scheduler sqlite, background task scheduling"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Background jobs aren't always triggered by user actions. Many tasks need to run on a schedule: daily reports, hourly cleanups, periodic syncs. bunqueue has a **built-in cron scheduler** that runs alongside your job queue with zero additional infrastructure.
+
+## Two Types of Scheduled Jobs
+
+bunqueue supports two scheduling modes:
+
+| Mode | Use Case | Example |
+|------|----------|---------|
+| Cron expression | Calendar-based schedules | "Every Monday at 9am" |
+| Repeat interval | Fixed interval | "Every 5 minutes" |
+
+## Cron Expressions
+
+Use standard cron syntax for calendar-based schedules:
+
+```typescript
+import { Queue } from 'bunqueue/client';
+
+const queue = new Queue('reports', { embedded: true });
+
+// Daily at midnight UTC
+await queue.upsertJobScheduler('daily-report', {
+  pattern: '0 0 * * *',
+}, {
+  name: 'generate-report',
+  data: { type: 'daily' },
+});
+
+// Every Monday at 9:00 AM
+await queue.upsertJobScheduler('weekly-digest', {
+  pattern: '0 9 * * 1',
+}, {
+  name: 'send-digest',
+  data: { type: 'weekly' },
+});
+
+// Every 15 minutes
+await queue.upsertJobScheduler('health-check', {
+  pattern: '*/15 * * * *',
+}, {
+  name: 'check-health',
+  data: { service: 'api' },
+});
+```
+
+## Repeat Intervals
+
+For simple fixed-interval schedules, use `every`:
+
+```typescript
+// Every 5 minutes (300,000 ms)
+await queue.upsertJobScheduler('sync-data', {
+  every: 300_000,
+}, {
+  name: 'sync',
+  data: { source: 'external-api' },
+});
+```
+
+<Aside type="note">
+  `every` is millisecond-based and doesn't drift. The scheduler calculates the next run time based on the previous execution, not wall clock time.
+</Aside>
+
+## Timezone Support
+
+Cron expressions default to UTC. Specify a timezone for local-time scheduling:
+
+```typescript
+// 9:00 AM New York time (handles DST automatically)
+await queue.upsertJobScheduler('morning-report', {
+  pattern: '0 9 * * *',
+  tz: 'America/New_York',
+}, {
+  name: 'morning-report',
+  data: {},
+});
+
+// 6:00 PM Tokyo time
+await queue.upsertJobScheduler('evening-cleanup', {
+  pattern: '0 18 * * *',
+  tz: 'Asia/Tokyo',
+}, {
+  name: 'cleanup',
+  data: {},
+});
+```
+
+## Execution Limits
+
+Prevent runaway cron jobs with execution limits:
+
+```typescript
+// Run at most 100 times, then stop
+await queue.upsertJobScheduler('limited-task', {
+  pattern: '*/5 * * * *',
+  limit: 100,
+}, {
+  name: 'task',
+  data: {},
+});
+```
+
+## Managing Scheduled Jobs
+
+List, inspect, and remove schedulers:
+
+```typescript
+// List all schedulers
+const schedulers = await queue.getJobSchedulers();
+for (const s of schedulers) {
+  console.log(s.name, s.pattern || s.every, s.next);
+}
+
+// Get a specific scheduler
+const scheduler = await queue.getJobScheduler('daily-report');
+console.log(scheduler);
+
+// Remove a scheduler
+await queue.removeJobScheduler('daily-report');
+
+// Count schedulers
+const count = await queue.getJobSchedulersCount();
+```
+
+## Event-Driven Scheduler Architecture
+
+bunqueue's scheduler uses an **event-driven** design with precise `setTimeout` instead of polling:
+
+```
+Scheduler Tick
+    │
+    ├── Calculate next cron/repeat fire time
+    ├── setTimeout(fireTime - now)
+    │
+    └── On fire:
+        ├── Create job in the queue
+        ├── Update execution count
+        ├── Calculate next fire time
+        └── Schedule next setTimeout
+```
+
+This means zero CPU usage between scheduled events. The scheduler only wakes up when a job needs to fire.
+
+<Aside type="tip">
+  The event-driven design replaced an earlier polling-based approach. The improvement is dramatic: instead of checking every 100ms, the scheduler sleeps until the exact moment a job needs to run.
+</Aside>
+
+## Cron + Workers: Complete Example
+
+Here's a complete pattern for a scheduled data sync:
+
+```typescript
+import { Queue, Worker } from 'bunqueue/client';
+
+const queue = new Queue('sync', { embedded: true });
+
+// Schedule: every hour
+await queue.upsertJobScheduler('hourly-sync', {
+  pattern: '0 * * * *',
+}, {
+  name: 'sync-users',
+  data: { source: 'external-api' },
+  opts: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 5000 },
+    timeout: 120_000, // 2 minute timeout
+  },
+});
+
+// Worker processes the scheduled jobs
+const worker = new Worker('sync', async (job) => {
+  const { source } = job.data;
+  await job.log(`Starting sync from ${source}`);
+
+  const users = await fetchUsersFromAPI(source);
+  await job.updateProgress(50);
+
+  await saveUsersToDatabase(users);
+  await job.updateProgress(100);
+
+  return { synced: users.length };
+}, { embedded: true });
+
+worker.on('completed', (job, result) => {
+  console.log(`Synced ${result.synced} users`);
+});
+```
+
+## CLI Management
+
+Manage cron jobs from the command line:
+
+```bash
+# List all cron jobs
+bunqueue cron list
+
+# Add a cron job
+bunqueue cron add --name daily-report --queue reports \
+  --schedule "0 0 * * *" --data '{"type":"daily"}'
+
+# Delete a cron job
+bunqueue cron delete --name daily-report
+```

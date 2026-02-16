@@ -1,0 +1,111 @@
+---
+title: "Why We Built bunqueue: SQLite Over Redis"
+description: "The motivation behind bunqueue - a high-performance job queue that replaces Redis with SQLite for simpler deployments and better performance on Bun."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/getting-started.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-01"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "bunqueue, sqlite job queue, redis alternative, bun job queue, background jobs typescript, sqlite vs redis, job queue no redis"
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+The Node.js ecosystem has relied on Redis-backed job queues for years. BullMQ, Bee-Queue, and others all share the same dependency: a running Redis server. We asked a simple question: **what if we didn't need Redis at all?**
+
+## The Redis Problem
+
+Redis is excellent software, but it introduces real operational complexity for job queues:
+
+- **Another service to manage** - deploy, monitor, backup, scale
+- **Network latency** - every job operation crosses the network
+- **Memory limits** - Redis stores everything in RAM
+- **Connection management** - pool sizing, reconnection, timeouts
+
+For many applications, especially single-server deployments and small teams, this overhead isn't justified.
+
+## Why SQLite?
+
+SQLite runs in-process. There's no network hop, no connection pool, no separate service to manage.
+
+<CardGrid>
+  <Card title="Zero Dependencies" icon="rocket">
+    No Redis, no external services. Just your app and a file on disk.
+  </Card>
+  <Card title="In-Process Speed" icon="star">
+    Direct memory access instead of TCP round-trips to Redis.
+  </Card>
+  <Card title="Persistence by Default" icon="open-book">
+    WAL mode gives you crash-safe writes with read concurrency.
+  </Card>
+  <Card title="Simple Backups" icon="laptop">
+    Copy one file, or use built-in S3 backup.
+  </Card>
+</CardGrid>
+
+## Bun Makes It Possible
+
+Bun's native SQLite driver (`bun:sqlite`) is what makes this architecture viable. It's not a Node.js addon compiled from C - it's built directly into the runtime with zero-copy optimizations.
+
+```typescript
+import { Database } from 'bun:sqlite';
+
+const db = new Database('./queue.db', {
+  strict: true,
+  create: true,
+});
+
+// WAL mode for concurrent reads + writes
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA synchronous = NORMAL');
+```
+
+This gives us prepared statements, transactions, and WAL mode with performance that rivals in-memory datastores for our workload patterns.
+
+## The Write Buffer Strategy
+
+Raw SQLite writes are fast, but bunqueue goes further with a **write buffer** that batches disk operations:
+
+```typescript
+// Jobs are added to an in-memory priority queue immediately
+// The write buffer flushes to SQLite every 10ms
+const queue = new Queue('emails', { embedded: true });
+
+// This returns instantly - job is in memory
+await queue.add('send', { to: 'user@example.com' });
+
+// For critical jobs, bypass the buffer:
+await queue.add('payment', data, { durable: true });
+```
+
+The `durable: true` option bypasses the write buffer and writes directly to SQLite, trading throughput for guaranteed persistence.
+
+<Aside type="tip">
+  In buffered mode, bunqueue achieves ~100,000 jobs/sec. With `durable: true`, it's ~10,000 jobs/sec. Both are faster than BullMQ + Redis for most operations.
+</Aside>
+
+## When to Use bunqueue
+
+bunqueue is designed for **single-instance deployments**. It's the right choice when:
+
+- You run your app on a single server or VPS
+- You want zero operational overhead for background jobs
+- You need reliable persistence without managing Redis
+- You're building on Bun and want native performance
+
+If you need multi-node clustering or Redis pub/sub features, BullMQ remains a solid choice. But for the majority of applications that run on a single server, bunqueue eliminates an entire layer of infrastructure.
+
+## What's Next?
+
+In upcoming posts, we'll dive deep into bunqueue's architecture - from the sharding system that distributes jobs across CPU cores to the auto-batching system that makes TCP mode nearly as fast as embedded mode. Stay tuned.

@@ -1,0 +1,170 @@
+---
+title: "Building Reliable Workers with Stall Detection"
+description: "How to build reliable job workers with bunqueue's stall detection, heartbeat protocol, and lock-based ownership. Prevent lost jobs and duplicate processing."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/server-mode.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-05"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "stall detection, job queue reliability, worker heartbeat, lock-based ownership, zombie jobs, graceful shutdown worker, job queue error handling"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A job queue is only as reliable as its workers. If a worker crashes mid-processing, what happens to the job? Without proper safeguards, it's either lost forever or stuck in an "active" state. bunqueue solves this with **stall detection** and **lock-based ownership**.
+
+## The Problem: Zombie Jobs
+
+Consider this scenario:
+
+1. Worker pulls job #42
+2. Worker starts processing
+3. Worker process crashes (OOM, unhandled exception, hardware failure)
+4. Job #42 is stuck in "active" state forever
+
+No error handler fires. No retry logic runs. The job simply disappears into the void.
+
+## Solution: Heartbeat + Lock Protocol
+
+bunqueue workers send periodic heartbeats to prove they're alive. If a heartbeat is missed, the job is considered "stalled" and returned to the queue.
+
+```typescript
+const worker = new Worker('emails', processor, {
+  embedded: true,
+  heartbeatInterval: 10_000,  // Send heartbeat every 10 seconds
+  useLocks: true,             // Enable lock-based ownership
+  lockDuration: 30_000,       // Lock expires after 30 seconds
+});
+```
+
+The flow:
+
+1. Worker pulls a job and acquires a **lock** with a unique token
+2. Every `heartbeatInterval` ms, the worker renews the lock
+3. If the lock expires (worker died), the stall detector reclaims the job
+4. The job is returned to the queue with `stallCount++`
+
+## Configuring Stall Detection
+
+In embedded mode, you can fine-tune stall behavior per queue:
+
+```typescript
+const queue = new Queue('payments', { embedded: true });
+
+queue.setStallConfig({
+  enabled: true,
+  stallInterval: 30_000,  // Check for stalls every 30 seconds
+  maxStalls: 3,           // After 3 stalls, move to DLQ
+  gracePeriod: 5_000,     // New jobs get 5s grace before stall check
+});
+```
+
+The `maxStalls` parameter is critical. If a job consistently stalls (perhaps due to a bug that causes OOM), it gets moved to the Dead Letter Queue after `maxStalls` attempts instead of retrying forever.
+
+## Lock Ownership: Preventing Double Processing
+
+Locks prevent a subtle but dangerous bug: **double processing**. Without locks, this can happen:
+
+1. Worker A pulls job #42
+2. Worker A's heartbeat is delayed (GC pause, network hiccup)
+3. Stall detector thinks the job is stalled, returns it to the queue
+4. Worker B pulls job #42 and starts processing
+5. Worker A recovers from GC pause and continues processing job #42
+6. **Both workers are processing the same job**
+
+With locks, Worker A's ack/fail is rejected because its lock token is no longer valid:
+
+```typescript
+// Worker A tries to ack after its lock expired
+// Server verifies the lock token
+// Token mismatch -> ACK rejected
+// Worker B's token is current -> Worker B's ACK succeeds
+```
+
+<Aside type="caution">
+  Lock ownership is enabled by default (`useLocks: true`). Disabling it removes this protection and should only be done for idempotent workloads where double processing is acceptable.
+</Aside>
+
+## Heartbeat Implementation
+
+The heartbeat runs as a timer inside the worker:
+
+```typescript
+const worker = new Worker('tasks', async (job) => {
+  // Long-running operation
+  for (let i = 0; i < 100; i++) {
+    await processChunk(i);
+    await job.updateProgress(i);
+    // Heartbeat runs automatically in the background
+  }
+  return { processed: true };
+}, {
+  heartbeatInterval: 10_000,
+  concurrency: 5,
+});
+```
+
+You don't need to manually send heartbeats. The worker handles it automatically for all active jobs. In TCP mode, heartbeats are batched into a single `JobHeartbeatB` command when multiple jobs are active.
+
+## Graceful Shutdown
+
+When stopping a worker, you want to finish current jobs rather than abandoning them:
+
+```typescript
+// Graceful: waits for active jobs to complete
+await worker.close();
+
+// Force: immediately stops (jobs will be reclaimed by stall detector)
+await worker.close(true);
+```
+
+The graceful shutdown:
+1. Stops polling for new jobs
+2. Waits for in-flight jobs to complete
+3. Flushes the ACK batcher (sends pending acks)
+4. Closes the TCP connection
+
+```typescript
+// Handle process signals for clean shutdown
+process.on('SIGTERM', async () => {
+  console.log('Shutting down worker...');
+  await worker.close(); // Graceful
+  process.exit(0);
+});
+```
+
+## Handling Stalled Events
+
+Workers emit events when stalls are detected:
+
+```typescript
+worker.on('stalled', (jobId, prev) => {
+  console.warn(`Job ${jobId} was stalled (previous state: ${prev})`);
+  // Alert your monitoring system
+});
+
+worker.on('failed', (job, err) => {
+  if (err.message.includes('Lock expired')) {
+    console.warn(`Job ${job.id} lost its lock - was reclaimed`);
+  }
+});
+```
+
+## Best Practices
+
+1. **Set `heartbeatInterval` to 1/3 of `lockDuration`** - this gives 2 retries before lock expiry
+2. **Use `maxStalls: 3`** for production - prevents infinite retry loops
+3. **Always use graceful shutdown** - `worker.close()` without `force: true`
+4. **Monitor stall events** - frequent stalls indicate worker health issues
+5. **Set appropriate timeouts** on your processor function - don't let jobs run forever

@@ -1,0 +1,176 @@
+---
+title: "Auto-Batching: 3x Throughput for Free"
+description: "How bunqueue's auto-batching system transparently groups concurrent add() calls into bulk operations, delivering 3x throughput with zero code changes."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/benchmarks.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-08"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "auto batching, job queue throughput, batch operations, tcp performance optimization, msgpack protocol, bulk push queue, queue performance tuning"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+When you call `queue.add()` multiple times concurrently in TCP mode, bunqueue doesn't send each as a separate network round-trip. It automatically **batches** them into a single `PUSHB` (push bulk) command. The result: up to 3x throughput with zero code changes.
+
+## The Problem: Network Round-Trips
+
+In TCP mode, each `queue.add()` requires a round-trip to the server:
+
+```
+add('a') -> TCP send -> server process -> TCP response -> done
+add('b') -> TCP send -> server process -> TCP response -> done
+add('c') -> TCP send -> server process -> TCP response -> done
+// 3 round-trips = 3x the latency
+```
+
+If you're adding many jobs concurrently (e.g., from a web endpoint handling multiple requests), each round-trip adds latency.
+
+## The Solution: Transparent Batching
+
+bunqueue's `AddBatcher` detects concurrent `add()` calls and groups them:
+
+```
+add('a') ─┐
+add('b') ─┤── single PUSHB command ── server processes all 3 ── response
+add('c') ─┘
+// 1 round-trip = 1/3 the latency
+```
+
+This happens completely transparently. Your code doesn't change at all.
+
+## How It Works
+
+The batcher uses a clever two-phase strategy:
+
+**Phase 1: No flush in-flight**
+When no flush is currently happening, the first `add()` triggers an **immediate flush**. This means sequential `await queue.add()` calls have zero overhead - each goes out immediately.
+
+**Phase 2: Flush in-flight**
+If a flush is already happening (another `add()` is being sent), new items are **buffered**. They're flushed as soon as the current flush completes, or when the buffer reaches `maxSize`, or after `maxDelayMs`.
+
+```typescript
+// Sequential: zero overhead (each add sends immediately)
+await queue.add('a', data1);  // flush immediately
+await queue.add('b', data2);  // flush immediately
+await queue.add('c', data3);  // flush immediately
+// Result: 3 individual PUSH commands (same as without batching)
+
+// Concurrent: auto-batched
+await Promise.all([
+  queue.add('a', data1),  // triggers first flush
+  queue.add('b', data2),  // buffered (flush in-flight)
+  queue.add('c', data3),  // buffered (flush in-flight)
+]);
+// Result: ~2 TCP calls (1st flush + batched 2nd flush)
+```
+
+<Aside type="tip">
+  The key insight is that sequential code pays zero penalty. Auto-batching only activates when there are actually concurrent calls to batch.
+</Aside>
+
+## Configuration
+
+Auto-batching is enabled by default in TCP mode. You can tune it:
+
+```typescript
+const queue = new Queue('jobs', {
+  connection: { host: 'localhost', port: 6789 },
+  autoBatch: {
+    maxSize: 50,       // Flush when 50 items buffered (default)
+    maxDelayMs: 5,     // Max time to wait for more items (default)
+  },
+});
+
+// Disable auto-batching if needed
+const queue2 = new Queue('jobs', {
+  connection: { host: 'localhost', port: 6789 },
+  autoBatch: { enabled: false },
+});
+```
+
+## Performance Numbers
+
+| Pattern | Without Batching | With Auto-Batch | Improvement |
+|---------|-----------------|-----------------|-------------|
+| Sequential `await` | ~10,000 ops/s | ~10,000 ops/s | **Same** |
+| `Promise.all(10)` | ~12,000 ops/s | ~35,000 ops/s | **~3x** |
+| `Promise.all(50)` | ~15,000 ops/s | ~95,000 ops/s | **~6x** |
+| `Promise.all(100)` | ~14,000 ops/s | ~145,000 ops/s | **~10x** |
+
+The more concurrent adds, the bigger the benefit.
+
+## Durable Jobs Bypass the Batcher
+
+Jobs with `durable: true` skip the batcher entirely. They're sent as individual `PUSH` commands with immediate disk confirmation:
+
+```typescript
+// This goes through the batcher (buffered)
+await queue.add('normal', data);
+
+// This bypasses the batcher (direct to disk)
+await queue.add('critical', data, { durable: true });
+```
+
+This ensures that durable jobs get their strong persistence guarantee regardless of batching behavior.
+
+## Overflow Protection
+
+The batcher has built-in protection against memory issues:
+
+```typescript
+// Internal protection (not configurable)
+const MAX_PENDING = 10_000;
+
+// If buffer exceeds 10,000 items:
+// 1. Oldest 10% are dropped
+// 2. Their promises are rejected with "Add buffer overflow"
+// 3. Remaining items continue normally
+```
+
+This prevents unbounded memory growth if the server is slow or unreachable.
+
+## ACK Batching Too
+
+The same batching concept applies to acknowledgments. Workers batch `ACK` commands for completed jobs:
+
+```typescript
+// Worker processes 10 jobs concurrently
+const worker = new Worker('tasks', processor, {
+  concurrency: 10,
+  // ACK batcher runs internally
+});
+
+// When jobs complete nearly simultaneously:
+// Instead of 10 individual ACK commands,
+// the ACK batcher sends a single ACKB command
+```
+
+## Real-World Impact
+
+In a typical web application handling API requests:
+
+```typescript
+// Express/Hono handler - multiple requests arrive concurrently
+app.post('/orders', async (c) => {
+  const order = await c.req.json();
+
+  // These adds from concurrent requests get auto-batched
+  await queue.add('process-order', order);
+
+  return c.json({ status: 'queued' });
+});
+```
+
+Under load (100 concurrent requests), instead of 100 individual TCP round-trips, the batcher groups them into ~5-10 bulk commands. The API response time drops proportionally.

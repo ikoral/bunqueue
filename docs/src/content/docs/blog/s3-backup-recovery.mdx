@@ -1,0 +1,208 @@
+---
+title: "S3 Backup and Disaster Recovery"
+description: "Set up automated S3 backups for your bunqueue data. Backup scheduling, retention policies, and step-by-step disaster recovery procedures."
+head:
+  - tag: meta
+    attrs:
+      property: og:image
+      content: https://bunqueue.dev/og/server-mode.png
+  - tag: meta
+    attrs:
+      property: og:type
+      content: article
+  - tag: meta
+    attrs:
+      property: article:published_time
+      content: "2026-02-11"
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "s3 backup sqlite, job queue backup, disaster recovery queue, cloudflare r2 backup, automated backup bun, sqlite backup s3, queue data recovery"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+bunqueue stores everything in a single SQLite file. This makes backups simple - but "simple" doesn't mean "optional." Here's how to set up automated S3 backups and recover from disasters.
+
+## Why Backup?
+
+SQLite is crash-safe (WAL mode + fsync), but it can't protect against:
+
+- **Disk failure** - hardware dies, data is gone
+- **Accidental deletion** - `rm -rf` happens
+- **Corruption** - filesystem bugs, power loss during write
+- **Migration errors** - bad deploy wipes the data directory
+
+S3 backup gives you point-in-time recovery with minimal effort.
+
+## Enabling S3 Backup
+
+Configure via environment variables:
+
+```bash
+# Required
+S3_BACKUP_ENABLED=1
+S3_BUCKET=my-bunqueue-backups
+S3_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+S3_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+S3_REGION=us-east-1
+
+# Optional
+S3_ENDPOINT=                      # Custom endpoint (MinIO, R2, etc.)
+S3_BACKUP_INTERVAL=21600000       # Every 6 hours (default)
+S3_BACKUP_RETENTION=7             # Keep 7 days of backups
+```
+
+Or pass them when starting the server:
+
+```bash
+S3_BACKUP_ENABLED=1 \
+S3_BUCKET=my-backups \
+S3_REGION=us-east-1 \
+bunqueue start --data-path ./data/queue.db
+```
+
+## Compatible Storage Providers
+
+Any S3-compatible storage works:
+
+| Provider | S3_ENDPOINT | Notes |
+|----------|-------------|-------|
+| AWS S3 | *(empty)* | Default |
+| Cloudflare R2 | `https://<account>.r2.cloudflarestorage.com` | No egress fees |
+| MinIO | `http://minio:9000` | Self-hosted |
+| DigitalOcean Spaces | `https://<region>.digitaloceanspaces.com` | Simple setup |
+| Backblaze B2 | `https://s3.<region>.backblazeb2.com` | Cheapest storage |
+
+```bash
+# Cloudflare R2 example
+S3_BACKUP_ENABLED=1
+S3_BUCKET=bunqueue-backups
+S3_ENDPOINT=https://abc123.r2.cloudflarestorage.com
+S3_ACCESS_KEY_ID=your-r2-key
+S3_SECRET_ACCESS_KEY=your-r2-secret
+S3_REGION=auto
+```
+
+## Backup Process
+
+The backup runs on a timer (default: every 6 hours):
+
+<Steps>
+
+1. **Checkpoint WAL** - forces all pending writes to the main database file
+2. **Create consistent snapshot** - SQLite's backup API ensures a point-in-time consistent copy
+3. **Compress** - the backup is compressed before upload
+4. **Upload to S3** - stored with a timestamp-based key
+5. **Cleanup old backups** - removes backups older than retention period
+
+</Steps>
+
+<Aside type="note">
+  The backup process is non-blocking. It creates a snapshot without stopping the queue, so jobs continue processing during backup.
+</Aside>
+
+## Backup File Naming
+
+Backups are stored with this key pattern:
+
+```
+bunqueue-backups/
+  backup-2024-01-15T00-00-00.db.gz
+  backup-2024-01-15T06-00-00.db.gz
+  backup-2024-01-15T12-00-00.db.gz
+  backup-2024-01-15T18-00-00.db.gz
+```
+
+## Disaster Recovery
+
+To restore from a backup:
+
+<Steps>
+
+1. **Stop bunqueue**
+
+   ```bash
+   systemctl stop bunqueue
+   # or: docker stop bunqueue
+   ```
+
+2. **Download the latest backup**
+
+   ```bash
+   aws s3 cp s3://my-bunqueue-backups/backup-2024-01-15T18-00-00.db.gz ./
+   gunzip backup-2024-01-15T18-00-00.db.gz
+   ```
+
+3. **Replace the database file**
+
+   ```bash
+   # Backup the current (possibly corrupted) file
+   mv /var/lib/bunqueue/queue.db /var/lib/bunqueue/queue.db.corrupted
+
+   # Restore from backup
+   mv backup-2024-01-15T18-00-00.db /var/lib/bunqueue/queue.db
+   ```
+
+4. **Restart bunqueue**
+
+   ```bash
+   systemctl start bunqueue
+   # or: docker start bunqueue
+   ```
+
+</Steps>
+
+bunqueue will recover the queue state from the restored database, reloading pending jobs, cron schedules, and DLQ entries.
+
+<Aside type="caution">
+  Recovery restores to the backup point-in-time. Jobs added or completed between the backup and the failure are lost. Reduce `S3_BACKUP_INTERVAL` for critical workloads.
+</Aside>
+
+## Backup Monitoring
+
+Monitor backup health in production:
+
+```bash
+# Check backup status via health endpoint
+curl http://localhost:6790/health
+# Response includes last backup time and status
+```
+
+Set up alerts for:
+- **No backup in 2x the interval** - backup process may be failing
+- **Backup size anomalies** - sudden size changes may indicate issues
+- **S3 upload failures** - check credentials and bucket permissions
+
+## Supplementary Strategies
+
+S3 backup covers most scenarios, but consider layering additional protection:
+
+**Filesystem Snapshots**
+```bash
+# LVM snapshot (instant, zero downtime)
+lvcreate -s -n bunqueue-snap -L 1G /dev/vg0/bunqueue
+
+# ZFS snapshot
+zfs snapshot tank/bunqueue@daily
+```
+
+**Cron-based local backup**
+```bash
+# Copy SQLite file every hour (WAL must be checkpointed first)
+0 * * * * sqlite3 /var/lib/bunqueue/queue.db ".backup /backups/queue-$(date +\%H).db"
+```
+
+**Replication to secondary server**
+```bash
+# rsync the database file periodically
+*/30 * * * * rsync -az /var/lib/bunqueue/ backup-server:/bunqueue-replica/
+```
+
+## Best Practices
+
+1. **Enable S3 backup from day one** - don't wait for your first data loss
+2. **Test recovery regularly** - a backup you can't restore from is worthless
+3. **Monitor backup health** - alert on missed backups
+4. **Use retention policies** - keep 7-30 days depending on your needs
+5. **Consider R2 or B2** for cost-effective storage (no egress fees with R2)
