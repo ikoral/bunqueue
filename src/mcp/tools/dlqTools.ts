@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpBackend } from '../adapter';
+import { withErrorHandler } from './withErrorHandler';
 
 export function registerDlqTools(server: McpServer, backend: McpBackend) {
   server.tool(
@@ -15,7 +16,7 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       limit: z.number().optional().describe('Max entries to return (default: 20)'),
     },
-    async ({ queue, limit }) => {
+    withErrorHandler(async ({ queue, limit }) => {
       const jobs = await backend.getDlq(queue, limit ?? 20);
       return {
         content: [
@@ -25,7 +26,7 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -35,14 +36,14 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       jobId: z.string().optional().describe('Specific job ID to retry (omit to retry all)'),
     },
-    async ({ queue, jobId }) => {
+    withErrorHandler(async ({ queue, jobId }) => {
       const retried = await backend.retryDlq(queue, jobId);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ success: true, queue, retried }) },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -51,14 +52,14 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       const purged = await backend.purgeDlq(queue);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ success: true, queue, purged }) },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -71,13 +72,13 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
         .optional()
         .describe('Specific job ID to retry (omit to retry all completed)'),
     },
-    async ({ queue, jobId }) => {
+    withErrorHandler(async ({ queue, jobId }) => {
       const retried = await backend.retryCompleted(queue, jobId);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ success: true, queue, retried }) },
         ],
       };
-    }
+    })
   );
 }

@@ -104,6 +104,23 @@ describe('EmbeddedBackend - Job Operations', () => {
     const result = await backend.updateProgress(pulled!.id, 75, 'Almost done');
     expect(result).toBe(true);
   });
+
+  test('getJobByCustomId returns null for non-existent custom id', async () => {
+    const job = await backend.getJobByCustomId('does-not-exist');
+    expect(job).toBeNull();
+  });
+
+  test('getJobResult returns undefined for job without result', async () => {
+    const added = await backend.addJob('result-q', 'no-result', {});
+    const result = await backend.getJobResult(added.jobId);
+    expect(result).toBeUndefined();
+  });
+
+  test('promoteJob returns false for non-delayed job', async () => {
+    const added = await backend.addJob('promote-q', 'not-delayed', {});
+    const result = await backend.promoteJob(added.jobId);
+    expect(result).toBe(false);
+  });
 });
 
 // ─── Queue Control ─────────────────────────────────────────────────────────
@@ -166,6 +183,44 @@ describe('EmbeddedBackend - Queue Control', () => {
     expect(typeof counts.active).toBe('number');
     expect(typeof counts.completed).toBe('number');
   });
+
+  test('getJobs returns jobs with pagination', async () => {
+    await backend.addJob('getjobs-q', 'j1', {});
+    await backend.addJob('getjobs-q', 'j2', {});
+    await backend.addJob('getjobs-q', 'j3', {});
+
+    const jobs = await backend.getJobs('getjobs-q', { start: 0, end: 2 });
+    expect(Array.isArray(jobs)).toBe(true);
+    expect(jobs.length).toBeLessThanOrEqual(2);
+  });
+
+  test('getJobs with state filter', async () => {
+    await backend.addJob('filter-q', 'j1', {});
+    const jobs = await backend.getJobs('filter-q', { state: 'waiting' });
+    expect(jobs.length).toBeGreaterThan(0);
+    for (const job of jobs) {
+      expect(job.queue).toBe('filter-q');
+    }
+  });
+
+  test('cleanQueue returns number removed', async () => {
+    await backend.addJob('clean-q', 'j1', {});
+    const removed = await backend.cleanQueue('clean-q', 0);
+    expect(typeof removed).toBe('number');
+  });
+
+  test('getCountsPerPriority returns priority breakdown', async () => {
+    await backend.addJob('prio-q', 'j1', { x: 1 }, { priority: 5 });
+    await backend.addJob('prio-q', 'j2', { x: 2 }, { priority: 10 });
+
+    const counts = await backend.getCountsPerPriority('prio-q');
+    expect(typeof counts).toBe('object');
+  });
+
+  test('isPaused returns false for new queue', async () => {
+    const paused = await backend.isPaused('not-paused-q');
+    expect(paused).toBe(false);
+  });
 });
 
 // ─── Rate Limiting ─────────────────────────────────────────────────────────
@@ -208,6 +263,11 @@ describe('EmbeddedBackend - DLQ', () => {
     const result = await backend.purgeDlq('dlq-purge-q');
     expect(result).toBe(0);
   });
+
+  test('retryCompleted returns 0 when no completed jobs', async () => {
+    const result = await backend.retryCompleted('dlq-retry-completed-q');
+    expect(result).toBe(0);
+  });
 });
 
 // ─── Cron Jobs ─────────────────────────────────────────────────────────────
@@ -236,6 +296,25 @@ describe('EmbeddedBackend - Cron', () => {
     expect(Array.isArray(crons)).toBe(true);
     const names = crons.map((c) => c.name);
     expect(names).toContain('list-cron-1');
+  });
+
+  test('getCron returns cron by name', async () => {
+    await backend.addCron({
+      name: 'get-cron-test',
+      queue: 'cron-q',
+      data: {},
+      repeatEvery: 5000,
+    });
+
+    const cron = await backend.getCron('get-cron-test');
+    expect(cron).not.toBeNull();
+    expect(cron!.name).toBe('get-cron-test');
+    expect(cron!.queue).toBe('cron-q');
+  });
+
+  test('getCron returns null for non-existent cron', async () => {
+    const cron = await backend.getCron('does-not-exist');
+    expect(cron).toBeNull();
   });
 
   test('deleteCron removes existing cron', async () => {
@@ -297,6 +376,16 @@ describe('EmbeddedBackend - Stats & Logs', () => {
     expect(logs[1].message).toBe('Warning encountered');
     expect(logs[1].level).toBe('warn');
   });
+
+  test('clearJobLogs removes logs', async () => {
+    const added = await backend.addJob('clear-log-q', 'logged', {});
+    await backend.addJobLog(added.jobId, 'Log 1', 'info');
+    await backend.addJobLog(added.jobId, 'Log 2', 'info');
+
+    await backend.clearJobLogs(added.jobId);
+    const logs = await backend.getJobLogs(added.jobId);
+    expect(logs).toHaveLength(0);
+  });
 });
 
 // ─── Job Consumption (Pull/Ack/Fail) ─────────────────────────────────────
@@ -315,6 +404,22 @@ describe('EmbeddedBackend - Job Consumption', () => {
     expect(job).toBeNull();
   });
 
+  test('pullJobBatch returns multiple jobs', async () => {
+    await backend.addJob('batch-pull-q', 'j1', {});
+    await backend.addJob('batch-pull-q', 'j2', {});
+    await backend.addJob('batch-pull-q', 'j3', {});
+
+    const jobs = await backend.pullJobBatch('batch-pull-q', 2);
+    expect(jobs.length).toBeLessThanOrEqual(2);
+    expect(jobs.length).toBeGreaterThan(0);
+  });
+
+  test('pullJobBatch returns empty array on empty queue', async () => {
+    const jobs = await backend.pullJobBatch('empty-batch-q', 5);
+    expect(Array.isArray(jobs)).toBe(true);
+    expect(jobs).toHaveLength(0);
+  });
+
   test('ackJob completes the job', async () => {
     await backend.addJob('ack-q', 'ack-test', {});
     const job = await backend.pullJob('ack-q');
@@ -326,12 +431,164 @@ describe('EmbeddedBackend - Job Consumption', () => {
     expect(state).toBe('completed');
   });
 
+  test('ackJobBatch completes multiple jobs', async () => {
+    await backend.addJob('ackb-q', 'j1', {});
+    await backend.addJob('ackb-q', 'j2', {});
+    const jobs = await backend.pullJobBatch('ackb-q', 2);
+    expect(jobs.length).toBe(2);
+
+    await backend.ackJobBatch(jobs.map((j) => j.id));
+
+    for (const job of jobs) {
+      const state = await backend.getJobState(job.id);
+      expect(state).toBe('completed');
+    }
+  });
+
   test('failJob marks job as failed', async () => {
     await backend.addJob('fail-q', 'fail-test', {});
     const job = await backend.pullJob('fail-q');
     expect(job).not.toBeNull();
 
     await backend.failJob(job!.id, 'Test error');
+  });
+
+  test('jobHeartbeat returns boolean', async () => {
+    await backend.addJob('hb-q', 'hb-test', {});
+    const job = await backend.pullJob('hb-q');
+    expect(job).not.toBeNull();
+
+    const result = await backend.jobHeartbeat(job!.id);
+    expect(typeof result).toBe('boolean');
+  });
+
+  test('jobHeartbeatBatch returns count', async () => {
+    await backend.addJob('hbb-q', 'j1', {});
+    await backend.addJob('hbb-q', 'j2', {});
+    const jobs = await backend.pullJobBatch('hbb-q', 2);
+
+    const count = await backend.jobHeartbeatBatch(jobs.map((j) => j.id));
+    expect(typeof count).toBe('number');
+  });
+});
+
+// ─── Worker Management ────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - Worker Management', () => {
+  test('registerWorker returns worker info', async () => {
+    const worker = await backend.registerWorker('test-worker', ['q1', 'q2']);
+    expect(worker).toBeDefined();
+    expect(worker.name).toBe('test-worker');
+    expect(worker.queues).toContain('q1');
+    expect(worker.queues).toContain('q2');
+  });
+
+  test('listWorkers includes registered worker', async () => {
+    await backend.registerWorker('listed-worker', ['q1']);
+    const workers = await backend.listWorkers();
+    expect(Array.isArray(workers)).toBe(true);
+    const names = workers.map((w) => w.name);
+    expect(names).toContain('listed-worker');
+  });
+
+  test('workerHeartbeat returns boolean', async () => {
+    const worker = await backend.registerWorker('hb-worker', ['q1']);
+    const result = await backend.workerHeartbeat(worker.id);
+    expect(typeof result).toBe('boolean');
+  });
+
+  test('unregisterWorker removes worker', async () => {
+    const worker = await backend.registerWorker('unreg-worker', ['q1']);
+    const success = await backend.unregisterWorker(worker.id);
+    expect(success).toBe(true);
+
+    const workers = await backend.listWorkers();
+    const ids = workers.map((w) => w.id);
+    expect(ids).not.toContain(worker.id);
+  });
+});
+
+// ─── Webhooks ─────────────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - Webhooks', () => {
+  test('addWebhook returns webhook info', async () => {
+    const webhook = await backend.addWebhook(
+      'https://example.com/hook',
+      ['job.completed'],
+      'webhook-q'
+    );
+    expect(webhook).toBeDefined();
+    expect(webhook.url).toBe('https://example.com/hook');
+    expect(webhook.events).toContain('job.completed');
+    expect(webhook.enabled).toBe(true);
+  });
+
+  test('listWebhooks returns registered webhooks', async () => {
+    await backend.addWebhook('https://example.com/hook2', ['job.failed']);
+    const webhooks = await backend.listWebhooks();
+    expect(Array.isArray(webhooks)).toBe(true);
+    expect(webhooks.length).toBeGreaterThan(0);
+  });
+
+  test('setWebhookEnabled toggles webhook', async () => {
+    const webhook = await backend.addWebhook('https://example.com/toggle', ['job.completed']);
+    const result = await backend.setWebhookEnabled(webhook.id, false);
+    expect(result).toBe(true);
+  });
+
+  test('removeWebhook removes webhook', async () => {
+    const webhook = await backend.addWebhook('https://example.com/remove', ['job.completed']);
+    const success = await backend.removeWebhook(webhook.id);
+    expect(success).toBe(true);
+  });
+});
+
+// ─── Monitoring ───────────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - Monitoring', () => {
+  test('getPerQueueStats returns object', async () => {
+    const stats = await backend.getPerQueueStats();
+    expect(typeof stats).toBe('object');
+  });
+
+  test('getMemoryStats returns object', async () => {
+    const stats = await backend.getMemoryStats();
+    expect(typeof stats).toBe('object');
+  });
+
+  test('getPrometheusMetrics returns string', async () => {
+    const metrics = await backend.getPrometheusMetrics();
+    expect(typeof metrics).toBe('string');
+  });
+
+  test('getStorageStatus returns health status', async () => {
+    const status = await backend.getStorageStatus();
+    expect(typeof status.diskFull).toBe('boolean');
+  });
+
+  test('compactMemory does not throw', async () => {
+    await backend.compactMemory();
+  });
+});
+
+// ─── Progress ─────────────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - Progress', () => {
+  test('getProgress returns null for non-existent job', async () => {
+    const result = await backend.getProgress('00000000-0000-0000-0000-000000000000');
+    expect(result).toBeNull();
+  });
+
+  test('getProgress returns progress after update', async () => {
+    const added = await backend.addJob('prog-q', 'prog-test', {});
+    const pulled = await backend.pullJob('prog-q');
+    expect(pulled).not.toBeNull();
+
+    await backend.updateProgress(pulled!.id, 50, 'Halfway there');
+    const progress = await backend.getProgress(pulled!.id);
+    expect(progress).not.toBeNull();
+    expect(progress!.progress).toBe(50);
+    expect(progress!.message).toBe('Halfway there');
   });
 });
 
@@ -411,5 +668,21 @@ describe('EmbeddedBackend - End-to-end flows', () => {
 
     const count = await backend.countJobs('e2e-bulk');
     expect(count).toBe(5);
+  });
+
+  test('full job lifecycle: add, pull, heartbeat, progress, ack, verify completed', async () => {
+    const added = await backend.addJob('e2e-lifecycle', 'full-cycle', { step: 'start' });
+    const pulled = await backend.pullJob('e2e-lifecycle');
+    expect(pulled).not.toBeNull();
+
+    await backend.jobHeartbeat(pulled!.id);
+    await backend.updateProgress(pulled!.id, 50, 'In progress');
+    await backend.ackJob(pulled!.id, { step: 'done' });
+
+    const state = await backend.getJobState(pulled!.id);
+    expect(state).toBe('completed');
+
+    const result = await backend.getJobResult(pulled!.id);
+    expect(result).toEqual({ step: 'done' });
   });
 });

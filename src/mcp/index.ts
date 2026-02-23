@@ -58,7 +58,7 @@ import { registerWorkerMgmtTools } from './tools/workerMgmtTools';
 import { registerMonitoringTools } from './tools/monitoringTools';
 
 async function main() {
-  const backend = createBackend();
+  const backend = await createBackend();
   const mode = process.env.BUNQUEUE_MODE ?? 'embedded';
 
   const server = new McpServer({

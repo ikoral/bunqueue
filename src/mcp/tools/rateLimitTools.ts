@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpBackend } from '../adapter';
+import { withErrorHandler } from './withErrorHandler';
 
 export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
   server.tool(
@@ -15,7 +16,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       limit: z.number().min(1).describe('Max jobs per second'),
     },
-    async ({ queue, limit }) => {
+    withErrorHandler(async ({ queue, limit }) => {
       await backend.setRateLimit(queue, limit);
       return {
         content: [
@@ -25,7 +26,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -34,7 +35,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       await backend.clearRateLimit(queue);
       return {
         content: [
@@ -44,7 +45,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -54,7 +55,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       limit: z.number().min(1).describe('Max concurrent jobs'),
     },
-    async ({ queue, limit }) => {
+    withErrorHandler(async ({ queue, limit }) => {
       await backend.setConcurrency(queue, limit);
       return {
         content: [
@@ -64,7 +65,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -73,7 +74,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       await backend.clearConcurrency(queue);
       return {
         content: [
@@ -83,6 +84,6 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 }

@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpBackend } from '../adapter';
+import { withErrorHandler } from './withErrorHandler';
 
 export function registerJobTools(server: McpServer, backend: McpBackend) {
   server.tool(
@@ -20,10 +21,10 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
       delay: z.number().optional().describe('Delay in milliseconds before processing'),
       attempts: z.number().optional().describe('Max retry attempts (default: 3)'),
     },
-    async ({ queue, name, data, priority, delay, attempts }) => {
+    withErrorHandler(async ({ queue, name, data, priority, delay, attempts }) => {
       const result = await backend.addJob(queue, name, data, { priority, delay, attempts });
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -42,10 +43,10 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
         )
         .describe('Array of jobs to add'),
     },
-    async ({ queue, jobs }) => {
+    withErrorHandler(async ({ queue, jobs }) => {
       const result = await backend.addJobsBulk(queue, jobs);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -54,15 +55,16 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
     {
       jobId: z.string().describe('Job ID'),
     },
-    async ({ jobId }) => {
+    withErrorHandler(async ({ jobId }) => {
       const job = await backend.getJob(jobId);
       if (!job) {
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Job not found' }) }],
+          isError: true,
         };
       }
       return { content: [{ type: 'text' as const, text: JSON.stringify(job, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -71,10 +73,10 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
     {
       jobId: z.string().describe('Job ID'),
     },
-    async ({ jobId }) => {
+    withErrorHandler(async ({ jobId }) => {
       const state = await backend.getJobState(jobId);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ jobId, state }) }] };
-    }
+    })
   );
 
   server.tool(
@@ -83,12 +85,12 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
     {
       jobId: z.string().describe('Job ID'),
     },
-    async ({ jobId }) => {
+    withErrorHandler(async ({ jobId }) => {
       const result = await backend.getJobResult(jobId);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ jobId, result }, null, 2) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -97,10 +99,10 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
     {
       jobId: z.string().describe('Job ID to cancel'),
     },
-    async ({ jobId }) => {
+    withErrorHandler(async ({ jobId }) => {
       const success = await backend.cancelJob(jobId);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, jobId }) }] };
-    }
+    })
   );
 
   server.tool(
@@ -109,10 +111,10 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
     {
       jobId: z.string().describe('Job ID to promote'),
     },
-    async ({ jobId }) => {
+    withErrorHandler(async ({ jobId }) => {
       const success = await backend.promoteJob(jobId);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, jobId }) }] };
-    }
+    })
   );
 
   server.tool(
@@ -123,12 +125,12 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
       progress: z.number().min(0).max(100).describe('Progress value (0-100)'),
       message: z.string().optional().describe('Optional progress message'),
     },
-    async ({ jobId, progress, message }) => {
+    withErrorHandler(async ({ jobId, progress, message }) => {
       const success = await backend.updateProgress(jobId, progress, message);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ success, jobId, progress }) }],
       };
-    }
+    })
   );
 
   server.tool(
@@ -137,7 +139,7 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
     {
       parentJobId: z.string().describe('Parent job ID'),
     },
-    async ({ parentJobId }) => {
+    withErrorHandler(async ({ parentJobId }) => {
       const values = await backend.getChildrenValues(parentJobId);
       return {
         content: [
@@ -147,7 +149,7 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -156,15 +158,16 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
     {
       customId: z.string().describe('Custom job ID'),
     },
-    async ({ customId }) => {
+    withErrorHandler(async ({ customId }) => {
       const job = await backend.getJobByCustomId(customId);
       if (!job) {
         return {
           content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Job not found' }) }],
+          isError: true,
         };
       }
       return { content: [{ type: 'text' as const, text: JSON.stringify(job, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -174,9 +177,9 @@ export function registerJobTools(server: McpServer, backend: McpBackend) {
       jobId: z.string().describe('Job ID to wait for'),
       timeoutMs: z.number().min(100).max(30000).describe('Maximum wait time in milliseconds'),
     },
-    async ({ jobId, timeoutMs }) => {
+    withErrorHandler(async ({ jobId, timeoutMs }) => {
       const completed = await backend.waitForJobCompletion(jobId, timeoutMs);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ jobId, completed }) }] };
-    }
+    })
   );
 }

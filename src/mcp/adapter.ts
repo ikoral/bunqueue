@@ -1009,7 +1009,7 @@ export class TcpBackend implements McpBackend {
 }
 
 /** Create backend based on environment configuration */
-export function createBackend(): McpBackend {
+export async function createBackend(): Promise<McpBackend> {
   const mode = process.env.BUNQUEUE_MODE ?? 'embedded';
 
   if (mode === 'tcp') {
@@ -1018,7 +1018,7 @@ export function createBackend(): McpBackend {
       port: process.env.BUNQUEUE_PORT ? parseInt(process.env.BUNQUEUE_PORT, 10) : undefined,
       token: process.env.BUNQUEUE_TOKEN,
     });
-    void backend.connect();
+    await backend.connect();
     return backend;
   }
 

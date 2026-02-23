@@ -7,13 +7,35 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpBackend } from './adapter';
 
+function withResourceErrorHandler(
+  uri: string,
+  fn: () => Promise<{ contents: Array<{ uri: string; text: string; mimeType: string }> }>
+) {
+  return async () => {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        contents: [
+          {
+            uri,
+            text: JSON.stringify({ error: message }),
+            mimeType: 'application/json',
+          },
+        ],
+      };
+    }
+  };
+}
+
 export function registerResources(server: McpServer, backend: McpBackend) {
   // Global stats resource
   server.resource(
     'stats',
     'bunqueue://stats',
     { description: 'Overall queue server statistics', mimeType: 'application/json' },
-    async () => {
+    withResourceErrorHandler('bunqueue://stats', async () => {
       const stats = await backend.getStats();
       return {
         contents: [
@@ -24,7 +46,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   // Queues list resource
@@ -32,7 +54,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
     'queues',
     'bunqueue://queues',
     { description: 'All queues with job counts per state', mimeType: 'application/json' },
-    async () => {
+    withResourceErrorHandler('bunqueue://queues', async () => {
       const queues = await backend.listQueues();
       const details = await Promise.all(
         queues.map(async (q) => {
@@ -49,7 +71,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   // Cron jobs resource
@@ -57,7 +79,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
     'crons',
     'bunqueue://crons',
     { description: 'All scheduled cron jobs', mimeType: 'application/json' },
-    async () => {
+    withResourceErrorHandler('bunqueue://crons', async () => {
       const crons = await backend.listCrons();
       return {
         contents: [
@@ -68,7 +90,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   // Workers resource
@@ -76,7 +98,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
     'workers',
     'bunqueue://workers',
     { description: 'Active workers and their status', mimeType: 'application/json' },
-    async () => {
+    withResourceErrorHandler('bunqueue://workers', async () => {
       const workers = await backend.listWorkers();
       return {
         contents: [
@@ -87,7 +109,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   // Webhooks resource
@@ -95,7 +117,7 @@ export function registerResources(server: McpServer, backend: McpBackend) {
     'webhooks',
     'bunqueue://webhooks',
     { description: 'Registered webhooks', mimeType: 'application/json' },
-    async () => {
+    withResourceErrorHandler('bunqueue://webhooks', async () => {
       const webhooks = await backend.listWebhooks();
       return {
         contents: [
@@ -106,6 +128,6 @@ export function registerResources(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 }

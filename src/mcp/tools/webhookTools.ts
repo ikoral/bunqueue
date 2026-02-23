@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpBackend } from '../adapter';
+import { withErrorHandler } from './withErrorHandler';
 
 export function registerWebhookTools(server: McpServer, backend: McpBackend) {
   server.tool(
@@ -27,14 +28,14 @@ export function registerWebhookTools(server: McpServer, backend: McpBackend) {
         .describe('Events to subscribe to'),
       queue: z.string().optional().describe('Limit to a specific queue (omit for all queues)'),
     },
-    async ({ url, events, queue }) => {
+    withErrorHandler(async ({ url, events, queue }) => {
       const webhook = await backend.addWebhook(url, events, queue);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ success: true, ...webhook }, null, 2) },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -43,23 +44,28 @@ export function registerWebhookTools(server: McpServer, backend: McpBackend) {
     {
       id: z.string().describe('Webhook ID to remove'),
     },
-    async ({ id }) => {
+    withErrorHandler(async ({ id }) => {
       const success = await backend.removeWebhook(id);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, id }) }] };
-    }
+    })
   );
 
-  server.tool('bunqueue_list_webhooks', 'List all registered webhooks.', {}, async () => {
-    const webhooks = await backend.listWebhooks();
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify({ count: webhooks.length, webhooks }, null, 2),
-        },
-      ],
-    };
-  });
+  server.tool(
+    'bunqueue_list_webhooks',
+    'List all registered webhooks.',
+    {},
+    withErrorHandler(async () => {
+      const webhooks = await backend.listWebhooks();
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ count: webhooks.length, webhooks }, null, 2),
+          },
+        ],
+      };
+    })
+  );
 
   server.tool(
     'bunqueue_set_webhook_enabled',
@@ -68,11 +74,11 @@ export function registerWebhookTools(server: McpServer, backend: McpBackend) {
       id: z.string().describe('Webhook ID'),
       enabled: z.boolean().describe('Whether the webhook should be enabled'),
     },
-    async ({ id, enabled }) => {
+    withErrorHandler(async ({ id, enabled }) => {
       const success = await backend.setWebhookEnabled(id, enabled);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ success, id, enabled }) }],
       };
-    }
+    })
   );
 }

@@ -7,12 +7,18 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpBackend } from '../adapter';
+import { withErrorHandler } from './withErrorHandler';
 
 export function registerQueueTools(server: McpServer, backend: McpBackend) {
-  server.tool('bunqueue_list_queues', 'List all queues.', {}, async () => {
-    const queues = await backend.listQueues();
-    return { content: [{ type: 'text' as const, text: JSON.stringify({ queues }) }] };
-  });
+  server.tool(
+    'bunqueue_list_queues',
+    'List all queues.',
+    {},
+    withErrorHandler(async () => {
+      const queues = await backend.listQueues();
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ queues }) }] };
+    })
+  );
 
   server.tool(
     'bunqueue_count_jobs',
@@ -20,10 +26,10 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       const count = await backend.countJobs(queue);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ queue, count }) }] };
-    }
+    })
   );
 
   server.tool(
@@ -38,7 +44,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
       start: z.number().optional().describe('Start index for pagination (default: 0)'),
       end: z.number().optional().describe('End index for pagination (default: 20)'),
     },
-    async ({ queue, state, start, end }) => {
+    withErrorHandler(async ({ queue, state, start, end }) => {
       const jobs = await backend.getJobs(queue, { state, start: start ?? 0, end: end ?? 20 });
       return {
         content: [
@@ -48,7 +54,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -57,10 +63,10 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       const counts = await backend.getJobCounts(queue);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ queue, ...counts }) }] };
-    }
+    })
   );
 
   server.tool(
@@ -69,7 +75,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       await backend.pauseQueue(queue);
       return {
         content: [
@@ -79,7 +85,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -88,7 +94,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       await backend.resumeQueue(queue);
       return {
         content: [
@@ -98,7 +104,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -107,14 +113,14 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       const removed = await backend.drainQueue(queue);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ success: true, queue, removed }) },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -123,7 +129,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       await backend.obliterateQueue(queue);
       return {
         content: [
@@ -133,7 +139,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
           },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -148,14 +154,14 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
         .describe('State to clean (default: both completed and failed)'),
       limit: z.number().optional().describe('Maximum number of jobs to remove'),
     },
-    async ({ queue, graceMs, state, limit }) => {
+    withErrorHandler(async ({ queue, graceMs, state, limit }) => {
       const removed = await backend.cleanQueue(queue, graceMs, state, limit);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ success: true, queue, removed }) },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -164,10 +170,10 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       const paused = await backend.isPaused(queue);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ queue, paused }) }] };
-    }
+    })
   );
 
   server.tool(
@@ -176,13 +182,13 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    async ({ queue }) => {
+    withErrorHandler(async ({ queue }) => {
       const counts = await backend.getCountsPerPriority(queue);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ queue, priorities: counts }, null, 2) },
         ],
       };
-    }
+    })
   );
 }

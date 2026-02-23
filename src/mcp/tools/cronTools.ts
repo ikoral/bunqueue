@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpBackend } from '../adapter';
+import { withErrorHandler } from './withErrorHandler';
 
 export function registerCronTools(server: McpServer, backend: McpBackend) {
   server.tool(
@@ -19,28 +20,28 @@ export function registerCronTools(server: McpServer, backend: McpBackend) {
       repeatEvery: z.number().optional().describe('Alternative: repeat every N milliseconds'),
       priority: z.number().optional().describe('Job priority'),
     },
-    async ({ name, queue, data, schedule, repeatEvery, priority }) => {
+    withErrorHandler(async ({ name, queue, data, schedule, repeatEvery, priority }) => {
       const cron = await backend.addCron({ name, queue, data, schedule, repeatEvery, priority });
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ success: true, ...cron }, null, 2) },
         ],
       };
-    }
+    })
   );
 
   server.tool(
     'bunqueue_list_crons',
     'List all scheduled cron jobs with their next run times.',
     {},
-    async () => {
+    withErrorHandler(async () => {
       const crons = await backend.listCrons();
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify({ count: crons.length, crons }, null, 2) },
         ],
       };
-    }
+    })
   );
 
   server.tool(
@@ -49,17 +50,18 @@ export function registerCronTools(server: McpServer, backend: McpBackend) {
     {
       name: z.string().describe('Cron job name'),
     },
-    async ({ name }) => {
+    withErrorHandler(async ({ name }) => {
       const cron = await backend.getCron(name);
       if (!cron) {
         return {
           content: [
             { type: 'text' as const, text: JSON.stringify({ error: 'Cron not found', name }) },
           ],
+          isError: true,
         };
       }
       return { content: [{ type: 'text' as const, text: JSON.stringify(cron, null, 2) }] };
-    }
+    })
   );
 
   server.tool(
@@ -68,9 +70,9 @@ export function registerCronTools(server: McpServer, backend: McpBackend) {
     {
       name: z.string().describe('Cron job name to delete'),
     },
-    async ({ name }) => {
+    withErrorHandler(async ({ name }) => {
       const success = await backend.deleteCron(name);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, name }) }] };
-    }
+    })
   );
 }
