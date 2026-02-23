@@ -31,6 +31,7 @@ export interface ContextDependencies {
   processingLocks: RWLock[];
   jobIndex: Map<JobId, JobLocation>;
   completedJobs: BoundedSet<JobId>;
+  completedJobsData: BoundedMap<JobId, Job>;
   jobResults: BoundedMap<JobId, unknown>;
   customIdMap: LRUMap<string, JobId>;
   jobLogs: LRUMap<JobId, JobLogEntry[]>;
@@ -164,6 +165,7 @@ export class ContextFactory {
       processingShards: this.deps.processingShards,
       processingLocks: this.deps.processingLocks,
       completedJobs: this.deps.completedJobs,
+      completedJobsData: this.deps.completedJobsData,
       jobResults: this.deps.jobResults,
       jobIndex: this.deps.jobIndex,
       customIdMap: this.deps.customIdMap,
@@ -200,6 +202,7 @@ export class ContextFactory {
       processingLocks: this.deps.processingLocks,
       jobIndex: this.deps.jobIndex,
       completedJobs: this.deps.completedJobs,
+      completedJobsData: this.deps.completedJobsData,
       jobResults: this.deps.jobResults,
       customIdMap: this.deps.customIdMap,
     };

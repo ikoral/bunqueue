@@ -155,6 +155,7 @@ export async function releaseResources(
 export interface FinalizeContext {
   storage: SqliteStorage | null;
   completedJobs: SetLike<JobId>;
+  completedJobsData: MapLike<JobId, Job>;
   jobResults: MapLike<JobId, unknown>;
   jobIndex: Map<JobId, JobLocation>;
   customIdMap?: MapLike<string, JobId>;
@@ -212,8 +213,9 @@ export function finalizeBatchAck<T>(
         ctx.jobResults.set(jobId, result);
         if (hasStorage) storage.storeResult(jobId, result);
       }
-      // 2. Update job index
+      // 2. Update job index and store job data for completed listing
       ctx.jobIndex.set(jobId, completedLocation);
+      ctx.completedJobsData.set(jobId, job);
       if (hasStorage) storage.markCompleted(jobId, now);
       // 3. Mark as completed LAST - this is the signal other threads wait for
       ctx.completedJobs.add(jobId);

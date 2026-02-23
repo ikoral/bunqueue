@@ -100,6 +100,7 @@ function createFinalizeContext(overrides?: Partial<FinalizeContext>): FinalizeCo
   return {
     storage: null,
     completedJobs: new Set<JobId>() as any,
+    completedJobsData: new Map<JobId, Job>() as any,
     jobResults: new Map<JobId, unknown>() as any,
     jobIndex: new Map<JobId, JobLocation>(),
     totalCompleted: { value: 0n },

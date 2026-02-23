@@ -32,6 +32,7 @@ export interface AckContext {
   processingShards: Map<JobId, Job>[];
   processingLocks: RWLock[];
   completedJobs: SetLike<JobId>;
+  completedJobsData: MapLike<JobId, Job>;
   jobResults: MapLike<JobId, unknown>;
   jobIndex: Map<JobId, JobLocation>;
   customIdMap?: MapLike<string, JobId>;
@@ -84,6 +85,7 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
 
   if (!job.removeOnComplete) {
     ctx.completedJobs.add(jobId);
+    ctx.completedJobsData.set(jobId, job);
     if (result !== undefined) {
       ctx.jobResults.set(jobId, result);
       ctx.storage?.storeResult(jobId, result);

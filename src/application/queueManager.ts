@@ -54,6 +54,7 @@ export class QueueManager {
   // Global indexes (bounded with LRU eviction)
   private readonly jobIndex = new Map<JobId, JobLocation>();
   private readonly completedJobs!: BoundedSet<JobId>;
+  private readonly completedJobsData!: BoundedMap<JobId, Job>;
   private readonly jobResults!: BoundedMap<JobId, unknown>;
   private readonly customIdMap!: LRUMap<string, JobId>;
   private readonly jobLogs!: LRUMap<JobId, JobLogEntry[]>;
@@ -106,8 +107,10 @@ export class QueueManager {
     this.storage = config.dataPath ? new SqliteStorage({ path: config.dataPath }) : null;
 
     // Initialize bounded collections
+    this.completedJobsData = new BoundedMap<JobId, Job>(this.config.maxCompletedJobs);
     this.completedJobs = new BoundedSet<JobId>(this.config.maxCompletedJobs, (jobId) => {
       this.jobIndex.delete(jobId);
+      this.completedJobsData.delete(jobId);
     });
     this.jobResults = new BoundedMap<JobId, unknown>(this.config.maxJobResults);
     this.customIdMap = new LRUMap<string, JobId>(this.config.maxCustomIds);
@@ -168,6 +171,7 @@ export class QueueManager {
       processingLocks: this.processingLocks,
       jobIndex: this.jobIndex,
       completedJobs: this.completedJobs,
+      completedJobsData: this.completedJobsData,
       jobResults: this.jobResults,
       customIdMap: this.customIdMap,
       jobLogs: this.jobLogs,
@@ -797,6 +801,7 @@ export class QueueManager {
     // Clear in-memory collections
     this.jobIndex.clear();
     this.completedJobs.clear();
+    this.completedJobsData.clear();
     this.jobResults.clear();
     this.jobLogs.clear();
     this.customIdMap.clear();

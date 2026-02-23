@@ -20,6 +20,7 @@ export interface QueryContext {
   processingLocks: RWLock[];
   jobIndex: Map<JobId, JobLocation>;
   completedJobs: SetLike<JobId>;
+  completedJobsData: MapLike<JobId, Job>;
   jobResults: MapLike<JobId, unknown>;
   customIdMap: MapLike<string, JobId>;
 }
@@ -119,6 +120,20 @@ export async function getJobState(jobId: JobId, ctx: QueryContext): Promise<JobS
   }
 }
 
+/** Collect completed jobs for a queue from index + storage */
+function collectCompletedJobs(queue: string, ctx: GetJobsContext): Job[] {
+  const jobs: Job[] = [];
+  for (const [jobId, location] of ctx.jobIndex) {
+    if (location.type === 'completed') {
+      const job = ctx.storage?.getJob(jobId) ?? ctx.completedJobsData?.get(jobId) ?? null;
+      if (job?.queue === queue) {
+        jobs.push(job);
+      }
+    }
+  }
+  return jobs;
+}
+
 /** Get jobs from queue with filters */
 export function getJobs(
   queue: string,
@@ -161,6 +176,9 @@ export function getJobs(
   }
   if (!state || state === 'failed') {
     jobs.push(...shard.getDlq(queue));
+  }
+  if (!state || state === 'completed') {
+    jobs.push(...collectCompletedJobs(queue, ctx));
   }
 
   jobs.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));

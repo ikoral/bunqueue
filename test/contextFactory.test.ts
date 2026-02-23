@@ -51,6 +51,7 @@ function createTestDependencies(overrides?: Partial<ContextDependencies>): Conte
     processingLocks,
     jobIndex: new Map<JobId, JobLocation>(),
     completedJobs: new BoundedSet<JobId>(DEFAULT_CONFIG.maxCompletedJobs),
+    completedJobsData: new BoundedMap<JobId, Job>(DEFAULT_CONFIG.maxCompletedJobs),
     jobResults: new BoundedMap<JobId, unknown>(DEFAULT_CONFIG.maxJobResults),
     customIdMap: new LRUMap<string, JobId>(DEFAULT_CONFIG.maxCustomIds),
     jobLogs: new LRUMap<JobId, JobLogEntry[]>(DEFAULT_CONFIG.maxJobLogs),
