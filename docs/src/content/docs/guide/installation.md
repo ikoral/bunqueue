@@ -77,4 +77,5 @@ import type {
 :::tip[Next Steps]
 - [Quick Start Tutorial](/guide/quickstart/) - Build your first queue
 - [Introduction](/guide/introduction/) - Learn about bunqueue features
+- [MCP Server](/guide/mcp/) - Connect AI agents to manage queues via natural language
 :::

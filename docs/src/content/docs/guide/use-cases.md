@@ -1,6 +1,6 @@
 ---
 title: "Production Use Cases & Patterns"
-description: Production-ready bunqueue patterns for Bun apps. Email delivery, report generation, webhooks, image processing, payments, and multi-tenant queues.
+description: Production-ready bunqueue patterns for Bun apps. AI agent workflows, email delivery, report generation, webhooks, image processing, payments, and multi-tenant queues.
 head:
   - tag: meta
     attrs:
@@ -8,7 +8,51 @@ head:
       content: https://bunqueue.dev/og/use-cases.png
 ---
 
-Production-ready patterns for common background job scenarios.
+Production-ready patterns for common background job scenarios — from email delivery to AI agent workflows.
+
+## AI Agent Workflows (MCP)
+
+bunqueue is the first job queue with native MCP support. AI agents can schedule tasks, manage pipelines, and monitor queues via natural language — no glue code needed.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        AI AGENT WORKFLOW                                  │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐               │
+│   │  AI Agent   │────▶│  MCP Server │────▶│   bunqueue   │               │
+│   │  (Claude,   │     │  (66 tools) │     │   Engine     │               │
+│   │   Cursor)   │◀────│             │◀────│              │               │
+│   └─────────────┘     └─────────────┘     └──────┬───────┘               │
+│                                                   │                       │
+│        "Schedule a cleanup job every day at 3AM"  │                       │
+│        "Show me all failed jobs and retry them"   │                       │
+│        "Set rate limit to 50/sec on api-calls"    │                       │
+│                                                   ▼                       │
+│                                           ┌──────────────┐               │
+│                                           │   Workers    │               │
+│                                           │  (process    │               │
+│                                           │   jobs)      │               │
+│                                           └──────────────┘               │
+│                                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+**What AI agents can do:**
+- **Schedule tasks** — cron jobs, delayed execution, recurring workflows
+- **Manage pipelines** — push jobs, monitor progress, retry failures
+- **Consume jobs** — full pull/ack/fail cycle for direct job processing
+- **Monitor** — stats, memory, Prometheus metrics, DLQ, logs
+- **Control flow** — pause/resume queues, set rate limits, manage concurrency
+
+```bash
+# Connect Claude Code to bunqueue
+claude mcp add bunqueue -- bunx bunqueue-mcp
+```
+
+See the [MCP Server guide](/guide/mcp/) for full setup and all 66 tools.
+
+---
 
 ## Architecture Overview
 

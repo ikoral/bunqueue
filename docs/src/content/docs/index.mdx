@@ -1,6 +1,6 @@
 ---
-title: High-Performance Job Queue for Bun
-description: bunqueue is the fastest job queue for Bun with SQLite persistence, dead letter queues, cron scheduling, priority jobs, and S3 backups. No Redis required.
+title: High-Performance Job Queue for Bun & AI Agents
+description: bunqueue is the fastest job queue for Bun with native MCP server for AI agents. SQLite persistence, cron scheduling, priority jobs, DLQ, and S3 backups. No Redis required. Built for agentic workflows.
 template: splash
 head:
   - tag: meta
@@ -8,7 +8,7 @@ head:
       property: 'og:image'
       content: 'https://bunqueue.dev/og-image.png'
 hero:
-  tagline: "The job queue that ships with everything.<br/><strong>No Redis. No infrastructure. Just Bun.</strong>"
+  tagline: "The job queue that ships with everything.<br/><strong>No Redis. No infrastructure. Built for AI agents.</strong>"
   image:
     file: ../../assets/hero.svg
   actions:
@@ -112,6 +112,10 @@ worker.on('failed', (job, error) => {
     <h3>Cron &amp; Scheduling</h3>
     <p>Cron expressions, delayed jobs, repeatable tasks. Schedule anything with timezone support.</p>
   </div>
+  <div class="hp-bento-card hp-bento-wide">
+    <h3>Native MCP Server for AI Agents</h3>
+    <p>66 MCP tools included. AI agents can schedule tasks, manage job pipelines, monitor queues, and control everything via natural language. Works with Claude, Cursor, Windsurf, and any MCP client.</p>
+  </div>
 </div>
 
 <div class="hp-section-header" style="margin-top: 5rem;">
@@ -198,6 +202,10 @@ worker.on('failed', (job, error) => {
   <div class="hp-feature-item">
     <strong>Prometheus</strong>
     <span>Built-in metrics</span>
+  </div>
+  <div class="hp-feature-item">
+    <strong>MCP Server</strong>
+    <span>AI agent control</span>
   </div>
 </div>
 

@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <strong>High-performance job queue for Bun. Zero external dependencies.</strong>
+  <strong>High-performance job queue for Bun. Built for AI agents and automation.<br/>Zero external dependencies. MCP-native.</strong>
 </p>
 
 <p align="center">
@@ -36,11 +36,14 @@
 - **Zero dependencies** — No Redis, no MongoDB
 - **SQLite persistence** — Survives restarts, WAL mode for concurrent access
 - **Up to 286K ops/sec** — [Verified benchmarks](https://bunqueue.dev/guide/benchmarks/)
+- **MCP server included** — AI agents get full control: scheduling, monitoring, DLQ, cron, rate limits
 
 ## When to use bunqueue
 
 **Great for:**
 
+- **AI agents that need a scheduler** — cron jobs, delayed tasks, retries, all via MCP
+- **Agentic workflows** — agents push jobs, workers process, agents monitor results
 - Single-server deployments
 - Prototypes and MVPs
 - Moderate to high workloads (up to 286K ops/sec)
@@ -140,6 +143,46 @@ SQLite handles surprisingly high throughput for single-node deployments:
 
 > Run `bun run bench` to verify on your hardware. [Full benchmark methodology →](https://bunqueue.dev/guide/benchmarks/)
 
+## Built for AI Agents (MCP Server)
+
+bunqueue is the **first job queue with native MCP support**. AI agents get a full-featured scheduler, task queue, and monitoring system — no glue code needed.
+
+**What AI agents can do with bunqueue:**
+
+- **Schedule tasks** — cron jobs, delayed execution, recurring workflows
+- **Manage job pipelines** — push jobs, monitor progress, retry failures
+- **Full pull/ack/fail cycle** — agents can consume and process jobs directly
+- **Monitor everything** — stats, memory, Prometheus metrics, logs, DLQ
+- **Control flow** — pause/resume queues, set rate limits, manage concurrency
+- **66 MCP tools + 5 resources** — complete control over every feature
+
+```bash
+# One command to connect Claude Code
+claude mcp add bunqueue -- bunx bunqueue-mcp
+```
+
+```json
+// Claude Desktop / Cursor / Windsurf — add to MCP config
+{
+  "mcpServers": {
+    "bunqueue": {
+      "command": "bunx",
+      "args": ["bunqueue-mcp"]
+    }
+  }
+}
+```
+
+**Example agent interactions:**
+
+- *"Schedule a cleanup job every day at 3 AM"*
+- *"Add 500 email jobs to the queue with priority 10"*
+- *"Show me all failed jobs and retry them"*
+- *"Set rate limit to 50/sec on the api-calls queue"*
+- *"What's the memory usage and queue throughput?"*
+
+Supports **embedded** (local SQLite) and **TCP** (remote server) modes. [Full MCP documentation →](https://bunqueue.dev/guide/mcp/)
+
 ## Monitoring
 
 ```bash
@@ -158,6 +201,7 @@ docker compose --profile monitoring up -d
 - [Queue API](https://bunqueue.dev/guide/queue/)
 - [Worker API](https://bunqueue.dev/guide/worker/)
 - [Server Mode](https://bunqueue.dev/guide/server/)
+- [MCP Server (AI Agents)](https://bunqueue.dev/guide/mcp/)
 - [Benchmarks](https://bunqueue.dev/guide/benchmarks/)
 - [CLI Reference](https://bunqueue.dev/guide/cli/)
 

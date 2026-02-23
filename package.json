@@ -1,7 +1,7 @@
 {
   "name": "bunqueue",
-  "version": "2.4.8",
-  "description": "High-performance job queue server written in TypeScript. SQLite persistence, cron scheduling, priorities, retries, DLQ, webhooks. Minimal dependencies.",
+  "version": "2.5.0",
+  "description": "High-performance job queue for Bun & AI agents. SQLite persistence, cron scheduling, priorities, retries, DLQ, webhooks, native MCP server. Zero external dependencies.",
   "type": "module",
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
@@ -58,23 +58,25 @@
     "prepublishOnly": "bun run build:lib"
   },
   "dependencies": {
-    "msgpackr": "^1.11.0",
-    "croner": "^9.0.0"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "croner": "^10.0.1",
+    "msgpackr": "^1.11.8",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/bun": "latest",
-    "bullmq": "^5.67.2",
-    "elysia": "^1.4.22",
-    "eslint": "^9.39.2",
+    "@eslint/js": "^10.0.1",
+    "@types/bun": "^1.3.9",
+    "bullmq": "^5.70.1",
+    "elysia": "^1.4.25",
+    "eslint": "^10.0.1",
     "eslint-config-prettier": "^10.1.8",
-    "ioredis": "^5.9.2",
+    "ioredis": "^5.9.3",
     "prettier": "^3.8.1",
-    "typescript": "^5.7.3",
-    "typescript-eslint": "^8.54.0"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
   },
   "peerDependencies": {
-    "bun": ">=1.0.0"
+    "bun": "^1.3.9"
   },
   "keywords": [
     "bun",

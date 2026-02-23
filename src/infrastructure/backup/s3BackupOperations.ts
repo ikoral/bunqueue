@@ -96,7 +96,9 @@ async function verifyDatabaseIntegrity(databasePath: string): Promise<void> {
     if (error instanceof Error && error.message.includes('integrity check failed')) {
       throw error;
     }
-    throw new Error('Database integrity check failed: corrupt or invalid database');
+    throw new Error('Database integrity check failed: corrupt or invalid database', {
+      cause: error,
+    });
   } finally {
     try {
       db?.close();

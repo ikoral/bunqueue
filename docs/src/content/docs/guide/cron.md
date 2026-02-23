@@ -103,8 +103,21 @@ await queue.add('heartbeat', {}, {
 });
 ```
 
+## AI Agent Cron Management (MCP)
+
+AI agents can create, list, and delete cron jobs via natural language using the [MCP Server](/guide/mcp/):
+
+- *"Create a cron job that runs every hour to clean up old sessions"*
+- *"List all scheduled cron jobs"*
+- *"Delete the daily-report cron"*
+
+```bash
+claude mcp add bunqueue -- bunx bunqueue-mcp
+```
+
 :::tip[Related Guides]
 - [Queue API](/guide/queue/) - Job options for cron-created jobs
 - [Server Mode](/guide/server/) - Cron scheduling in server mode
 - [CLI Commands](/guide/cli/) - Manage cron jobs via CLI
+- [MCP Server](/guide/mcp/) - Full AI agent integration with 66 tools
 :::

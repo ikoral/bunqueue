@@ -198,4 +198,5 @@ Without `DATA_PATH`, bunqueue runs in-memory (no persistence).
 - [Code Examples & Recipes](/examples/) - More complete examples
 - [Production Use Cases](/guide/use-cases/) - Real-world patterns
 - [Server Mode](/guide/server/) - Run bunqueue as a standalone server
+- [MCP Server](/guide/mcp/) - Connect AI agents (Claude, Cursor, Windsurf) to manage queues via natural language
 :::

@@ -1,6 +1,6 @@
 ---
 title: bunqueue vs BullMQ Comparison
-description: Compare bunqueue vs BullMQ performance benchmarks. bunqueue is 1.3x faster push, 3.2x faster bulk, 1.7x faster processing with zero Redis dependency
+description: Compare bunqueue vs BullMQ performance benchmarks. bunqueue is 1.3x faster push, 3.2x faster bulk, 1.7x faster processing with zero Redis dependency. Native MCP server for AI agents included
 head:
   - tag: meta
     attrs:
@@ -171,6 +171,7 @@ Both bunqueue and BullMQ use **identical test conditions**: same payload size (1
 | **External Dependencies** | ✅ None | ❌ Redis required |
 | **S3 Backup** | ✅ Built-in | ❌ Manual |
 | **TCP Pipelining** | ✅ Built-in | ✅ Via Redis |
+| **MCP Server (AI Agents)** | ✅ 66 tools built-in | ❌ Not available |
 
 ---
 

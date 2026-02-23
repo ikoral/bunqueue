@@ -1,6 +1,6 @@
 ---
 title: MCP Server for AI Agents
-description: Use bunqueue MCP server with Claude Desktop and Claude Code. Add jobs, monitor queues, configure cron jobs, and debug DLQ using natural language
+description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 66 tools for complete queue management via natural language.
 head:
   - tag: meta
     attrs:
@@ -8,21 +8,23 @@ head:
       content: https://bunqueue.dev/og/integrations.png
 ---
 
-import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside, Badge } from '@astrojs/starlight/components';
 
-bunqueue includes an **MCP (Model Context Protocol)** server that allows AI assistants like Claude to manage your job queues directly through natural language.
+bunqueue includes an **MCP (Model Context Protocol)** server that gives AI assistants **complete control** over your job queues. 66 tools, 5 resources, zero configuration.
 
 ## What is MCP?
 
 MCP is an open protocol that enables AI assistants to interact with external tools and services. With bunqueue's MCP server, you can:
 
-- Add and manage jobs using natural language
-- Monitor queue health and statistics
-- Configure cron jobs and rate limits
+- Add, pull, ack, and fail jobs using natural language
+- Monitor queue health, memory, and Prometheus metrics
+- Configure cron jobs, rate limits, and concurrency
 - Debug failed jobs in the DLQ
+- Manage workers, webhooks, and locks
+- Full pull/ack/fail cycle for job consumption
 
 <Aside type="tip">
-MCP works with Claude Desktop, Claude Code (CLI), and any MCP-compatible client.
+MCP works with Claude Desktop, Claude Code (CLI), Cursor, Windsurf, and any MCP-compatible client.
 </Aside>
 
 ## Installation
@@ -36,8 +38,6 @@ bun add bunqueue
 ## Configuration
 
 ### Claude Desktop
-
-Add bunqueue to your Claude Desktop configuration:
 
 <Tabs>
 <TabItem label="macOS">
@@ -83,13 +83,13 @@ Add bunqueue to your Claude Desktop configuration:
 
 ### Claude Code (CLI)
 
-For Claude Code, add to your settings:
-
 ```bash
 claude mcp add bunqueue -- bunx bunqueue-mcp
 ```
 
-Or manually edit `~/.claude.json`:
+### Cursor / Windsurf
+
+Add to your MCP settings:
 
 ```json
 {
@@ -102,63 +102,165 @@ Or manually edit `~/.claude.json`:
 }
 ```
 
-## Available Tools
+### Remote Server (TCP Mode)
 
-### Job Operations
+Connect to a running bunqueue server instead of embedded SQLite:
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `bunqueue_add_job` | Add a job to a queue | `queue`*, `name`*, `data`*, `priority`, `delay`, `attempts` |
-| `bunqueue_add_jobs_bulk` | Add multiple jobs | `queue`*, `jobs`* (array of `{name, data, priority, delay}`) |
-| `bunqueue_get_job` | Get job by ID | `jobId`* |
-| `bunqueue_cancel_job` | Cancel a job | `jobId`* |
-| `bunqueue_update_progress` | Update progress | `jobId`*, `progress`* (0-100), `message` |
+```json
+{
+  "mcpServers": {
+    "bunqueue": {
+      "command": "bunx",
+      "args": ["bunqueue-mcp"],
+      "env": {
+        "BUNQUEUE_MODE": "tcp",
+        "BUNQUEUE_HOST": "localhost",
+        "BUNQUEUE_PORT": "6789",
+        "BUNQUEUE_TOKEN": "your-auth-token"
+      }
+    }
+  }
+}
+```
 
-### Queue Control
+## Connection Modes
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `bunqueue_pause_queue` | Pause processing | `queue`* |
-| `bunqueue_resume_queue` | Resume processing | `queue`* |
-| `bunqueue_drain_queue` | Remove waiting jobs | `queue`* |
-| `bunqueue_obliterate_queue` | Remove ALL data | `queue`* |
-| `bunqueue_list_queues` | List all queues | - |
-| `bunqueue_count_jobs` | Count jobs | `queue`* |
+|                  | Embedded (default)           | TCP (remote)                     |
+| ---------------- | ---------------------------- | -------------------------------- |
+| **How it works** | Direct SQLite access         | Connects to bunqueue server      |
+| **Setup**        | Zero config                  | Set `BUNQUEUE_MODE=tcp`          |
+| **Best for**     | Local dev, single-machine    | Production, shared queues        |
+| **Data**         | `./data/bunq.db`             | Remote server handles storage    |
 
-### Rate Limiting
+## Available Tools <Badge text="66 tools" variant="success" />
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `bunqueue_set_rate_limit` | Set jobs/second | `queue`*, `limit`* |
-| `bunqueue_set_concurrency` | Set max concurrent | `queue`*, `limit`* |
+### Job Operations (11 tools)
 
-### Dead Letter Queue
+| Tool | Description |
+|------|-------------|
+| `bunqueue_add_job` | Add a job to a queue |
+| `bunqueue_add_jobs_bulk` | Add multiple jobs in one call |
+| `bunqueue_get_job` | Get job details by ID |
+| `bunqueue_get_job_state` | Get current state (waiting/active/completed/failed) |
+| `bunqueue_get_job_result` | Get the result of a completed job |
+| `bunqueue_cancel_job` | Cancel a waiting or delayed job |
+| `bunqueue_promote_job` | Promote delayed job to waiting |
+| `bunqueue_update_progress` | Update job progress (0-100) |
+| `bunqueue_get_children_values` | Get child job results (FlowProducer) |
+| `bunqueue_get_job_by_custom_id` | Look up job by custom ID |
+| `bunqueue_wait_for_job` | Wait for a job to complete |
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `bunqueue_get_dlq` | Get failed jobs | `queue`*, `limit` |
-| `bunqueue_retry_dlq` | Retry from DLQ | `queue`*, `jobId` (optional) |
-| `bunqueue_purge_dlq` | Clear DLQ | `queue`* |
+### Job Management (6 tools)
 
-### Cron Jobs
+| Tool | Description |
+|------|-------------|
+| `bunqueue_update_job_data` | Update job payload data |
+| `bunqueue_change_job_priority` | Change job priority |
+| `bunqueue_move_to_delayed` | Move job to delayed state |
+| `bunqueue_discard_job` | Permanently discard a job |
+| `bunqueue_get_progress` | Get progress value and message |
+| `bunqueue_change_delay` | Change delay of a delayed job |
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `bunqueue_add_cron` | Add recurring job | `name`*, `queue`*, `data`*, `schedule`, `repeatEvery`, `priority` |
-| `bunqueue_list_crons` | List all crons | - |
-| `bunqueue_delete_cron` | Delete cron | `name`* |
+### Job Consumption (8 tools)
 
-### Monitoring
+| Tool | Description |
+|------|-------------|
+| `bunqueue_pull_job` | Pull a job from a queue for processing |
+| `bunqueue_pull_job_batch` | Pull multiple jobs at once |
+| `bunqueue_ack_job` | Acknowledge job completion with result |
+| `bunqueue_ack_job_batch` | Batch acknowledge multiple jobs |
+| `bunqueue_fail_job` | Mark a job as failed |
+| `bunqueue_job_heartbeat` | Send heartbeat for active job |
+| `bunqueue_job_heartbeat_batch` | Batch heartbeat for multiple jobs |
+| `bunqueue_extend_lock` | Extend lock on an active job |
 
-| Tool | Description | Parameters |
-|------|-------------|------------|
-| `bunqueue_get_stats` | Queue statistics | - |
-| `bunqueue_get_job_logs` | Job logs | `jobId`* |
-| `bunqueue_add_job_log` | Add log entry | `jobId`*, `message`*, `level` (info/warn/error) |
+### Queue Control (11 tools)
 
-<Aside>
-Parameters marked with * are required.
-</Aside>
+| Tool | Description |
+|------|-------------|
+| `bunqueue_list_queues` | List all queues |
+| `bunqueue_count_jobs` | Count total jobs in a queue |
+| `bunqueue_get_jobs` | List jobs with state filter and pagination |
+| `bunqueue_get_job_counts` | Job counts per state |
+| `bunqueue_pause_queue` | Pause job processing |
+| `bunqueue_resume_queue` | Resume processing |
+| `bunqueue_drain_queue` | Remove all waiting jobs |
+| `bunqueue_obliterate_queue` | Remove ALL data from a queue |
+| `bunqueue_clean_queue` | Remove old jobs by grace period |
+| `bunqueue_is_paused` | Check if queue is paused |
+| `bunqueue_get_counts_per_priority` | Job counts by priority level |
+
+### Dead Letter Queue (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_get_dlq` | Get failed jobs from DLQ |
+| `bunqueue_retry_dlq` | Retry jobs from DLQ |
+| `bunqueue_purge_dlq` | Clear all DLQ entries |
+| `bunqueue_retry_completed` | Reprocess completed jobs |
+
+### Cron Jobs (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_add_cron` | Add recurring job (cron pattern or interval) |
+| `bunqueue_list_crons` | List all scheduled crons |
+| `bunqueue_get_cron` | Get cron details by name |
+| `bunqueue_delete_cron` | Delete a cron job |
+
+### Rate Limiting & Concurrency (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_set_rate_limit` | Set max jobs per second |
+| `bunqueue_clear_rate_limit` | Remove rate limit |
+| `bunqueue_set_concurrency` | Set max concurrent jobs |
+| `bunqueue_clear_concurrency` | Remove concurrency limit |
+
+### Webhook Management (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_add_webhook` | Add webhook for job events |
+| `bunqueue_remove_webhook` | Remove a webhook |
+| `bunqueue_list_webhooks` | List all webhooks |
+| `bunqueue_set_webhook_enabled` | Enable/disable a webhook |
+
+### Worker Management (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_register_worker` | Register a new worker |
+| `bunqueue_unregister_worker` | Remove a worker |
+| `bunqueue_worker_heartbeat` | Send worker heartbeat |
+
+### Monitoring & Stats (11 tools)
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_get_stats` | Global server statistics |
+| `bunqueue_get_queue_stats` | Per-queue statistics |
+| `bunqueue_list_workers` | List active workers |
+| `bunqueue_get_job_logs` | Get job log entries |
+| `bunqueue_add_job_log` | Add log entry to a job |
+| `bunqueue_get_storage_status` | Disk health status |
+| `bunqueue_get_per_queue_stats` | Detailed per-queue breakdown |
+| `bunqueue_get_memory_stats` | Memory usage stats |
+| `bunqueue_get_prometheus_metrics` | Prometheus exposition format |
+| `bunqueue_clear_job_logs` | Clear logs for a job |
+| `bunqueue_compact_memory` | Force memory compaction |
+
+## MCP Resources <Badge text="5 resources" variant="note" />
+
+Resources provide read-only context that AI assistants can access:
+
+| Resource URI | Description |
+|-------------|-------------|
+| `bunqueue://stats` | Global server statistics |
+| `bunqueue://queues` | All queues with job counts |
+| `bunqueue://crons` | Scheduled cron jobs |
+| `bunqueue://workers` | Active workers |
+| `bunqueue://webhooks` | Registered webhooks |
 
 ## Example Prompts
 
@@ -200,6 +302,10 @@ Parameters marked with * are required.
 "Retry all jobs in the DLQ for the emails queue"
 ```
 
+```
+"Show me memory usage and Prometheus metrics"
+```
+
 ### Cron Jobs
 
 ```
@@ -210,8 +316,24 @@ Parameters marked with * are required.
 "List all scheduled cron jobs"
 ```
 
+### Worker Management
+
 ```
-"Delete the daily-backup cron job"
+"List all active workers and their processing stats"
+```
+
+```
+"Set rate limit to 50 jobs/sec on the api-calls queue"
+```
+
+### Job Consumption
+
+```
+"Pull 5 jobs from the tasks queue and show me their data"
+```
+
+```
+"Mark job abc-123 as completed with result {processed: true}"
 ```
 
 ## Complete Example
@@ -220,32 +342,34 @@ Here's a full workflow using Claude with bunqueue MCP:
 
 **You:** "I need to set up an email queue system"
 
-**Claude:** *Uses bunqueue_add_job to create test job*
+**Claude:** *Creates queue, adds test job via `bunqueue_add_job`*
 
 ```json
 {
-  "jobId": "019c0e14-19ed-7000-9c72-d81ae9d00938",
-  "queue": "emails",
-  "message": "Job added successfully"
+  "jobId": "019c0e14-19ed-7000-9c72-d81ae9d00938"
 }
 ```
 
 **You:** "Add a cron job to send daily digest emails at 9 AM"
 
-**Claude:** *Uses bunqueue_add_cron*
+**Claude:** *Uses `bunqueue_add_cron`*
 
 ```json
 {
-  "success": true,
   "name": "daily-digest",
   "queue": "emails",
+  "schedule": "0 9 * * *",
   "nextRun": "2026-01-31T09:00:00.000Z"
 }
 ```
 
-**You:** "What's the current status of all queues?"
+**You:** "Set rate limit to 10 emails per second"
 
-**Claude:** *Uses bunqueue_get_stats*
+**Claude:** *Uses `bunqueue_set_rate_limit`*
+
+**You:** "What's the current status?"
+
+**Claude:** *Uses `bunqueue_get_stats` + `bunqueue_get_per_queue_stats`*
 
 ```json
 {
@@ -253,7 +377,8 @@ Here's a full workflow using Claude with bunqueue MCP:
   "active": 2,
   "completed": 143,
   "dlq": 1,
-  "cronJobs": 1
+  "cronJobs": 1,
+  "uptime": 3600
 }
 ```
 
@@ -284,7 +409,7 @@ Configure with environment variable:
 ## Processing Jobs
 
 <Aside type="caution">
-The MCP server only **manages** queues. You need a separate Worker to **process** jobs.
+The MCP server **manages** queues. You need a separate Worker to **process** jobs.
 </Aside>
 
 Run a worker alongside the MCP server:
@@ -310,13 +435,15 @@ console.log('Worker started, processing emails queue...');
 bun run worker.ts
 ```
 
-## Best Practices
+## Environment Variables
 
-1. **Descriptive job names** - Use names like `send-welcome-email` not `job1`
-2. **Set priorities** - Critical jobs should have higher priority
-3. **Use delays** - For rate-limited APIs, add delays between jobs
-4. **Monitor DLQ** - Check failed jobs regularly
-5. **Cron for recurring** - Don't manually add repeated jobs
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BUNQUEUE_MODE` | `embedded` | Connection mode: `embedded` or `tcp` |
+| `BUNQUEUE_HOST` | `localhost` | TCP server host |
+| `BUNQUEUE_PORT` | `6789` | TCP server port |
+| `BUNQUEUE_TOKEN` | - | Authentication token for TCP |
+| `DATA_PATH` | `./data/bunq.db` | SQLite database path (embedded mode) |
 
 ## Troubleshooting
 
@@ -330,7 +457,7 @@ bunx bunqueue-mcp --help
 which bun
 
 # Test manually
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | bunx bunqueue-mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | bunx bunqueue-mcp
 ```
 
 ### Jobs stuck in waiting
@@ -338,7 +465,6 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | bunx bunqueue-mcp
 Make sure a Worker is running:
 
 ```bash
-# Check if worker is processing
 bun run worker.ts
 ```
 
@@ -355,4 +481,5 @@ ls -la ./data/
 
 1. Restart Claude Desktop/Code
 2. Check config file syntax (valid JSON)
-3. Verify path to bunqueue-mcp is correct
+3. Verify path to `bunqueue-mcp` is correct
+4. Run `bunx bunqueue-mcp` manually to check for errors

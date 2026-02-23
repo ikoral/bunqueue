@@ -1,6 +1,6 @@
 ---
 title: Introduction to bunqueue Job Queue
-description: Learn what bunqueue is, its core features, and why it's the fastest SQLite job queue for Bun. Zero Redis dependency
+description: Learn what bunqueue is, its core features, and why it's the fastest SQLite job queue for Bun. Built for AI agents with native MCP server. Zero Redis dependency
 head:
   - tag: meta
     attrs:
@@ -9,7 +9,7 @@ head:
 ---
 
 
-**bunqueue** is a high-performance job queue written in TypeScript, designed specifically for the [Bun](https://bun.sh) runtime.
+**bunqueue** is a high-performance job queue written in TypeScript, designed specifically for the [Bun](https://bun.sh) runtime. Built for AI agents and agentic workflows with a native MCP server.
 
 ## Why bunqueue?
 
@@ -17,6 +17,7 @@ head:
 - **Zero Redis** - No external dependencies. SQLite provides persistence with WAL mode for concurrent access
 - **BullMQ-Compatible API** - Familiar patterns if you're migrating from BullMQ
 - **Production Ready** - Stall detection, DLQ, rate limiting, webhooks, and S3 backups
+- **MCP Server for AI Agents** - 66 MCP tools included. AI agents can schedule tasks, manage pipelines, and monitor queues via natural language
 
 ## Architecture
 
@@ -107,8 +108,10 @@ Best for:
 | S3 backups | ✅ | ❌ |
 | Sandboxed workers | ✅ | ✅ |
 | Durable writes | ✅ | ✅ (Redis AOF) |
+| MCP server (AI agents) | ✅ (66 tools) | ❌ |
 
 ## Next Steps
 
 - [Installation](/guide/installation/) - Get bunqueue installed
 - [Quick Start](/guide/quickstart/) - Create your first queue
+- [MCP Server](/guide/mcp/) - Connect AI agents to your queues
