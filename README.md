@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://bunqueue.dev/">Documentation</a> &middot;
   <a href="https://bunqueue.dev/guide/benchmarks/">Benchmarks</a> &middot;
-  <a href="https://github.com/egeominotti/bunqueue">GitHub</a>
+  <a href="https://www.npmjs.com/package/bunqueue">npm</a>
 </p>
 
 ---
