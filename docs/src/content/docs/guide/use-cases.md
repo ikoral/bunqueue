@@ -1,18 +1,34 @@
 ---
-title: "Production Use Cases & Patterns"
-description: Production-ready bunqueue patterns for Bun apps. AI agent workflows, email delivery, report generation, webhooks, image processing, payments, and multi-tenant queues.
+title: "Production Use Cases & Background Job Patterns for Bun"
+description: Production-ready bunqueue patterns for Bun apps. AI agent workflows with MCP, email delivery, report generation, webhook delivery, image processing, payment processing, multi-tenant queues, and video transcoding.
 head:
   - tag: meta
     attrs:
       property: og:image
       content: https://bunqueue.dev/og/use-cases.png
+  - tag: meta
+    attrs:
+      property: og:title
+      content: "bunqueue Use Cases — Production Job Queue Patterns for Bun"
+  - tag: meta
+    attrs:
+      property: og:description
+      content: "Battle-tested patterns for background jobs in Bun. Email delivery, webhooks, payments, image processing, AI agent workflows, cron scheduling, and more."
+  - tag: meta
+    attrs:
+      name: keywords
+      content: "background jobs, job queue, Bun, TypeScript, email queue, webhook delivery, payment processing, image processing, video transcoding, cron jobs, AI agent, MCP, multi-tenant, rate limiting, dead letter queue, retry pattern"
 ---
 
-Production-ready patterns for common background job scenarios — from email delivery to AI agent workflows.
+Every non-trivial application needs background processing. API requests should return immediately while expensive operations — sending emails, processing images, charging payments, calling external APIs — happen asynchronously in the background.
+
+bunqueue provides the infrastructure for all of these patterns: persistent queues backed by SQLite, automatic retries with exponential backoff, dead letter queues for failed jobs, progress tracking, cron scheduling, rate limiting, and real-time monitoring. Each pattern below is production-ready and uses bunqueue's embedded mode (zero config, no external services).
 
 ## AI Agent Workflows (MCP)
 
-bunqueue is the first job queue with native MCP support. AI agents can schedule tasks, manage pipelines, and monitor queues via natural language — no glue code needed.
+AI agents are increasingly used to orchestrate complex automation tasks, but they lack the ability to schedule background work, manage retries, or run recurring operations. bunqueue solves this by exposing its entire queue engine as 73 MCP tools that any AI agent can call directly.
+
+When an agent connects to bunqueue via MCP (Model Context Protocol), it gains the ability to add jobs to queues, create cron schedules, set rate limits, monitor queue health, manage dead letter queues, and — with HTTP handlers — auto-process jobs by making HTTP requests without any external worker process.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -21,36 +37,38 @@ bunqueue is the first job queue with native MCP support. AI agents can schedule 
 │                                                                           │
 │   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐               │
 │   │  AI Agent   │────▶│  MCP Server │────▶│   bunqueue   │               │
-│   │  (Claude,   │     │  (70 tools) │     │   Engine     │               │
+│   │  (Claude,   │     │ (73 tools)  │     │   Engine     │               │
 │   │   Cursor)   │◀────│             │◀────│              │               │
 │   └─────────────┘     └─────────────┘     └──────┬───────┘               │
 │                                                   │                       │
 │        "Schedule a cleanup job every day at 3AM"  │                       │
+│        "Register an HTTP handler on the meteo     │                       │
+│         queue to poll the weather API"             │                       │
 │        "Show me all failed jobs and retry them"   │                       │
-│        "Set rate limit to 50/sec on api-calls"    │                       │
 │                                                   ▼                       │
-│                                           ┌──────────────┐               │
-│                                           │   Workers    │               │
-│                                           │  (process    │               │
-│                                           │   jobs)      │               │
-│                                           └──────────────┘               │
+│                                     ┌──────────────────────┐             │
+│                                     │  Workers / HTTP      │             │
+│                                     │  Handlers (process   │             │
+│                                     │  jobs automatically) │             │
+│                                     └──────────────────────┘             │
 │                                                                           │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**What AI agents can do:**
-- **Schedule tasks** — cron jobs, delayed execution, recurring workflows
-- **Manage pipelines** — push jobs, monitor progress, retry failures
-- **Consume jobs** — full pull/ack/fail cycle for direct job processing
-- **Monitor** — stats, memory, Prometheus metrics, DLQ, logs
-- **Control flow** — pause/resume queues, set rate limits, manage concurrency
+**What AI agents can do with bunqueue:**
+- **Schedule tasks** — create cron jobs, delayed execution, recurring workflows with a single tool call
+- **Manage pipelines** — push jobs, monitor progress, retry failures, create sequential or parallel workflows
+- **Auto-process jobs via HTTP** — register an HTTP handler on a queue, and bunqueue calls the endpoint for every job. No external worker needed
+- **Consume jobs directly** — full pull/ack/fail cycle for inline job processing within the agent session
+- **Monitor everything** — server stats, memory, Prometheus metrics, DLQ entries, job logs, per-queue breakdowns
+- **Control flow** — pause/resume queues, set rate limits per second, manage concurrency limits
 
 ```bash
-# Connect Claude Code to bunqueue
+# One command to connect any MCP-compatible AI client
 claude mcp add bunqueue -- bunx bunqueue-mcp
 ```
 
-See the [MCP Server guide](/guide/mcp/) for full setup and all 70 tools.
+The MCP server runs as a subprocess, communicates via stdio using JSON-RPC, and supports both embedded mode (local SQLite) and TCP mode (connect to a remote bunqueue server). See the [MCP Server guide](/guide/mcp/) for full setup, all 73 tools, HTTP handler configuration, and real-world examples.
 
 ---
 
@@ -115,6 +133,10 @@ See the [MCP Server guide](/guide/mcp/) for full setup and all 70 tools.
 
 ## Email Delivery System
 
+Email is one of the most common background job use cases. Sending email synchronously in an API request is slow (SMTP connections, template rendering, attachment handling) and unreliable (provider outages, rate limits, network errors). A queue decouples the send operation from the request, ensuring emails are delivered reliably even if the provider is temporarily unavailable.
+
+bunqueue handles this with automatic retries and exponential backoff. If SendGrid or your SMTP server returns a 5xx error, the job is retried up to N times with increasing delays. After all attempts are exhausted, the job moves to the dead letter queue (DLQ) where it can be inspected, retried manually, or auto-retried on a schedule. Progress tracking lets you monitor each step of the email pipeline in real time.
+
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   Request   │────▶│   Queue     │────▶│   Worker    │────▶│   SMTP/     │
@@ -129,8 +151,6 @@ See the [MCP Server guide](/guide/mcp/) for full setup and all 70 tools.
              │ (logged)  │              │ (backoff) │              │ (alert)   │
              └───────────┘              └───────────┘              └───────────┘
 ```
-
-Reliable email sending with retries, templates, and delivery tracking.
 
 ```typescript
 import { Queue, Worker, shutdownManager } from 'bunqueue/client';
@@ -215,7 +235,9 @@ await emailQueue.addBulk(
                                           └────────────┘
 ```
 
-Long-running report generation with progress tracking and file storage.
+Reports that query large datasets, transform data, generate files, and upload to storage can take minutes to complete. Running this synchronously in an API request would timeout. Instead, the user triggers the report and receives a notification when it's ready.
+
+bunqueue's progress tracking is essential here: the worker reports each phase (data fetch, processing, file generation, upload) so the frontend can show a live progress bar. The 10-minute timeout prevents stuck jobs from blocking the queue, and the 2-retry policy handles transient database or storage failures.
 
 ```typescript
 interface ReportJob {
@@ -311,7 +333,9 @@ await reportQueue.add('monthly-sales', {
                              └────────────┘           └────────────┘
 ```
 
-Reliable webhook delivery with automatic retries and failure tracking.
+Webhooks are inherently unreliable. Partner endpoints go down, return 5xx errors, or hit rate limits. A robust webhook system must handle all of these cases gracefully. bunqueue provides exactly this: each webhook delivery is a job with configurable retry attempts, exponential backoff, and a dead letter queue for permanent failures.
+
+The DLQ is configured to auto-retry failed webhooks hourly (up to 3 times) before giving up. This means transient outages are handled automatically without any manual intervention. After 7 days, expired DLQ entries are purged. The worker uses `AbortSignal.timeout()` to prevent hanging connections from blocking the queue.
 
 ```typescript
 interface WebhookJob {
@@ -408,7 +432,9 @@ await webhookQueue.add('order.created', {
                                 └─────────────────────────────────────────┘
 ```
 
-Multi-stage image processing with variants and CDN upload.
+When a user uploads an image, you typically need to generate multiple variants: thumbnails for listings, medium sizes for cards, full resolution for detail views, and OpenGraph images for social sharing. Processing all of these synchronously would make the upload endpoint unbearably slow.
+
+By pushing an image job to bunqueue, the upload returns immediately while a Worker handles the heavy lifting in the background. The worker downloads the source image, runs it through Sharp (or any image processing library) for each variant, uploads the results to a CDN, and saves the URLs as the job result. Progress tracking reports each variant as it completes, and the 2-minute timeout prevents stuck ffmpeg/sharp processes from blocking the queue.
 
 ```typescript
 interface ImageJob {
@@ -486,7 +512,9 @@ await imageQueue.add('product-image', {
 
 ## Data Export/Import System
 
-Large dataset export with streaming and chunked processing.
+Exporting large datasets (hundreds of thousands of records) cannot happen in a single request. The data must be fetched in chunks, written to a temporary file, uploaded to storage, and then the user must be notified. This is a textbook background job.
+
+bunqueue's progress tracking shines here: each chunk updates the progress percentage, so the user sees real-time feedback on a potentially 30-minute export. The chunked approach prevents memory exhaustion — instead of loading all records into memory, the worker processes 10,000 records at a time. The 30-minute timeout accommodates large exports while preventing infinite hangs.
 
 ```typescript
 interface ExportJob {
@@ -589,7 +617,9 @@ await exportQueue.add('accounting-export', {
                                 └─────────────────────────────────────────┘
 ```
 
-Send notifications across multiple channels with preferences.
+Modern applications need to reach users through multiple channels: email, push notifications, SMS, and in-app messages. Each channel has its own API, failure modes, and rate limits. Processing notifications synchronously would make the triggering action (e.g. "order placed") extremely slow and fragile — a single SMS provider timeout would block the entire response.
+
+By queuing notification jobs, the triggering action returns instantly while the worker fans out to all configured channels. User preferences are respected (some users opt out of SMS), and individual channel failures don't block other channels. High-priority notifications (like security alerts) use bunqueue's priority system to jump ahead of promotional messages in the queue.
 
 ```typescript
 interface NotificationJob {
@@ -697,7 +727,9 @@ await notificationQueue.add('security-alert', {
                     ⚠️  DLQ: Manual review required (no auto-retry)
 ```
 
-Secure payment processing with idempotency and audit logging.
+Payment processing is the most critical background job in any e-commerce system. It must be reliable (never lose a charge), idempotent (never charge twice for the same order), and auditable (every action logged). Processing payments synchronously in the checkout flow is risky: a timeout or crash after the charge but before the database update results in a lost transaction.
+
+bunqueue handles this with the `durable: true` flag, which bypasses the write buffer and persists the job to SQLite immediately. This guarantees zero data loss even if the process crashes. The idempotency key pattern prevents duplicate charges, and the DLQ is configured with `autoRetry: false` because failed payments require manual review — you don't want to auto-retry a charge that failed due to insufficient funds.
 
 ```typescript
 interface PaymentJob {
@@ -795,7 +827,9 @@ await paymentQueue.add('charge', {
 
 ## Search Index Synchronization
 
-Keep search indices in sync with database changes.
+Search engines like Elasticsearch or Typesense need to stay in sync with your database. Updating the index synchronously on every database write adds latency and creates a tight coupling between your application and the search service. If Elasticsearch is down, your writes would fail.
+
+By pushing index operations to a queue, database writes return immediately while bunqueue handles the synchronization in the background. The high retry count (5 attempts) and `removeOnComplete: true` flag keep the queue lean while ensuring eventual consistency. Bulk re-indexing after schema changes is straightforward: push thousands of index jobs and let the worker process them at controlled concurrency.
 
 ```typescript
 interface IndexJob {
@@ -973,7 +1007,9 @@ process.on('SIGINT', () => {
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-Isolated queues per tenant with resource limits.
+In a multi-tenant SaaS application, you need queue isolation between tenants. One tenant's burst of activity should not impact another tenant's job processing. Pausing queues for maintenance on tenant A should not affect tenant B.
+
+bunqueue's `QueueGroup` provides namespace isolation: each tenant gets its own set of queues (emails, reports, webhooks) prefixed with the tenant ID. All queues share the same SQLite database (efficient storage), but operations like pause, resume, and drain are scoped to the tenant. Rate limits and concurrency can be configured per-tenant to enforce resource boundaries.
 
 ```typescript
 import { QueueGroup } from 'bunqueue/client';
@@ -1041,7 +1077,9 @@ Rate limiting via `setRateLimit()` is only available in **server mode**. In embe
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-External API integration with controlled throughput.
+External APIs impose rate limits, and exceeding them results in 429 errors, temporary bans, or degraded service. When your application needs to make thousands of API calls (syncing inventory, importing data, sending notifications), you need controlled throughput.
+
+bunqueue provides two levels of rate control. In embedded mode, worker concurrency acts as a parallel limit — setting `concurrency: 10` means at most 10 API calls happen simultaneously. The worker also handles 429 responses by throwing an error, which triggers bunqueue's automatic retry with backoff. In server mode, `setRateLimit()` provides precise per-second rate limiting using a token bucket algorithm.
 
 ```typescript
 interface ApiJob {
@@ -1145,7 +1183,9 @@ for (const item of items) {
         └───────────┘
 ```
 
-Complex workflows with dependencies using FlowProducer.
+Real-world job processing often involves dependencies: you cannot ship an order before validating inventory and payment. You cannot load data into a warehouse before extracting and transforming it. You cannot merge results before all parallel chunks complete.
+
+bunqueue's FlowProducer (BullMQ v5 compatible) supports three workflow patterns. **Parent-child flows** run children in parallel, then execute the parent when all children complete. **Sequential chains** pass results from one job to the next (A → B → C). **Fan-out/fan-in** runs parallel jobs and merges results into a final job. Workers can access parent and child results to build data pipelines without external orchestration.
 
 ```typescript
 import { FlowProducer, Queue, Worker } from 'bunqueue/client';
@@ -1212,7 +1252,9 @@ const mergeWorker = new Worker('processing', async (job) => {
 
 ## Video Transcoding Pipeline
 
-Multi-resolution video transcoding with progress tracking.
+Video transcoding is one of the most resource-intensive background operations. A single video may need to be encoded into 4+ resolutions (1080p, 720p, 480p, 360p), generate thumbnails, and upload all variants to a CDN. This can take minutes to hours depending on the source file size and target formats.
+
+bunqueue's long timeout support (up to 1 hour), per-resolution progress tracking, and job logging make it ideal for transcoding pipelines. The worker reports progress as each resolution completes, and job logs capture encoding details (resolution, bitrate, output URL) for debugging. An optional webhook URL notifies your application when transcoding finishes.
 
 ```typescript
 interface TranscodeJob {
@@ -1305,7 +1347,9 @@ await transcodeQueue.add('transcode-video', {
 
 ## Graceful Shutdown Pattern
 
-Production-ready shutdown handling for all workers.
+In production, processes receive shutdown signals (SIGINT, SIGTERM) from container orchestrators, deployment scripts, or manual restarts. A naive shutdown kills workers immediately, leaving jobs in an active state with no acknowledgment. These orphaned jobs become "stalled" and must be recovered on restart.
+
+bunqueue's graceful shutdown pattern pauses all workers (stop accepting new jobs), waits for active jobs to complete (with a 30-second timeout), closes queue connections, and flushes the SQLite write buffer. This ensures no data loss and no orphaned jobs. If active jobs don't complete within the timeout, `worker.close(true)` forces an immediate stop — the stall detector will recover these jobs on restart.
 
 ```typescript
 import { Queue, Worker, shutdownManager } from 'bunqueue/client';

@@ -119,5 +119,5 @@ claude mcp add bunqueue -- bunx bunqueue-mcp
 - [Queue API](/guide/queue/) - Job options for cron-created jobs
 - [Server Mode](/guide/server/) - Cron scheduling in server mode
 - [CLI Commands](/guide/cli/) - Manage cron jobs via CLI
-- [MCP Server](/guide/mcp/) - Full AI agent integration with 70 tools
+- [MCP Server](/guide/mcp/) - Full AI agent integration with 73 tools
 :::
