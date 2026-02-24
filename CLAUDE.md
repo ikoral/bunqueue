@@ -294,6 +294,14 @@ bun scripts/tcp/run-all-tests.ts   # TCP tests (24 suites)
 bun run bench                      # Benchmarks
 ```
 
+## Publishing
+
+Always use `bun publish` (not `npm publish`) to publish to npm.
+
+```bash
+bun publish
+```
+
 ## Performance
 
 | Mode               | Throughput      | Data Loss Risk |
