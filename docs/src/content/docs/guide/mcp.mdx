@@ -422,9 +422,32 @@ $ claude
 
 ## Processing Jobs
 
-<Aside type="caution">
-The MCP server **manages** queues. You need a separate Worker to **process** jobs.
-</Aside>
+There are two ways to process jobs. Choose based on your use case:
+
+### Option A: HTTP Handlers (agent-managed, no code required)
+
+Use `bunqueue_register_handler` to let the MCP server auto-process jobs via HTTP calls. The agent registers a handler, and an embedded Worker spawns automatically. No external process needed.
+
+```
+┌────────────┐     ┌──────────────┐     ┌──────────────┐     ┌─────────────┐
+│ Cron / Add │────▶│  Job Queue   │────▶│  Embedded    │────▶│  HTTP API   │
+│   Job      │     │  (waiting)   │     │  Worker      │     │  endpoint   │
+└────────────┘     └──────────────┘     └──────────────┘     └─────────────┘
+                                              │
+                                              ▼
+                                        ┌──────────────┐
+                                        │ Job Result   │
+                                        │ (completed)  │
+                                        └──────────────┘
+```
+
+**Best for:** API polling, webhooks, external service calls, monitoring, health checks.
+
+The agent controls everything: register, schedule, monitor, unregister. No deployment needed.
+
+### Option B: External Worker (custom logic)
+
+For complex processing that requires custom code (database writes, file processing, business logic), deploy a Worker process:
 
 ```typescript
 // worker.ts
@@ -439,13 +462,15 @@ new Worker('emails', async (job) => {
 
   return { sent: true, timestamp: Date.now() };
 }, { embedded: true });
-
-console.log('Worker started, processing emails queue...');
 ```
 
 ```bash
 bun run worker.ts
 ```
+
+**Best for:** Email sending, image processing, database operations, complex business logic.
+
+The agent orchestrates (add jobs, schedule crons, monitor), the Worker executes.
 
 ## Environment Variables
 
