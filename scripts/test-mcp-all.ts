@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Comprehensive MCP Server Test - Tests ALL 66 tools + 5 resources
+ * Comprehensive MCP Server Test - Tests ALL 70 tools + 5 resources
  * Run: bun scripts/test-mcp-all.ts
  */
 

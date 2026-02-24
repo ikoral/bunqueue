@@ -156,7 +156,7 @@ bunqueue is the **first job queue with native MCP support**. AI agents get a ful
 - **Full pull/ack/fail cycle** — agents can consume and process jobs directly
 - **Monitor everything** — stats, memory, Prometheus metrics, logs, DLQ
 - **Control flow** — pause/resume queues, set rate limits, manage concurrency
-- **66 MCP tools + 5 resources** — complete control over every feature
+- **70 MCP tools + 5 resources + 3 prompts** — complete control over every feature
 
 ```bash
 # One command to connect Claude Code

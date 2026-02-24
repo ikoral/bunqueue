@@ -17,7 +17,7 @@ head:
 - **Zero Redis** - No external dependencies. SQLite provides persistence with WAL mode for concurrent access
 - **BullMQ-Compatible API** - Familiar patterns if you're migrating from BullMQ
 - **Production Ready** - Stall detection, DLQ, rate limiting, webhooks, and S3 backups
-- **MCP Server for AI Agents** - 66 MCP tools included. AI agents can schedule tasks, manage pipelines, and monitor queues via natural language
+- **MCP Server for AI Agents** - 70 MCP tools included. AI agents can schedule tasks, manage pipelines, and monitor queues via natural language
 
 ## Architecture
 
@@ -108,7 +108,7 @@ Best for:
 | S3 backups | ✅ | ❌ |
 | Sandboxed workers | ✅ | ✅ |
 | Durable writes | ✅ | ✅ (Redis AOF) |
-| MCP server (AI agents) | ✅ (66 tools) | ❌ |
+| MCP server (AI agents) | ✅ (70 tools) | ❌ |
 
 ## Next Steps
 

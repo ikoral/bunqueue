@@ -21,7 +21,7 @@ bunqueue is the first job queue with native MCP support. AI agents can schedule 
 │                                                                           │
 │   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐               │
 │   │  AI Agent   │────▶│  MCP Server │────▶│   bunqueue   │               │
-│   │  (Claude,   │     │  (66 tools) │     │   Engine     │               │
+│   │  (Claude,   │     │  (70 tools) │     │   Engine     │               │
 │   │   Cursor)   │◀────│             │◀────│              │               │
 │   └─────────────┘     └─────────────┘     └──────┬───────┘               │
 │                                                   │                       │
@@ -50,7 +50,7 @@ bunqueue is the first job queue with native MCP support. AI agents can schedule 
 claude mcp add bunqueue -- bunx bunqueue-mcp
 ```
 
-See the [MCP Server guide](/guide/mcp/) for full setup and all 66 tools.
+See the [MCP Server guide](/guide/mcp/) for full setup and all 70 tools.
 
 ---
 
