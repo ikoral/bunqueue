@@ -770,6 +770,8 @@ nav.sidebar .top-level > li:last-child {
 
 .hp-stat {
   text-align: center;
+  flex: 1;
+  min-width: 0;
 }
 
 .hp-stat-value {
