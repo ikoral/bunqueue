@@ -81,13 +81,18 @@ async function main() {
   // Register resources
   registerResources(server, backend);
 
-  // Graceful shutdown
-  const shutdown = () => {
-    backend.shutdown();
+  // Graceful shutdown — allow backend and transport to flush before exit
+  const shutdown = async () => {
+    try {
+      backend.shutdown();
+      await server.close();
+    } catch {
+      // Ignore cleanup errors during shutdown
+    }
     process.exit(0);
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', () => void shutdown());
+  process.on('SIGTERM', () => void shutdown());
 
   // Connect via stdio transport
   const transport = new StdioServerTransport();
