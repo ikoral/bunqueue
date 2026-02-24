@@ -20,7 +20,7 @@ function withResourceErrorHandler(
         contents: [
           {
             uri,
-            text: JSON.stringify({ error: message }),
+            text: JSON.stringify({ error: message, isError: true }),
             mimeType: 'application/json',
           },
         ],

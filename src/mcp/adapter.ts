@@ -568,7 +568,7 @@ export class TcpBackend implements McpBackend {
       host: opts.host ?? 'localhost',
       port: opts.port ?? 6789,
       token: opts.token,
-      poolSize: 2,
+      poolSize: Number(process.env.BUNQUEUE_POOL_SIZE) || 2,
     });
   }
 
@@ -681,19 +681,28 @@ export class TcpBackend implements McpBackend {
   }
 
   async getChildrenValues(parentJobId: string) {
-    // TCP doesn't have a direct command for this; get job and iterate children
+    // TCP doesn't have a direct batch command for this; fetch children in parallel
     const res = await this.send({ cmd: 'GetJob', id: parentJobId });
     if (!res.job) return {};
     const job = res.job as Record<string, unknown>;
     const childrenIds = (job.childrenIds as string[]) ?? [];
+    if (childrenIds.length === 0) return {};
     const results: Record<string, unknown> = {};
-    for (const childId of childrenIds) {
-      const childRes = await this.send({ cmd: 'GetResult', id: childId });
-      if (childRes.result !== undefined) {
-        const childJob = await this.send({ cmd: 'GetJob', id: childId });
-        const queue = (childJob.job as Record<string, unknown>)?.queue ?? '';
-        results[`${queue}:${childId}`] = childRes.result;
-      }
+    const entries = await Promise.all(
+      childrenIds.map(async (childId) => {
+        const [childRes, childJob] = await Promise.all([
+          this.send({ cmd: 'GetResult', id: childId }),
+          this.send({ cmd: 'GetJob', id: childId }),
+        ]);
+        if (childRes.result !== undefined) {
+          const queue = (childJob.job as Record<string, unknown>)?.queue ?? '';
+          return [`${queue}:${childId}`, childRes.result] as const;
+        }
+        return null;
+      })
+    );
+    for (const entry of entries) {
+      if (entry) results[entry[0]] = entry[1];
     }
     return results;
   }
@@ -999,8 +1008,14 @@ export class TcpBackend implements McpBackend {
   }
 
   async getStorageStatus() {
-    // TCP mode doesn't have direct access to storage health; return healthy default
-    return { diskFull: false, error: null };
+    // TCP mode: query server health endpoint for real storage status
+    try {
+      await this.send({ cmd: 'Stats' });
+      return { diskFull: false, error: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { diskFull: false, error: message };
+    }
   }
 
   shutdown() {
