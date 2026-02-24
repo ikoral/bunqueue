@@ -10,6 +10,15 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.5.4] - 2026-02-24
+
+### Added
+- **4 MCP Flow Tools** — job workflow orchestration via MCP (70 tools total):
+  - `bunqueue_add_flow` — create flow trees with parent/children dependencies (BullMQ v5 compatible)
+  - `bunqueue_add_flow_chain` — sequential pipelines: A → B → C
+  - `bunqueue_add_flow_bulk_then` — fan-out/fan-in: parallel jobs → final merge
+  - `bunqueue_get_flow` — retrieve flow trees with full dependency graph
+
 ## [2.5.3] - 2026-02-24
 
 ### Added

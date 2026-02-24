@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unnecessary-condition, @typescript-eslint/no-unnecessary-type-conversion, @typescript-eslint/no-base-to-string, @typescript-eslint/prefer-readonly, @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unnecessary-condition, @typescript-eslint/no-unnecessary-type-conversion, @typescript-eslint/no-base-to-string, @typescript-eslint/prefer-readonly */
 /**
  * MCP Backend Adapter
  * Abstraction layer for embedded (SQLite direct) and TCP (remote server) modes.
@@ -60,6 +60,31 @@ export interface WorkerInfo {
   processed: number;
   failed: number;
   lastHeartbeat: number;
+}
+
+/** Flow job input for creating flow trees */
+export interface FlowJobInput {
+  name: string;
+  queueName: string;
+  data?: Record<string, unknown>;
+  opts?: { priority?: number; delay?: number; attempts?: number };
+  children?: FlowJobInput[];
+}
+
+/** Flow step input for chains and fan-out/fan-in */
+export interface FlowStepInput {
+  name: string;
+  queueName: string;
+  data: Record<string, unknown>;
+  opts?: { priority?: number; delay?: number; attempts?: number };
+}
+
+/** Flow node result (recursive tree) */
+export interface FlowNodeResult {
+  jobId: string;
+  name: string;
+  queueName: string;
+  children?: FlowNodeResult[];
 }
 
 /** Common backend interface - all methods async for TCP compatibility */
@@ -160,6 +185,20 @@ export interface McpBackend {
   clearJobLogs(jobId: string, keepLogs?: number): Promise<void>;
   compactMemory(): Promise<void>;
 
+  // Flow operations
+  addFlow(flow: FlowJobInput): Promise<FlowNodeResult>;
+  addFlowChain(steps: FlowStepInput[]): Promise<{ jobIds: string[] }>;
+  addFlowBulkThen(
+    parallel: FlowStepInput[],
+    final: FlowStepInput
+  ): Promise<{ parallelIds: string[]; finalId: string }>;
+  getFlow(
+    jobId: string,
+    queueName: string,
+    depth?: number,
+    maxChildren?: number
+  ): Promise<FlowNodeResult | null>;
+
   // Lifecycle
   shutdown(): void;
 }
@@ -200,8 +239,27 @@ function serializeCron(c: {
 // ============ Embedded Backend ============
 
 import { getSharedManager, shutdownManager } from '../client/manager';
+import { FlowProducer } from '../client/flow';
+import type { JobNode } from '../client/flowTypes';
+
+/** Convert a JobNode tree to FlowNodeResult */
+function toFlowNodeResult(node: JobNode): FlowNodeResult {
+  return {
+    jobId: node.job.id,
+    name: node.job.name,
+    queueName: node.job.queueName,
+    children: node.children?.map(toFlowNodeResult),
+  };
+}
 
 export class EmbeddedBackend implements McpBackend {
+  private flowProducer: FlowProducer | null = null;
+
+  private getFlowProducer(): FlowProducer {
+    this.flowProducer ??= new FlowProducer({ embedded: true });
+    return this.flowProducer;
+  }
+
   private get manager() {
     return getSharedManager();
   }
@@ -551,7 +609,34 @@ export class EmbeddedBackend implements McpBackend {
     return Promise.resolve();
   }
 
+  async addFlow(flow: FlowJobInput): Promise<FlowNodeResult> {
+    const node = await this.getFlowProducer().add(flow);
+    return toFlowNodeResult(node);
+  }
+
+  async addFlowChain(steps: FlowStepInput[]): Promise<{ jobIds: string[] }> {
+    return this.getFlowProducer().addChain(steps);
+  }
+
+  async addFlowBulkThen(
+    parallel: FlowStepInput[],
+    final: FlowStepInput
+  ): Promise<{ parallelIds: string[]; finalId: string }> {
+    return this.getFlowProducer().addBulkThen(parallel, final);
+  }
+
+  async getFlow(
+    id: string,
+    queueName: string,
+    depth?: number,
+    maxChildren?: number
+  ): Promise<FlowNodeResult | null> {
+    const node = await this.getFlowProducer().getFlow({ id, queueName, depth, maxChildren });
+    return node ? toFlowNodeResult(node) : null;
+  }
+
   shutdown() {
+    this.flowProducer?.close();
     shutdownManager();
   }
 }
@@ -562,8 +647,11 @@ import { TcpConnectionPool } from '../client/tcpPool';
 
 export class TcpBackend implements McpBackend {
   private pool: TcpConnectionPool;
+  private flowProducer: FlowProducer | null = null;
+  private readonly connOpts: { host?: string; port?: number; token?: string };
 
   constructor(opts: { host?: string; port?: number; token?: string }) {
+    this.connOpts = opts;
     this.pool = new TcpConnectionPool({
       host: opts.host ?? 'localhost',
       port: opts.port ?? 6789,
@@ -574,6 +662,17 @@ export class TcpBackend implements McpBackend {
 
   async connect() {
     await this.pool.connect();
+  }
+
+  private getFlowProducer(): FlowProducer {
+    this.flowProducer ??= new FlowProducer({
+      connection: {
+        host: this.connOpts.host,
+        port: this.connOpts.port,
+        token: this.connOpts.token,
+      },
+    });
+    return this.flowProducer;
   }
 
   private async send(cmd: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -1018,7 +1117,34 @@ export class TcpBackend implements McpBackend {
     }
   }
 
+  async addFlow(flow: FlowJobInput): Promise<FlowNodeResult> {
+    const node = await this.getFlowProducer().add(flow);
+    return toFlowNodeResult(node);
+  }
+
+  async addFlowChain(steps: FlowStepInput[]): Promise<{ jobIds: string[] }> {
+    return this.getFlowProducer().addChain(steps);
+  }
+
+  async addFlowBulkThen(
+    parallel: FlowStepInput[],
+    final: FlowStepInput
+  ): Promise<{ parallelIds: string[]; finalId: string }> {
+    return this.getFlowProducer().addBulkThen(parallel, final);
+  }
+
+  async getFlow(
+    id: string,
+    queueName: string,
+    depth?: number,
+    maxChildren?: number
+  ): Promise<FlowNodeResult | null> {
+    const node = await this.getFlowProducer().getFlow({ id, queueName, depth, maxChildren });
+    return node ? toFlowNodeResult(node) : null;
+  }
+
   shutdown() {
+    this.flowProducer?.close();
     this.pool.close();
   }
 }

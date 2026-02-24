@@ -950,3 +950,138 @@ describe('MCP Prompts - incident_response data gathering', () => {
     expect(problematic.find((q) => q.name === 'bad-q')?.paused).toBe(true);
   });
 });
+
+// ─── Flow Tools ────────────────────────────────────────────────────────────
+
+describe('EmbeddedBackend - Flow Operations', () => {
+  test('addFlowChain creates sequential pipeline', async () => {
+    const result = await backend.addFlowChain([
+      { name: 'fetch', queueName: 'pipeline', data: { url: 'http://example.com' } },
+      { name: 'process', queueName: 'pipeline', data: { format: 'json' } },
+      { name: 'store', queueName: 'pipeline', data: { bucket: 's3' } },
+    ]);
+
+    expect(result.jobIds).toHaveLength(3);
+    result.jobIds.forEach((id) => expect(id).toBeDefined());
+  });
+
+  test('addFlowChain with single step', async () => {
+    const result = await backend.addFlowChain([
+      { name: 'only-step', queueName: 'solo', data: { key: 'value' } },
+    ]);
+    expect(result.jobIds).toHaveLength(1);
+  });
+
+  test('addFlowChain with empty array returns empty', async () => {
+    const result = await backend.addFlowChain([]);
+    expect(result.jobIds).toHaveLength(0);
+  });
+
+  test('addFlowBulkThen creates fan-out/fan-in', async () => {
+    const result = await backend.addFlowBulkThen(
+      [
+        { name: 'resize-small', queueName: 'images', data: { size: 'small' } },
+        { name: 'resize-medium', queueName: 'images', data: { size: 'medium' } },
+        { name: 'resize-large', queueName: 'images', data: { size: 'large' } },
+      ],
+      { name: 'merge-results', queueName: 'images', data: { output: 'gallery' } }
+    );
+
+    expect(result.parallelIds).toHaveLength(3);
+    expect(result.finalId).toBeDefined();
+    // Final job is distinct from parallel jobs
+    expect(result.parallelIds).not.toContain(result.finalId);
+  });
+
+  test('addFlow creates tree with children', async () => {
+    const result = await backend.addFlow({
+      name: 'parent',
+      queueName: 'flow-q',
+      data: { type: 'root' },
+      children: [
+        { name: 'child-a', queueName: 'flow-q', data: { type: 'a' } },
+        { name: 'child-b', queueName: 'flow-q', data: { type: 'b' } },
+      ],
+    });
+
+    expect(result.jobId).toBeDefined();
+    expect(result.name).toBe('parent');
+    expect(result.queueName).toBe('flow-q');
+    expect(result.children).toHaveLength(2);
+    expect(result.children![0].name).toBe('child-a');
+    expect(result.children![1].name).toBe('child-b');
+  });
+
+  test('addFlow creates leaf node without children', async () => {
+    const result = await backend.addFlow({
+      name: 'leaf',
+      queueName: 'flow-q',
+      data: { solo: true },
+    });
+
+    expect(result.jobId).toBeDefined();
+    expect(result.name).toBe('leaf');
+    expect(result.children).toBeUndefined();
+  });
+
+  test('addFlow with nested children (3 levels)', async () => {
+    const result = await backend.addFlow({
+      name: 'root',
+      queueName: 'deep',
+      children: [
+        {
+          name: 'mid',
+          queueName: 'deep',
+          children: [{ name: 'leaf', queueName: 'deep', data: { depth: 3 } }],
+        },
+      ],
+    });
+
+    expect(result.children).toHaveLength(1);
+    expect(result.children![0].name).toBe('mid');
+    expect(result.children![0].children).toHaveLength(1);
+    expect(result.children![0].children![0].name).toBe('leaf');
+  });
+
+  test('getFlow retrieves flow tree', async () => {
+    const created = await backend.addFlow({
+      name: 'parent',
+      queueName: 'flow-get',
+      data: { x: 1 },
+      children: [{ name: 'child', queueName: 'flow-get', data: { x: 2 } }],
+    });
+
+    const flow = await backend.getFlow(created.jobId, 'flow-get');
+    expect(flow).not.toBeNull();
+    expect(flow!.jobId).toBe(created.jobId);
+    expect(flow!.name).toBe('parent');
+  });
+
+  test('getFlow returns null for non-existent job', async () => {
+    const flow = await backend.getFlow('non-existent-id', 'no-queue');
+    expect(flow).toBeNull();
+  });
+
+  test('addFlowChain with opts (priority, delay)', async () => {
+    const result = await backend.addFlowChain([
+      {
+        name: 'urgent',
+        queueName: 'prio-q',
+        data: { task: 'important' },
+        opts: { priority: 10 },
+      },
+      {
+        name: 'delayed',
+        queueName: 'prio-q',
+        data: { task: 'later' },
+        opts: { delay: 5000 },
+      },
+    ]);
+
+    expect(result.jobIds).toHaveLength(2);
+    // Verify the first job has correct priority
+    const job = await backend.getJob(result.jobIds[0]);
+    expect(job).not.toBeNull();
+    expect(job!.priority).toBe(10);
+  });
+});

@@ -1,6 +1,6 @@
 ---
 title: MCP Server for AI Agents
-description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 66 tools for complete queue management via natural language.
+description: Use bunqueue MCP server with Claude Desktop, Claude Code, Cursor, and any MCP client. 70 tools for complete queue management via natural language.
 head:
   - tag: meta
     attrs:
@@ -10,7 +10,7 @@ head:
 
 import { Tabs, TabItem, Aside, Badge } from '@astrojs/starlight/components';
 
-bunqueue includes an **MCP (Model Context Protocol)** server that gives AI assistants **complete control** over your job queues. 66 tools, 5 resources, zero configuration. Built on the official `@modelcontextprotocol/sdk` for full protocol compliance.
+bunqueue includes an **MCP (Model Context Protocol)** server that gives AI assistants **complete control** over your job queues. 70 tools, 5 resources, zero configuration. Built on the official `@modelcontextprotocol/sdk` for full protocol compliance.
 
 ## What is MCP?
 
@@ -132,7 +132,7 @@ Connect to a running bunqueue server instead of embedded SQLite:
 | **Best for**     | Local dev, single-machine    | Production, shared queues        |
 | **Data**         | `./data/bunq.db`             | Remote server handles storage    |
 
-## Available Tools <Badge text="66 tools" variant="success" />
+## Available Tools <Badge text="70 tools" variant="success" />
 
 ### Job Operations (11 tools)
 
@@ -250,6 +250,15 @@ Connect to a running bunqueue server instead of embedded SQLite:
 | `bunqueue_clear_job_logs` | Clear logs for a job |
 | `bunqueue_compact_memory` | Force memory compaction |
 
+### Job Workflows (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `bunqueue_add_flow` | Create a flow tree (BullMQ v5 compatible). Children processed BEFORE parent |
+| `bunqueue_add_flow_chain` | Create a sequential pipeline: A → B → C |
+| `bunqueue_add_flow_bulk_then` | Fan-out/fan-in: parallel jobs → final merge job |
+| `bunqueue_get_flow` | Retrieve a flow tree with full dependency graph |
+
 ## MCP Resources <Badge text="5 resources" variant="note" />
 
 Resources provide read-only context that AI assistants can access:
@@ -264,7 +273,7 @@ Resources provide read-only context that AI assistants can access:
 
 ## Error Handling
 
-All 66 tools return structured error responses. When a tool encounters an error (backend exception, connection failure, invalid operation), it returns:
+All 70 tools return structured error responses. When a tool encounters an error (backend exception, connection failure, invalid operation), it returns:
 
 ```json
 {
