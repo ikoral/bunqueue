@@ -1,6 +1,6 @@
 ---
-title: "Rate Limiting & Concurrency Control"
-description: Control job processing rates in bunqueue with per-queue rate limits and concurrency controls. Protect downstream services from overload via CLI or HTTP API
+title: "Rate Limiting & Concurrency Control for Bun Job Queues"
+description: Control job processing rates in bunqueue with per-queue rate limits and concurrency caps. Protect downstream services via CLI or HTTP API.
 head:
   - tag: meta
     attrs:

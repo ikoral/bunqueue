@@ -1,6 +1,6 @@
 ---
-title: Changelog & Release Notes
-description: Complete version history and release notes for bunqueue job queue. Track new features, bug fixes, performance improvements, and breaking changes.
+title: "bunqueue Changelog: Version History & Release Notes"
+description: "Complete version history for bunqueue Bun job queue. Track new features, bug fixes, performance improvements, and breaking changes."
 head:
   - tag: meta
     attrs:

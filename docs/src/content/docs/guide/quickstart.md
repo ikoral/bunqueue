@@ -1,6 +1,6 @@
 ---
-title: Quick Start Tutorial
-description: Get started with bunqueue in 5 minutes. Create queues, add jobs, and process them with workers in embedded mode. Includes SQLite persistence setup
+title: "Quick Start — Build Your First Bun Job Queue in 5 Minutes"
+description: "Get started with bunqueue in 5 minutes. Create queues, add jobs, and process them with Workers. Includes SQLite persistence setup."
 head:
   - tag: meta
     attrs:

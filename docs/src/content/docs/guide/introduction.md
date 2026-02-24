@@ -1,6 +1,6 @@
 ---
-title: Introduction to bunqueue Job Queue
-description: Learn what bunqueue is, its core features, and why it's the fastest SQLite job queue for Bun. Built for AI agents with native MCP server. Zero Redis dependency
+title: "bunqueue — High-Performance Job Queue for Bun with SQLite & MCP"
+description: "Discover bunqueue: the fastest Bun job queue with SQLite persistence, zero Redis, cron scheduling, and native MCP server for AI agents."
 head:
   - tag: meta
     attrs:

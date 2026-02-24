@@ -1,6 +1,6 @@
 ---
-title: "Flow Producer & Job Dependencies"
-description: Build complex job workflows in bunqueue with FlowProducer. Create sequential chains, parallel execution with merge, and hierarchical tree structures
+title: "FlowProducer — Job Dependencies, Chains & Parallel Workflows"
+description: "Build complex job workflows in bunqueue with FlowProducer. Sequential chains, parallel fan-out/merge, and hierarchical dependency trees."
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
-title: Frequently Asked Questions
-description: Common questions about bunqueue job queue for Bun answered - performance benchmarks, scaling strategies, SQLite persistence, and BullMQ migration guide.
+title: "bunqueue FAQ: Bun Job Queue Questions Answered"
+description: "Common questions about bunqueue answered: performance benchmarks, scaling, SQLite vs Redis, BullMQ migration, and production deployment tips."
 head:
   - tag: meta
     attrs:

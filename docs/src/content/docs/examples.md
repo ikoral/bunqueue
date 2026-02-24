@@ -1,6 +1,6 @@
 ---
-title: Code Examples & Recipes
-description: Production-ready code examples for bunqueue - email queues, image processing pipelines, scheduled reports, webhooks, ETL workflows, and more patterns.
+title: "bunqueue Code Examples: Job Queue Patterns & Recipes for Bun"
+description: "Production-ready bunqueue examples: email queues, image processing, scheduled reports, webhooks, ETL workflows, and common patterns."
 head:
   - tag: meta
     attrs:

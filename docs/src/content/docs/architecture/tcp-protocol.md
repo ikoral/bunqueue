@@ -1,6 +1,6 @@
 ---
-title: TCP Protocol Architecture
-description: TCP protocol architecture for bunqueue Bun job queue. Covers MessagePack wire format, 6x faster pipelining, connection pooling, and full command reference.
+title: "bunqueue TCP Protocol Architecture: Wire Format & Pipelining"
+description: "bunqueue TCP protocol deep dive: MessagePack wire format, 6x faster pipelining, connection pooling, and binary command architecture."
 head:
   - tag: meta
     attrs:

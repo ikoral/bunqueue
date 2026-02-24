@@ -1,6 +1,6 @@
 ---
-title: "Stall Detection & Recovery"
-description: Configure stall detection in bunqueue to automatically recover unresponsive jobs. Set heartbeat intervals, max stalls, and grace periods for workers
+title: "Stall Detection — Recover Unresponsive Jobs Automatically in Bun"
+description: "Configure bunqueue stall detection to auto-recover stuck jobs. Set heartbeat intervals, max stall thresholds, and grace periods for Workers."
 head:
   - tag: meta
     attrs:

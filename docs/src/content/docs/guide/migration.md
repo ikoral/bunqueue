@@ -1,6 +1,6 @@
 ---
-title: Migration Guide from BullMQ
-description: Migrate from BullMQ to bunqueue with minimal code changes. Drop Redis, keep your Queue and Worker API. Step-by-step guide for Bun job queues.
+title: "Migrate from BullMQ to Bunqueue: Step-by-Step Guide"
+description: Migrate from BullMQ to bunqueue with minimal code changes. Drop Redis, keep your Queue and Worker API, and switch to Bun-native SQLite.
 head:
   - tag: meta
     attrs:

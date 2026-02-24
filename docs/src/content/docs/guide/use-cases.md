@@ -1,6 +1,6 @@
 ---
 title: "Production Use Cases & Background Job Patterns for Bun"
-description: Production-ready bunqueue patterns for Bun apps. AI agent workflows with MCP, email delivery, report generation, webhook delivery, image processing, payment processing, multi-tenant queues, and video transcoding.
+description: "Production-ready bunqueue patterns: AI agent workflows, email delivery, webhooks, payments, image processing, cron scheduling, multi-tenant queues."
 head:
   - tag: meta
     attrs:
@@ -17,7 +17,7 @@ head:
   - tag: meta
     attrs:
       name: keywords
-      content: "background jobs, job queue, Bun, TypeScript, email queue, webhook delivery, payment processing, image processing, video transcoding, cron jobs, AI agent, MCP, multi-tenant, rate limiting, dead letter queue, retry pattern"
+      content: "background jobs, job queue, Bun, TypeScript, email queue, webhook delivery, payment processing, image processing, video transcoding, cron jobs, AI agent, MCP, multi-tenant, rate limiting, dead letter queue, retry pattern, AI automation, agentic workflows, AI task scheduler, Claude, Cursor"
 ---
 
 Every non-trivial application needs background processing. API requests should return immediately while expensive operations — sending emails, processing images, charging payments, calling external APIs — happen asynchronously in the background.

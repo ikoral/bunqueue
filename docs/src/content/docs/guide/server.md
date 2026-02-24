@@ -1,6 +1,6 @@
 ---
-title: "Server Mode (TCP & HTTP)"
-description: Run bunqueue as a standalone server with TCP and HTTP APIs. Multi-client support, token authentication, Docker deployment, and graceful shutdown.
+title: "Server Mode — Run bunqueue as a Standalone TCP & HTTP Service"
+description: "Deploy bunqueue as a standalone server with TCP and HTTP APIs. Multi-client support, token auth, Docker deployment, and graceful shutdown."
 head:
   - tag: meta
     attrs:

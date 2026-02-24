@@ -1,6 +1,6 @@
 ---
-title: Dead Letter Queue (DLQ) Guide
-description: Configure bunqueue Dead Letter Queue for failed jobs. Auto-retry with backoff, expiration policies, filtering by reason, and DLQ stats for Bun apps.
+title: "Dead Letter Queue — Handle Failed Jobs & Auto-Retry in bunqueue"
+description: "Configure bunqueue's Dead Letter Queue: auto-retry with backoff, expiration policies, filter by failure reason, and monitor DLQ stats."
 head:
   - tag: meta
     attrs:

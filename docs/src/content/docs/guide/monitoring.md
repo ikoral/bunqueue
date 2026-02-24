@@ -1,6 +1,6 @@
 ---
-title: "Monitoring & Prometheus Metrics"
-description: Set up Prometheus metrics, Grafana dashboards, and health checks for bunqueue. Monitor queue backlogs, failure rates, DLQ alerts, and worker status
+title: "Bunqueue Monitoring with Prometheus & Grafana"
+description: Set up Prometheus metrics, Grafana dashboards, and health checks for bunqueue. Monitor backlogs, failure rates, DLQ alerts, and workers.
 head:
   - tag: meta
     attrs:

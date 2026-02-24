@@ -209,7 +209,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             name: 'keywords',
-            content: 'bun, job queue, message queue, task queue, background jobs, sqlite, redis alternative, bullmq alternative, typescript, cron, scheduler, worker, dlq, dead letter queue, ai agents, mcp server, agentic workflows, claude, cursor',
+            content: 'bun, job queue, message queue, task queue, background jobs, sqlite, redis alternative, bullmq alternative, typescript, cron, scheduler, worker, dlq, dead letter queue, ai agents, mcp server, model context protocol, agentic workflows, claude, cursor, windsurf, ai automation, ai task scheduler, llm tools',
           },
         },
         {
@@ -442,6 +442,11 @@ export default defineConfig({
         }
         // Getting started guides - high priority
         else if (url.match(/^\/(guide\/(introduction|installation|quickstart))\//)) {
+          item.priority = 0.9;
+          item.changefreq = 'weekly';
+        }
+        // MCP, benchmarks, comparison, use-cases - high priority landing pages
+        else if (url.match(/^\/(guide\/(mcp|benchmarks|comparison|use-cases))\//)) {
           item.priority = 0.9;
           item.changefreq = 'weekly';
         }

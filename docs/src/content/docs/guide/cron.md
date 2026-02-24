@@ -1,6 +1,6 @@
 ---
-title: "Cron Jobs & Scheduled Tasks"
-description: Schedule recurring jobs in bunqueue using cron expressions or intervals. Supports IANA timezones, repeatable jobs, and both server and embedded modes
+title: "Cron Jobs & Scheduled Tasks in Bunqueue"
+description: Schedule recurring jobs with cron expressions or intervals in bunqueue. IANA timezone support, repeatable jobs, and embedded or server mode.
 head:
   - tag: meta
     attrs:

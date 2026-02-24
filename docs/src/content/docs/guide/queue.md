@@ -1,6 +1,6 @@
 ---
-title: Queue API Reference
-description: Master bunqueue Queue API for adding jobs with priorities, delays, retries, and deduplication. Includes bulk operations, durable writes, and DLQ config
+title: "Queue API — Add Jobs, Priorities, Delays & Deduplication in bunqueue"
+description: "Complete bunqueue Queue API reference: add jobs with priorities, delays, retries, bulk operations, durable writes, and DLQ configuration."
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
-title: "Installation & Setup"
-description: Install bunqueue for Bun via npm or from source. Full TypeScript support with type definitions for Queue, Worker, Job, and configuration options.
+title: "Install bunqueue — Setup Guide for Bun Job Queue"
+description: "Install bunqueue via npm or from source. Full TypeScript support with type definitions for Queue, Worker, Job, and all config options."
 head:
   - tag: meta
     attrs:

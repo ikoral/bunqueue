@@ -1,6 +1,6 @@
 ---
-title: TypeScript Types Reference
-description: Complete TypeScript type definitions for bunqueue Bun job queue. Includes Job, Queue, Worker, DLQ, and connection interfaces with full generic support.
+title: "bunqueue TypeScript Types: Job, Queue, Worker & DLQ Interfaces"
+description: "Complete TypeScript type definitions for bunqueue. Includes Job, Queue, Worker, DLQ, and connection interfaces with full generic support."
 head:
   - tag: meta
     attrs:

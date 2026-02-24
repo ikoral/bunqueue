@@ -1,6 +1,6 @@
 ---
-title: TCP Protocol Reference
-description: High-performance binary TCP protocol specification for bunqueue job queue. Covers wire format, MessagePack encoding, pipelining, and all command references.
+title: "bunqueue TCP Protocol Reference: Binary MessagePack Commands"
+description: "TCP protocol spec for bunqueue: MessagePack wire format, pipelining, length-prefixed framing, and full command reference for all operations."
 head:
   - tag: meta
     attrs:

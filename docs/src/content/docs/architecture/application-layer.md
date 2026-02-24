@@ -1,6 +1,6 @@
 ---
-title: Application Layer Architecture
-description: Application layer architecture of bunqueue job queue. Covers PUSH/PULL/ACK operations, stall detection, dependency resolution, and DLQ management flows.
+title: "bunqueue Application Layer: Operations, Stall Detection & DLQ Management"
+description: "bunqueue application layer: PUSH/PULL/ACK operations, stall detection, dependency resolution, DLQ management, and job lifecycle flows."
 head:
   - tag: meta
     attrs:

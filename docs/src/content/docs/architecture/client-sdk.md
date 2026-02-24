@@ -1,6 +1,6 @@
 ---
-title: Client SDK Architecture
-description: Client SDK architecture for bunqueue Bun job queue. Covers TCP connection pooling, embedded vs server mode, worker heartbeats, and ACK batching flows.
+title: "bunqueue Client SDK Architecture: Connection Pooling & Worker Modes"
+description: "bunqueue Client SDK internals: TCP connection pooling, embedded vs server mode, worker heartbeats, ACK batching, and auto-batching."
 head:
   - tag: meta
     attrs:

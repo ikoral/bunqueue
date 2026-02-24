@@ -1,6 +1,6 @@
 ---
-title: Queue Group API
-description: Bunqueue QueueGroup for namespace isolation in Bun apps. Organize related queues with prefixes for multi-tenant systems and microservice domains.
+title: "Bunqueue QueueGroup API for Namespace Isolation"
+description: Use bunqueue QueueGroup to organize queues with namespace prefixes. Ideal for multi-tenant Bun apps and microservice domain isolation.
 head:
   - tag: meta
     attrs:

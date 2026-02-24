@@ -1,6 +1,6 @@
 ---
-title: Hono Framework Integration
-description: Integrate bunqueue with Hono for background jobs in Bun. Add queues, workers, and job status endpoints with middleware pattern and graceful shutdown.
+title: "Bunqueue + Hono Integration: Background Jobs for Bun"
+description: Add background job queues to Hono with bunqueue. Middleware patterns, worker setup, job status endpoints, and graceful shutdown for Bun apps.
 head:
   - tag: meta
     attrs:

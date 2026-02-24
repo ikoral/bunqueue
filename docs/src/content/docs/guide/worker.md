@@ -1,6 +1,6 @@
 ---
-title: Worker API Reference
-description: Learn bunqueue Worker API for job processing. Configure concurrency, heartbeats, batch pulling, lock-based ownership, and sandboxed workers for isolation
+title: "Worker API — Process Background Jobs with Concurrency & Retries"
+description: "Configure bunqueue Workers for job processing: concurrency, heartbeats, batch pulling, lock-based ownership, and sandboxed isolation."
 head:
   - tag: meta
     attrs:

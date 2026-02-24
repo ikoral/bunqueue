@@ -1,6 +1,6 @@
 ---
-title: CPU-Intensive Workers over TCP
-description: Handle CPU-heavy jobs over TCP without dropping connections. Configure ping intervals, command timeouts, and yield patterns for reliable processing
+title: "CPU-Intensive Workers over TCP in Bunqueue"
+description: Run CPU-heavy Bun jobs over TCP without dropping connections. Configure ping intervals, command timeouts, and yield patterns for reliability.
 head:
   - tag: meta
     attrs:

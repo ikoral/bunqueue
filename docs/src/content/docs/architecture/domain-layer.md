@@ -1,6 +1,6 @@
 ---
-title: Domain Layer Architecture
-description: Domain layer architecture of bunqueue Bun job queue. Covers auto-scaled sharding, 4-ary priority queues, job state machine, DLQ flow, and rate limiting.
+title: "bunqueue Domain Layer: Sharding, Priority Queues & Job State Machine"
+description: "bunqueue domain layer internals: auto-scaled sharding, 4-ary priority queues, job state machine, DLQ flow, and rate limiting logic."
 head:
   - tag: meta
     attrs:

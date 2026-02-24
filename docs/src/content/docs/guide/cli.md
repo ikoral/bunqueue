@@ -1,6 +1,6 @@
 ---
-title: CLI Commands Reference
-description: Complete bunqueue CLI reference for Bun job queues. Push, pull, and ack jobs, manage DLQ, schedule cron tasks, and monitor server stats.
+title: "CLI Reference — Manage Bun Job Queues from the Command Line"
+description: "Complete bunqueue CLI reference: push, pull, and ack jobs, manage DLQ, schedule cron tasks, and monitor server stats from your terminal."
 head:
   - tag: meta
     attrs:

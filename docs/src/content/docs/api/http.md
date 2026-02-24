@@ -1,6 +1,6 @@
 ---
-title: HTTP API Reference
-description: Complete HTTP REST API reference for bunqueue job queue server. Covers endpoints for job push/pull, health checks, WebSocket events, and authentication.
+title: "bunqueue HTTP REST API Reference"
+description: "Complete HTTP API reference for bunqueue: job push/pull endpoints, health checks, Prometheus metrics, WebSocket events, and auth."
 head:
   - tag: meta
     attrs:

@@ -1,6 +1,6 @@
 ---
-title: Environment Variables Reference
-description: Configure bunqueue server with environment variables. TCP/HTTP ports, SQLite path, auth tokens, S3 backup settings, and logging options for Bun.
+title: "Bunqueue Environment Variables Reference"
+description: Complete environment variable reference for bunqueue. TCP/HTTP ports, SQLite path, auth tokens, S3 backup, timeouts, and logging options.
 head:
   - tag: meta
     attrs:

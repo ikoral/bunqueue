@@ -1,6 +1,6 @@
 ---
-title: "Webhooks & Event Notifications"
-description: Bunqueue webhooks for job events with HMAC-SHA256 signatures. Receive HTTP callbacks on completion, failure, progress, and stall with auto-retry.
+title: "Bunqueue Webhooks & Job Event Notifications"
+description: Configure webhooks with HMAC-SHA256 signatures for bunqueue job events. HTTP callbacks on completion, failure, progress, and stall with auto-retry.
 head:
   - tag: meta
     attrs:
