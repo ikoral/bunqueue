@@ -111,13 +111,20 @@ export class TcpClient extends EventEmitter {
     );
 
     this.socket = socket;
+
+    if (this.options.token) {
+      try {
+        await this.authenticate();
+      } catch (err) {
+        this.socket.end();
+        this.socket = null;
+        throw err;
+      }
+    }
+
     this.connected = true;
     this.connecting = false;
     this.health.recordConnected();
-
-    if (this.options.token) {
-      await this.authenticate();
-    }
   }
 
   private async authenticate(): Promise<void> {
