@@ -3,7 +3,11 @@
  * Runs job processors in isolated Bun Worker processes
  */
 
-import { getSharedManager, type SharedManager } from '../manager';
+import { EventEmitter } from 'events';
+import { getSharedManager } from '../manager';
+import { getSharedPool, releaseSharedPool, type TcpConnectionPool } from '../tcpPool';
+import { createPublicJob } from '../jobConversion';
+import type { Job } from '../types';
 import type { Job as DomainJob } from '../../domain/types/job';
 import type {
   SandboxedWorkerOptions,
@@ -13,6 +17,7 @@ import type {
   IPCResponse,
 } from './types';
 import { createWrapperScript, cleanupWrapperScript } from './wrapper';
+import { type QueueOps, createEmbeddedOps, createTcpOps } from './queueOps';
 
 const LOG_PREFIX = '[SandboxedWorker]';
 
@@ -39,20 +44,34 @@ function log(
 /**
  * Sandboxed Worker - runs processors in isolated Bun Worker processes
  */
-export class SandboxedWorker {
+export class SandboxedWorker extends EventEmitter {
   private readonly queueName: string;
   private readonly options: RequiredSandboxedWorkerOptions;
   private readonly workers: WorkerProcess[] = [];
   private running = false;
   private pullPromise: Promise<void> | null = null;
   private wrapperPath: string | null = null;
-  private readonly manager: SharedManager;
+  private readonly ops: QueueOps;
+  private readonly tcp: TcpConnectionPool | null;
   private readonly workerId: string;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly heartbeatInterval: number;
 
   constructor(queueName: string, options: SandboxedWorkerOptions) {
+    super();
     this.queueName = queueName;
-    this.manager = options.manager ?? getSharedManager();
     this.workerId = `sandboxed-worker-${queueName}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    if (options.connection) {
+      this.tcp = getSharedPool(options.connection);
+      this.ops = createTcpOps(this.tcp);
+      this.heartbeatInterval = options.heartbeatInterval ?? 10000;
+    } else {
+      this.tcp = null;
+      this.ops = createEmbeddedOps(options.manager ?? getSharedManager());
+      this.heartbeatInterval = options.heartbeatInterval ?? 0;
+    }
+
     this.options = {
       processor: options.processor,
       concurrency: options.concurrency ?? 1,
@@ -68,6 +87,9 @@ export class SandboxedWorker {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+
+    if (this.tcp) await this.tcp.connect();
+
     this.wrapperPath = await createWrapperScript(this.queueName, this.options.processor);
 
     // Spawn all workers and wait for them to be ready
@@ -77,12 +99,19 @@ export class SandboxedWorker {
     }
     await Promise.all(spawnPromises);
 
+    this.startHeartbeat();
+    this.emit('ready');
     this.pullPromise = this.pullLoop();
   }
 
   /** Stop all workers gracefully */
   async stop(): Promise<void> {
     this.running = false;
+
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
 
     for (const wp of this.workers) {
       if (wp.timeoutId) clearTimeout(wp.timeoutId);
@@ -92,6 +121,8 @@ export class SandboxedWorker {
 
     if (this.pullPromise) await this.pullPromise;
     await cleanupWrapperScript(this.wrapperPath);
+    if (this.tcp) releaseSharedPool(this.tcp);
+    this.emit('closed');
   }
 
   /** Get worker pool stats */
@@ -170,7 +201,7 @@ export class SandboxedWorker {
         continue;
       }
 
-      const { job, token } = await this.manager.pullWithLock(this.queueName, this.workerId, 1000);
+      const { job, token } = await this.ops.pull(this.queueName, this.workerId, 1000);
       if (job) this.dispatch(idle, job, token);
     }
   }
@@ -183,6 +214,8 @@ export class SandboxedWorker {
       this.handleTimeout(wp, job);
     }, this.options.timeout);
 
+    this.emit('active', this.createEventJob(job));
+
     const request: IPCRequest = {
       type: 'job',
       job: { id: String(job.id), data: job.data, queue: job.queue, attempts: job.attempts },
@@ -190,12 +223,16 @@ export class SandboxedWorker {
     try {
       wp.worker.postMessage(request);
     } catch (err) {
-      log('error', 'Failed to dispatch job', {
-        jobId: String(job.id),
-        error: err instanceof Error ? err.message : String(err),
-      });
+      const errMsg = err instanceof Error ? err.message : String(err);
+      log('error', 'Failed to dispatch job', { jobId: String(job.id), error: errMsg });
+      this.safeEmitError(
+        Object.assign(new Error(`Dispatch failed: ${errMsg}`), {
+          jobId: String(job.id),
+          context: 'dispatch' as const,
+        })
+      );
       this.resetWorkerState(wp);
-      this.manager
+      this.ops
         .fail(job.id, 'Dispatch failed: worker terminated', token ?? undefined)
         .catch(() => {});
     }
@@ -214,46 +251,56 @@ export class SandboxedWorker {
         break;
       case 'progress':
         if (msg.progress !== undefined) {
-          this.manager.updateProgress(wp.currentJob.id, msg.progress).catch(() => {});
+          this.ops.updateProgress(wp.currentJob.id, msg.progress).catch(() => {});
+          this.emit('progress', this.createEventJob(wp.currentJob), msg.progress);
         }
         break;
     }
   }
 
   private complete(wp: WorkerProcess, result: unknown): void {
-    if (wp.currentJob) {
-      const jobId = wp.currentJob.id;
+    const job = wp.currentJob;
+    if (job) {
       const token = wp.currentToken ?? undefined;
-      this.manager.ack(jobId, result, token).catch((e: unknown) => {
+      this.ops.ack(job.id, result, token).catch((e: unknown) => {
         log('error', 'Failed to ack job', {
-          jobId: String(jobId),
+          jobId: String(job.id),
           error: e instanceof Error ? e.message : String(e),
         });
       });
+      const eventJob = this.createEventJob(job);
+      (eventJob as { returnvalue?: unknown }).returnvalue = result;
+      this.emit('completed', eventJob, result);
     }
     this.resetWorkerState(wp);
   }
 
   private fail(wp: WorkerProcess, error: string): void {
-    if (wp.currentJob) {
-      const jobId = wp.currentJob.id;
+    const job = wp.currentJob;
+    if (job) {
       const token = wp.currentToken ?? undefined;
-      this.manager.fail(jobId, error, token).catch((e: unknown) => {
+      this.ops.fail(job.id, error, token).catch((e: unknown) => {
         log('error', 'Failed to mark job as failed', {
-          jobId: String(jobId),
+          jobId: String(job.id),
           error: e instanceof Error ? e.message : String(e),
         });
       });
+      const eventJob = this.createEventJob(job);
+      (eventJob as { failedReason?: string }).failedReason = error;
+      this.emit('failed', eventJob, new Error(error));
     }
     this.resetWorkerState(wp);
   }
 
   private handleTimeout(wp: WorkerProcess, job: DomainJob): void {
     wp.worker.terminate();
+    const errorMsg = `Job timed out after ${this.options.timeout}ms`;
     const token = wp.currentToken ?? undefined;
-    this.manager
-      .fail(job.id, `Job timed out after ${this.options.timeout}ms`, token)
-      .catch(() => {});
+    this.ops.fail(job.id, errorMsg, token).catch(() => {});
+
+    const eventJob = this.createEventJob(job);
+    (eventJob as { failedReason?: string }).failedReason = errorMsg;
+    this.emit('failed', eventJob, new Error(errorMsg));
 
     this.resetWorkerState(wp);
 
@@ -264,8 +311,15 @@ export class SandboxedWorker {
   private handleCrash(wp: WorkerProcess, index: number): void {
     if (wp.currentJob) {
       const token = wp.currentToken ?? undefined;
-      this.manager.fail(wp.currentJob.id, 'Worker crashed', token).catch(() => {});
+      this.ops.fail(wp.currentJob.id, 'Worker crashed', token).catch(() => {});
     }
+
+    this.safeEmitError(
+      Object.assign(new Error('Worker crashed'), {
+        workerIndex: index,
+        context: 'crash' as const,
+      })
+    );
 
     this.resetWorkerState(wp);
     wp.restarts++;
@@ -283,5 +337,46 @@ export class SandboxedWorker {
         maxRestarts: this.options.maxRestarts,
       });
     }
+  }
+
+  /** Start heartbeat timer for TCP lock renewal */
+  private startHeartbeat(): void {
+    if (this.heartbeatInterval <= 0) return;
+    this.heartbeatTimer = setInterval(() => void this.sendHeartbeat(), this.heartbeatInterval);
+  }
+
+  /** Send heartbeat for all active jobs */
+  private async sendHeartbeat(): Promise<void> {
+    const active = this.workers.filter((w) => w.busy && w.currentJob);
+    if (active.length === 0) return;
+    try {
+      const ids = active.map((w) => String(w.currentJob?.id));
+      const tokens = active.map((w) => w.currentToken ?? '');
+      await this.ops.sendHeartbeat(ids, tokens);
+    } catch (err) {
+      this.safeEmitError(
+        Object.assign(err instanceof Error ? err : new Error(String(err)), {
+          context: 'heartbeat' as const,
+        })
+      );
+    }
+  }
+
+  /** Emit 'error' only if there are listeners (avoids uncaught exception) */
+  private safeEmitError(error: Error): void {
+    if (this.listenerCount('error') > 0) {
+      this.emit('error', error);
+    }
+  }
+
+  /** Create a public Job object from a DomainJob for event payloads */
+  private createEventJob(domainJob: DomainJob): Job {
+    const data = domainJob.data as { name?: string } | null;
+    return createPublicJob({
+      job: domainJob,
+      name: data?.name ?? 'default',
+      updateProgress: async () => {},
+      log: async () => {},
+    });
   }
 }

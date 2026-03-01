@@ -4,6 +4,7 @@
  */
 
 import type { SharedManager } from '../manager';
+import type { ConnectionOptions } from '../types';
 import type { Job as DomainJob } from '../../domain/types/job';
 
 /** Sandboxed worker configuration */
@@ -24,6 +25,10 @@ export interface SandboxedWorkerOptions {
   pollInterval?: number;
   /** Custom QueueManager (for testing, defaults to shared manager) */
   manager?: SharedManager;
+  /** TCP connection options (if provided, uses TCP mode instead of embedded) */
+  connection?: ConnectionOptions;
+  /** Heartbeat interval in ms for TCP lock renewal (default: 10000 for TCP, 0 for embedded) */
+  heartbeatInterval?: number;
 }
 
 /** Required options with defaults applied */

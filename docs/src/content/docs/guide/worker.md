@@ -232,6 +232,7 @@ Each job runs in a separate Bun Worker thread. If a job crashes (OOM, infinite l
 ```typescript
 import { SandboxedWorker } from 'bunqueue/client';
 
+// Embedded mode (in-process)
 const worker = new SandboxedWorker('cpu-intensive', {
   processor: './processor.ts',  // Path to processor file
   concurrency: 4,               // 4 parallel worker processes
@@ -244,6 +245,32 @@ const worker = new SandboxedWorker('cpu-intensive', {
 
 worker.start();
 ```
+
+### TCP Mode
+
+SandboxedWorker also supports TCP mode for connecting to a remote bunqueue server. Pass a `connection` option to enable it:
+
+```typescript
+import { SandboxedWorker } from 'bunqueue/client';
+
+// TCP mode - connects to bunqueue server
+const worker = new SandboxedWorker('cpu-intensive', {
+  processor: './processor.ts',
+  concurrency: 4,
+  connection: {
+    host: 'localhost',
+    port: 6789,
+    token: 'my-auth-token',   // Optional auth
+  },
+  heartbeatInterval: 10000,    // Lock renewal interval (default: 10000 for TCP)
+});
+
+worker.start();
+```
+
+:::tip[When to use TCP mode]
+Use TCP mode when running bunqueue as a standalone server (systemd, Docker) and you need crash-isolated job processing. The worker processes run in isolated Bun Worker threads while communicating with the server over TCP.
+:::
 
 **Processor file** (`processor.ts`):
 
@@ -271,6 +298,40 @@ export default async (job: {
 | Untrusted code | ❌ | ✅ |
 | Memory leak protection | ❌ | ✅ |
 | Crash isolation | ❌ | ✅ |
+
+### SandboxedWorker Events
+
+SandboxedWorker supports the same events as the regular Worker:
+
+```typescript
+worker.on('ready', () => {
+  console.log('Worker pool is ready');
+});
+
+worker.on('active', (job) => {
+  console.log(`Job ${job.id} dispatched to worker process`);
+});
+
+worker.on('completed', (job, result) => {
+  console.log(`Job ${job.id} completed:`, result);
+});
+
+worker.on('failed', (job, error) => {
+  console.error(`Job ${job.id} failed:`, error.message);
+});
+
+worker.on('progress', (job, progress) => {
+  console.log(`Job ${job.id} progress: ${progress}%`);
+});
+
+worker.on('error', (error) => {
+  console.error('Worker error:', error);
+});
+
+worker.on('closed', () => {
+  console.log('Worker pool stopped');
+});
+```
 
 ### SandboxedWorker API
 

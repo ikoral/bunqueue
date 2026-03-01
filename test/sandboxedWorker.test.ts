@@ -242,4 +242,234 @@ describe('SandboxedWorker', () => {
 
     await worker.stop();
   });
+
+  // ============ Event Emission Tests ============
+
+  test('should emit ready event on start', async () => {
+    let readyEmitted = false;
+    const worker = new SandboxedWorker('sandboxed-ready-event', {
+      processor: processorPath,
+      concurrency: 1,
+      manager,
+    });
+
+    worker.on('ready', () => {
+      readyEmitted = true;
+    });
+
+    await worker.start();
+    expect(readyEmitted).toBe(true);
+
+    await worker.stop();
+  });
+
+  test('should emit closed event on stop', async () => {
+    let closedEmitted = false;
+    const worker = new SandboxedWorker('sandboxed-closed-event', {
+      processor: processorPath,
+      concurrency: 1,
+      manager,
+    });
+
+    worker.on('closed', () => {
+      closedEmitted = true;
+    });
+
+    await worker.start();
+    await worker.stop();
+    expect(closedEmitted).toBe(true);
+  });
+
+  test('should emit active and completed events', async () => {
+    const queueName = `sandboxed-events-test-${Date.now()}`;
+    const activeJobs: string[] = [];
+    const completedJobs: { id: string; result: unknown }[] = [];
+
+    const worker = new SandboxedWorker(queueName, {
+      processor: processorPath,
+      concurrency: 1,
+      timeout: 5000,
+      manager,
+    });
+
+    worker.on('active', (job) => {
+      activeJobs.push(String(job.id));
+    });
+
+    worker.on('completed', (job, result) => {
+      completedJobs.push({ id: String(job.id), result });
+    });
+
+    await worker.start();
+
+    const job = await manager.push(queueName, { data: { value: 10 } });
+
+    // Wait for completion
+    for (let i = 0; i < 30; i++) {
+      await Bun.sleep(100);
+      if (completedJobs.length > 0) break;
+    }
+
+    expect(activeJobs.length).toBe(1);
+    expect(activeJobs[0]).toBe(String(job.id));
+    expect(completedJobs.length).toBe(1);
+    expect(completedJobs[0].id).toBe(String(job.id));
+    expect(completedJobs[0].result).toEqual({ processed: true, value: 20 });
+
+    await worker.stop();
+  });
+
+  test('should emit failed event on processor error', async () => {
+    const errorProcessorPath2 = `${Bun.env.TMPDIR ?? '/tmp'}/error-processor-events-${Date.now()}.ts`;
+    await Bun.write(
+      errorProcessorPath2,
+      `
+      export default async (job: any) => {
+        throw new Error('Event test error');
+      };
+    `
+    );
+
+    const queueName = `sandboxed-failed-event-${Date.now()}`;
+    const failedJobs: { id: string; error: string }[] = [];
+
+    const worker = new SandboxedWorker(queueName, {
+      processor: errorProcessorPath2,
+      concurrency: 1,
+      timeout: 5000,
+      manager,
+    });
+
+    worker.on('failed', (job, error) => {
+      failedJobs.push({ id: String(job.id), error: error.message });
+    });
+
+    await worker.start();
+
+    const job = await manager.push(queueName, { data: { test: true } });
+
+    // Wait for failure
+    for (let i = 0; i < 30; i++) {
+      await Bun.sleep(100);
+      if (failedJobs.length > 0) break;
+    }
+
+    expect(failedJobs.length).toBe(1);
+    expect(failedJobs[0].id).toBe(String(job.id));
+    expect(failedJobs[0].error).toContain('Event test error');
+
+    await worker.stop();
+
+    try {
+      await unlink(errorProcessorPath2);
+    } catch {
+      // Ignore
+    }
+  });
+
+  test('should emit progress event', async () => {
+    const queueName = `sandboxed-progress-event-${Date.now()}`;
+    const progressUpdates: number[] = [];
+
+    const worker = new SandboxedWorker(queueName, {
+      processor: processorPath,
+      concurrency: 1,
+      timeout: 5000,
+      manager,
+    });
+
+    worker.on('progress', (_job, progress) => {
+      progressUpdates.push(progress);
+    });
+
+    await worker.start();
+
+    await manager.push(queueName, { data: { value: 5 } });
+
+    // Wait for completion (processor calls progress(50) then progress(100))
+    for (let i = 0; i < 30; i++) {
+      await Bun.sleep(100);
+      if (progressUpdates.length >= 2) break;
+    }
+
+    expect(progressUpdates).toContain(50);
+    expect(progressUpdates).toContain(100);
+
+    await worker.stop();
+  });
+
+  // ============ TCP Mode Tests ============
+
+  test('should create sandboxed worker with TCP connection options', async () => {
+    const worker = new SandboxedWorker('sandboxed-tcp-test', {
+      processor: processorPath,
+      connection: { host: 'localhost', port: 16789 },
+    });
+
+    expect(worker).toBeDefined();
+    const stats = worker.getStats();
+    expect(stats.total).toBe(0);
+
+    // Cleanup the TCP pool reference
+    await worker.stop();
+  });
+
+  test('should accept custom heartbeat interval for TCP mode', async () => {
+    const worker = new SandboxedWorker('sandboxed-tcp-hb-test', {
+      processor: processorPath,
+      connection: { host: 'localhost', port: 16789 },
+      heartbeatInterval: 5000,
+    });
+
+    expect(worker).toBeDefined();
+    await worker.stop();
+  });
+
+  test('should emit failed event on timeout', async () => {
+    const slowProcessorPath2 = `${Bun.env.TMPDIR ?? '/tmp'}/slow-processor-events-${Date.now()}.ts`;
+    await Bun.write(
+      slowProcessorPath2,
+      `
+      export default async (job: any) => {
+        await Bun.sleep(10000);
+        return { done: true };
+      };
+    `
+    );
+
+    const queueName = `sandboxed-timeout-event-${Date.now()}`;
+    const failedJobs: { id: string; error: string }[] = [];
+
+    const worker = new SandboxedWorker(queueName, {
+      processor: slowProcessorPath2,
+      concurrency: 1,
+      timeout: 100,
+      manager,
+    });
+
+    worker.on('failed', (job, error) => {
+      failedJobs.push({ id: String(job.id), error: error.message });
+    });
+
+    await worker.start();
+
+    await manager.push(queueName, { data: { test: true } });
+
+    // Wait for timeout
+    for (let i = 0; i < 30; i++) {
+      await Bun.sleep(100);
+      if (failedJobs.length > 0) break;
+    }
+
+    expect(failedJobs.length).toBe(1);
+    expect(failedJobs[0].error).toContain('timed out');
+
+    await worker.stop();
+
+    try {
+      await unlink(slowProcessorPath2);
+    } catch {
+      // Ignore
+    }
+  });
 });
