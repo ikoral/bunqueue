@@ -87,7 +87,7 @@ Path to SQLite database file.
 
 | Type | Default | Example |
 |------|---------|---------|
-| string | `./data/bunq.db` | `/var/lib/queue.db` |
+| string | `in-memory` | `/var/lib/queue.db` |
 
 ```bash
 DATA_PATH=/var/lib/queue.db bunqueue start
@@ -409,7 +409,7 @@ Comma-separated list of allowed CORS origins.
 
 | Type | Default | Example |
 |------|---------|---------|
-| string | `*` | `https://app.example.com` |
+| string | `(none)` | `https://app.example.com` |
 
 ```bash
 CORS_ALLOW_ORIGIN=https://app.example.com,https://admin.example.com bunqueue start

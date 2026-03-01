@@ -36,7 +36,7 @@ AUTH_TOKENS=secret1,secret2 bunqueue
 | `HOST` | `0.0.0.0` | Server hostname |
 | `DATA_PATH` | (memory) | SQLite database path |
 | `AUTH_TOKENS` | (none) | Comma-separated auth tokens |
-| `CORS_ALLOW_ORIGIN` | `*` | CORS allowed origins |
+| `CORS_ALLOW_ORIGIN` | `(none)` | CORS allowed origins |
 | `LOG_FORMAT` | `text` | Log format (text/json) |
 
 ## Docker

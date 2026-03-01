@@ -74,7 +74,6 @@ const job = await queue.add('job-name', data, {
   backoffConfig: {        // Advanced backoff configuration
     type: 'exponential',  // 'fixed' or 'exponential'
     delay: 2000,          // Base delay in ms
-    maxDelay: 60000,      // Max cap in ms (default: 3,600,000 = 1 hour)
   },
   timeout: 30000,         // Job timeout in ms
   jobId: 'custom-id',     // Custom job ID for deduplication (BullMQ-style)
@@ -614,7 +613,7 @@ Retrying all completed jobs can re-queue a large number of jobs at once. Conside
 | `delay` | `number` | `0` | Delay in ms before processing |
 | `attempts` | `number` | `3` | Max retry attempts |
 | `backoff` | `number` | `1000` | Backoff base in ms (exponential, jitter applied) |
-| `backoffConfig` | `object` | - | Advanced backoff: `{ type, delay, maxDelay? }` |
+| `backoffConfig` | `object` | - | Advanced backoff: `{ type, delay }` |
 | `timeout` | `number` | - | Processing timeout in ms |
 | `jobId` | `string` | - | Custom ID for deduplication (BullMQ-style idempotent) |
 | `deduplication` | `object` | - | Advanced deduplication config (`ttl`, `extend`, `replace`) |

@@ -440,7 +440,7 @@ Do not use PM2 cluster mode (`instances > 1`). bunqueue is a single-instance que
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATA_PATH` | SQLite database path | `./data/bunq.db` |
+| `DATA_PATH` | SQLite database path | `in-memory` |
 | `TCP_PORT` | TCP server port | `6789` |
 | `HTTP_PORT` | HTTP server port | `6790` |
 | `AUTH_TOKENS` | Comma-separated auth tokens | - |
@@ -500,7 +500,7 @@ bunqueue exposes health endpoints:
 ```bash
 # HTTP health check (detailed)
 curl http://localhost:6790/health
-# {"ok":true,"status":"healthy","uptime":3600,"version":"2.1.8",
+# {"ok":true,"status":"healthy","uptime":3600,"version":"2.5.7",
 #  "queues":{"waiting":5,"active":2},"connections":{"ws":0,"sse":0},
 #  "memory":{"heapUsed":45,"heapTotal":64,"rss":128}}
 

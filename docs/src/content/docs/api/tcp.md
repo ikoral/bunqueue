@@ -575,6 +575,26 @@ Get the progress of an active job.
 
 ---
 
+#### GetChildrenValues
+
+Get the return values from all child jobs of a parent job. Used with FlowProducer workflows to retrieve results from completed children.
+
+**Request:**
+
+```typescript
+{ cmd: 'GetChildrenValues', id: string }
+```
+
+**Response:**
+
+```typescript
+{ ok: true, data: { values: Record<string, any> } }
+```
+
+Returns an empty `values` object if the job has no children or if an error occurs.
+
+---
+
 ### Control Commands
 
 #### Cancel
@@ -1057,6 +1077,38 @@ List all registered cron job schedules.
 
 ---
 
+#### CronGet
+
+Get a single cron job by name.
+
+**Request:**
+
+```typescript
+{ cmd: 'CronGet', name: string }
+```
+
+**Response:**
+
+```typescript
+{
+  ok: true,
+  cron: {
+    name: string,
+    queue: string,
+    schedule: string | null,
+    repeatEvery: number | null,
+    nextRun: number,
+    executions: number,
+    maxLimit: number | undefined,
+    timezone: string | undefined
+  }
+}
+```
+
+Returns an error if the cron job is not found.
+
+---
+
 ### Monitoring Commands
 
 #### Ping
@@ -1180,6 +1232,31 @@ Get metrics in Prometheus text exposition format.
 
 ```typescript
 { ok: true, data: { metrics: string } }
+```
+
+---
+
+#### StorageStatus
+
+Get the storage/disk health status. Reports whether the disk is full or has errors.
+
+**Request:**
+
+```typescript
+{ cmd: 'StorageStatus' }
+```
+
+**Response:**
+
+```typescript
+{
+  ok: true,
+  data: {
+    diskFull: boolean,         // Whether the disk is full
+    error: string | null,      // Error message if any
+    since: number | null       // Timestamp when the issue started (ms since epoch)
+  }
+}
 ```
 
 ---
@@ -1572,6 +1649,7 @@ Job data payloads are limited to **10 MB** when serialized.
 | | `GetJobByCustomId` | Look up job by custom ID |
 | | `Count` | Total job count for a queue |
 | | `GetProgress` | Get job progress |
+| | `GetChildrenValues` | Get child job return values |
 | **Control** | `Cancel` | Cancel a job |
 | | `Progress` | Update job progress |
 | | `Update` | Update job data |
@@ -1594,11 +1672,13 @@ Job data payloads are limited to **10 MB** when serialized.
 | **Cron** | `Cron` | Create/update cron schedule |
 | | `CronDelete` | Delete cron schedule |
 | | `CronList` | List cron schedules |
+| | `CronGet` | Get cron schedule by name |
 | **Monitoring** | `Ping` | Health check |
 | | `Hello` | Protocol negotiation |
 | | `Stats` | Server statistics |
 | | `Metrics` | Detailed metrics |
 | | `Prometheus` | Prometheus-format metrics |
+| | `StorageStatus` | Get storage/disk health status |
 | | `Heartbeat` | Worker heartbeat |
 | | `JobHeartbeat` | Job heartbeat (stall prevention) |
 | | `JobHeartbeatB` | Batch job heartbeat |
