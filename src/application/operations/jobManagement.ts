@@ -23,6 +23,7 @@ export interface JobManagementContext {
   jobIndex: Map<JobId, JobLocation>;
   webhookManager: WebhookManager;
   eventsManager: EventsManager;
+  repeatChain?: Map<JobId, JobId>;
 }
 
 /** Cancel a job (remove from queue) */
@@ -109,9 +110,8 @@ export async function updateJobData(
   ctx: JobManagementContext
 ): Promise<boolean> {
   const location = ctx.jobIndex.get(jobId);
-  if (!location) return false;
 
-  if (location.type === 'queue') {
+  if (location?.type === 'queue') {
     return withWriteLock(ctx.shardLocks[location.shardIdx], () => {
       const job = ctx.shards[location.shardIdx].getQueue(location.queueName).find(jobId);
       if (job) {
@@ -120,7 +120,7 @@ export async function updateJobData(
       }
       return false;
     });
-  } else if (location.type === 'processing') {
+  } else if (location?.type === 'processing') {
     const procIdx = processingShardIndex(jobId);
     return withWriteLock(ctx.processingLocks[procIdx], () => {
       const job = ctx.processingShards[procIdx].get(jobId);
@@ -131,7 +131,39 @@ export async function updateJobData(
       return false;
     });
   }
-  return false;
+
+  // Job is completed or not found - check for repeat chain successor
+  return updateRepeatSuccessor(jobId, data, ctx);
+}
+
+/**
+ * Follow the repeat chain to find and update the successor job's data.
+ * When a repeated job completes, handleRepeat creates a new job (the successor).
+ * This allows updateJobData on the completed job to propagate to the next repeat.
+ */
+async function updateRepeatSuccessor(
+  originalId: JobId,
+  data: unknown,
+  ctx: JobManagementContext
+): Promise<boolean> {
+  if (!ctx.repeatChain) return false;
+
+  const successorId = ctx.repeatChain.get(originalId);
+  if (!successorId) return false;
+
+  const successorLoc = ctx.jobIndex.get(successorId);
+  if (successorLoc?.type !== 'queue') return false;
+
+  return withWriteLock(ctx.shardLocks[successorLoc.shardIdx], () => {
+    const job = ctx.shards[successorLoc.shardIdx]
+      .getQueue(successorLoc.queueName)
+      .find(successorId);
+    if (job) {
+      (job as { data: unknown }).data = data;
+      return true;
+    }
+    return false;
+  });
 }
 
 /** Change job priority */
