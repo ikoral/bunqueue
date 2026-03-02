@@ -832,10 +832,24 @@ Next backup: 2024-01-15 16:30:00
 |--------|-------|-------------|---------|
 | `--host` | `-H` | Server hostname | `localhost` |
 | `--port` | `-p` | TCP port | `6789` |
-| `--token` | `-t` | Authentication token | - |
+| `--token` | `-t` | Authentication token (env: `BQ_TOKEN`, `BUNQUEUE_TOKEN`) | - |
 | `--json` | - | Output as JSON | `false` |
 | `--help` | `-h` | Show help | - |
 | `--version` | `-v` | Show version | - |
+
+### Authentication
+
+The `--token` flag can be set via environment variables to avoid repeating it:
+
+```bash
+# Set once, use everywhere
+export BQ_TOKEN=my-secret-token
+bunqueue stats
+bunqueue push emails '{"to":"user@example.com"}'
+bunqueue queue pause emails
+```
+
+Priority: `--token` flag > `BQ_TOKEN` > `BUNQUEUE_TOKEN`.
 
 ### JSON Output
 

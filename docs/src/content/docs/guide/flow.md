@@ -92,9 +92,25 @@ Workers can access results from previous jobs in the chain.
 When using FlowProducer, bunqueue automatically injects special properties into job data:
 - `__flowParentId` - Parent job ID (for chain/tree flows)
 - `__flowParentIds` - Array of parent IDs (for merge flows)
+- `__parentId` - Parent job ID (BullMQ v5 compatible)
+- `__parentQueue` - Parent job queue name (BullMQ v5 compatible)
+- `__childrenIds` - Children job IDs (BullMQ v5 compatible)
 
-These allow child jobs to access parent results.
+These allow child jobs to access parent results. All fields are fully typed via the `FlowJobData` interface — IntelliSense works automatically inside Worker processors.
 :::
+
+### `FlowJobData` Type
+
+The `FlowJobData` interface is automatically intersected with your job data type `T` in Worker callbacks. You can also import it explicitly:
+
+```typescript
+import type { FlowJobData } from 'bunqueue/client';
+
+interface MyJobData extends FlowJobData {
+  email: string;
+  subject: string;
+}
+```
 
 ```typescript
 import { FlowProducer, Worker } from 'bunqueue/client';
