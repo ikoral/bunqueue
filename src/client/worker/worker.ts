@@ -7,7 +7,7 @@ import { EventEmitter } from 'events';
 import { getSharedManager } from '../manager';
 import { TcpConnectionPool } from '../tcpPool';
 import { EventType } from '../../domain/types/queue';
-import type { WorkerOptions, Processor, ConnectionOptions } from '../types';
+import type { WorkerOptions, Processor, ConnectionOptions, Job } from '../types';
 import type { Job as InternalJob } from '../../domain/types/job';
 import type { TcpConnection, ExtendedWorkerOptions } from './types';
 import { FORCE_EMBEDDED, WORKER_CONSTANTS } from './types';
@@ -60,6 +60,34 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   // Stalled event subscription (BullMQ v5 compatible)
   private stalledUnsubscribe: (() => void) | null = null;
+
+  // ============ Typed Event Overloads ============
+
+  on(event: 'ready' | 'drained' | 'closed', listener: () => void): this;
+  on(event: 'active', listener: (job: Job<T>) => void): this;
+  on(event: 'completed', listener: (job: Job<T>, result: R) => void): this;
+  on(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
+  on(event: 'progress', listener: (job: Job<T> | null, progress: number) => void): this;
+  on(event: 'stalled', listener: (jobId: string, reason: string) => void): this;
+  on(event: 'error', listener: (error: Error) => void): this;
+  on(event: 'cancelled', listener: (data: { jobId: string; reason: string }) => void): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(event: string, listener: (...args: any[]) => void): this {
+    return super.on(event, listener);
+  }
+
+  once(event: 'ready' | 'drained' | 'closed', listener: () => void): this;
+  once(event: 'active', listener: (job: Job<T>) => void): this;
+  once(event: 'completed', listener: (job: Job<T>, result: R) => void): this;
+  once(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
+  once(event: 'progress', listener: (job: Job<T> | null, progress: number) => void): this;
+  once(event: 'stalled', listener: (jobId: string, reason: string) => void): this;
+  once(event: 'error', listener: (error: Error) => void): this;
+  once(event: 'cancelled', listener: (data: { jobId: string; reason: string }) => void): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  once(event: string, listener: (...args: any[]) => void): this {
+    return super.once(event, listener);
+  }
 
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
