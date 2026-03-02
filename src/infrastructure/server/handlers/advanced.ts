@@ -184,3 +184,41 @@ export function handleClearConcurrency(
   ctx.queueManager.clearConcurrency(cmd.queue);
   return resp.ok(undefined, reqId);
 }
+
+/** Handle ChangeDelay command - change delay for a delayed/active job */
+export async function handleChangeDelay(
+  cmd: Extract<Command, { cmd: 'ChangeDelay' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  const success = await ctx.queueManager.changeDelay(jobId(cmd.id), cmd.delay);
+  return success
+    ? resp.ok(undefined, reqId)
+    : resp.error('Job not found or cannot change delay', reqId);
+}
+
+/** Handle MoveToWait command - promote a delayed job to waiting */
+export async function handleMoveToWait(
+  cmd: Extract<Command, { cmd: 'MoveToWait' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  const success = await ctx.queueManager.promote(jobId(cmd.id));
+  return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not delayed', reqId);
+}
+
+/** Handle PromoteJobs command - promote all delayed jobs in a queue */
+export async function handlePromoteJobs(
+  cmd: Extract<Command, { cmd: 'PromoteJobs' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  const delayed = ctx.queueManager.getJobs(cmd.queue, { state: 'delayed' });
+  const limit = cmd.count ?? delayed.length;
+  let count = 0;
+  for (let i = 0; i < Math.min(limit, delayed.length); i++) {
+    const success = await ctx.queueManager.promote(delayed[i].id);
+    if (success) count++;
+  }
+  return { ok: true, count, reqId } as Response;
+}

@@ -1053,7 +1053,7 @@ export class TcpBackend implements McpBackend {
   }
 
   async unregisterWorker(id: string) {
-    const res = await this.send({ cmd: 'UnregisterWorker', id });
+    const res = await this.send({ cmd: 'UnregisterWorker', workerId: id });
     return (res.ok as boolean) ?? true;
   }
 

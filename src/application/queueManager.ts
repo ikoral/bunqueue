@@ -470,6 +470,14 @@ export class QueueManager {
         parentJob.childrenIds.push(childJobId);
       }
     }
+
+    // Persist changes to SQLite if storage is available
+    if (this.storage) {
+      this.storage.updateJobData(childJobId, childJob.data);
+      if (parentJob) {
+        this.storage.updateJobChildrenIds(parentJobId, parentJob.childrenIds);
+      }
+    }
   }
 
   getJobByCustomId(customId: string): Job | null {

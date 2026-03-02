@@ -262,6 +262,22 @@ export class SqliteStorage {
     });
   }
 
+  /** Update a job's data blob (e.g. after adding __parentId) */
+  updateJobData(jobId: JobId, data: unknown): void {
+    this.safeWrite(() => {
+      this.db.prepare('UPDATE jobs SET data = ? WHERE id = ?').run(pack(data), jobId);
+    });
+  }
+
+  /** Update a job's children_ids blob and parent_id */
+  updateJobChildrenIds(jobId: JobId, childrenIds: JobId[]): void {
+    this.safeWrite(() => {
+      this.db
+        .prepare('UPDATE jobs SET children_ids = ? WHERE id = ?')
+        .run(childrenIds.length > 0 ? pack(childrenIds) : null, jobId);
+    });
+  }
+
   getJob(id: JobId): Job | null {
     const row = this.statements.get('getJob')!.get(id) as DbJob | null;
     return row ? rowToJob(row) : null;

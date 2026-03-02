@@ -317,6 +317,7 @@ export interface JobHeartbeatCommand extends BaseCommand {
   readonly cmd: 'JobHeartbeat';
   readonly id: string; // Job ID
   readonly token?: string; // Lock token for ownership verification
+  readonly duration?: number; // Lock renewal duration in ms
 }
 
 /** Batch job heartbeat for multiple jobs */
@@ -396,6 +397,55 @@ export interface GetChildrenValuesCommand extends BaseCommand {
 /** Get real storage/disk health status */
 export interface StorageStatusCommand extends BaseCommand {
   readonly cmd: 'StorageStatus';
+}
+
+// ============ Extended Commands ============
+
+export interface ClearLogsCommand extends BaseCommand {
+  readonly cmd: 'ClearLogs';
+  readonly id: string;
+  readonly keepLogs?: number;
+}
+
+export interface ExtendLockCommand extends BaseCommand {
+  readonly cmd: 'ExtendLock';
+  readonly id: string;
+  readonly token?: string;
+  readonly duration: number;
+}
+
+export interface ExtendLocksCommand extends BaseCommand {
+  readonly cmd: 'ExtendLocks';
+  readonly ids: string[];
+  readonly tokens: string[];
+  readonly durations: number[];
+}
+
+export interface ChangeDelayCommand extends BaseCommand {
+  readonly cmd: 'ChangeDelay';
+  readonly id: string;
+  readonly delay: number;
+}
+
+export interface SetWebhookEnabledCommand extends BaseCommand {
+  readonly cmd: 'SetWebhookEnabled';
+  readonly id: string;
+  readonly enabled: boolean;
+}
+
+export interface CompactMemoryCommand extends BaseCommand {
+  readonly cmd: 'CompactMemory';
+}
+
+export interface MoveToWaitCommand extends BaseCommand {
+  readonly cmd: 'MoveToWait';
+  readonly id: string;
+}
+
+export interface PromoteJobsCommand extends BaseCommand {
+  readonly cmd: 'PromoteJobs';
+  readonly queue: string;
+  readonly count?: number;
 }
 
 // ============ Auth Commands ============
@@ -478,6 +528,14 @@ export type Command =
   | CronGetCommand
   | GetChildrenValuesCommand
   | StorageStatusCommand
+  | ClearLogsCommand
+  | ExtendLockCommand
+  | ExtendLocksCommand
+  | ChangeDelayCommand
+  | SetWebhookEnabledCommand
+  | CompactMemoryCommand
+  | MoveToWaitCommand
+  | PromoteJobsCommand
   | AuthCommand
   | HelloCommand;
 

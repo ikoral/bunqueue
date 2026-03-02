@@ -19,6 +19,11 @@ import type {
   RemoveWebhookCommand,
   ListWebhooksCommand,
   PrometheusCommand,
+  ClearLogsCommand,
+  ExtendLockCommand,
+  ExtendLocksCommand,
+  SetWebhookEnabledCommand,
+  CompactMemoryCommand,
 } from '../../../domain/types/command';
 import { VERSION } from '../../../shared/version';
 import type { Response } from '../../../domain/types/response';
@@ -67,7 +72,15 @@ export function handleJobHeartbeat(
   reqId?: string
 ): Response {
   const jid = jobId(cmd.id);
-  // Pass token to renew lock if provided
+
+  // If duration is specified, extend lock with that duration
+  if (cmd.duration && cmd.token) {
+    const success = ctx.queueManager.renewJobLock(jid, cmd.token, cmd.duration);
+    if (success) return resp.data({ ok: true }, reqId);
+    return resp.error('Job not found or not active (or invalid token)', reqId);
+  }
+
+  // Standard heartbeat
   const success = ctx.queueManager.jobHeartbeat(jid, cmd.token);
   if (success) {
     return resp.data({ ok: true }, reqId);
@@ -229,4 +242,65 @@ export function handlePrometheus(
 ): Response {
   const metrics = ctx.queueManager.getPrometheusMetrics();
   return resp.data({ metrics }, reqId);
+}
+
+// ============ Clear Logs ============
+
+export function handleClearLogs(
+  cmd: ClearLogsCommand,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  ctx.queueManager.clearLogs(jobId(cmd.id), cmd.keepLogs);
+  return resp.ok(undefined, reqId);
+}
+
+// ============ Extend Lock ============
+
+export async function handleExtendLock(
+  cmd: ExtendLockCommand,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  const success = await ctx.queueManager.extendLock(jobId(cmd.id), cmd.token ?? null, cmd.duration);
+  return success ? resp.ok(undefined, reqId) : resp.error('Lock not found or invalid token', reqId);
+}
+
+export async function handleExtendLocks(
+  cmd: ExtendLocksCommand,
+  ctx: HandlerContext,
+  reqId?: string
+): Promise<Response> {
+  let count = 0;
+  for (let i = 0; i < cmd.ids.length; i++) {
+    const success = await ctx.queueManager.extendLock(
+      jobId(cmd.ids[i]),
+      cmd.tokens[i] ?? null,
+      cmd.durations[i]
+    );
+    if (success) count++;
+  }
+  return { ok: true, count, reqId } as Response;
+}
+
+// ============ Set Webhook Enabled ============
+
+export function handleSetWebhookEnabled(
+  cmd: SetWebhookEnabledCommand,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const success = ctx.queueManager.webhookManager.setEnabled(cmd.id, cmd.enabled);
+  return success ? resp.ok(undefined, reqId) : resp.error('Webhook not found', reqId);
+}
+
+// ============ Compact Memory ============
+
+export function handleCompactMemory(
+  _cmd: CompactMemoryCommand,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  ctx.queueManager.compactMemory();
+  return resp.ok(undefined, reqId);
 }

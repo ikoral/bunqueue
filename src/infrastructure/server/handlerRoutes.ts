@@ -60,6 +60,9 @@ import {
   handleRateLimitClear,
   handleSetConcurrency,
   handleClearConcurrency,
+  handleChangeDelay,
+  handleMoveToWait,
+  handlePromoteJobs,
 } from './handlers/advanced';
 
 import {
@@ -77,6 +80,11 @@ import {
   handleRemoveWebhook,
   handleListWebhooks,
   handlePrometheus,
+  handleClearLogs,
+  handleExtendLock,
+  handleExtendLocks,
+  handleSetWebhookEnabled,
+  handleCompactMemory,
 } from './handlers/monitoring';
 
 /** Route core commands (PUSH, PULL, ACK, FAIL) */
@@ -163,6 +171,16 @@ export async function routeManagementCommand(
       return handleDiscard(cmd, ctx, reqId);
     case 'WaitJob':
       return handleWaitJob(cmd, ctx, reqId);
+    case 'ChangeDelay':
+      return handleChangeDelay(cmd, ctx, reqId);
+    case 'MoveToWait':
+      return handleMoveToWait(cmd, ctx, reqId);
+    case 'PromoteJobs':
+      return handlePromoteJobs(cmd, ctx, reqId);
+    case 'ExtendLock':
+      return handleExtendLock(cmd, ctx, reqId);
+    case 'ExtendLocks':
+      return handleExtendLocks(cmd, ctx, reqId);
     default:
       return null;
   }
@@ -300,6 +318,12 @@ export function routeMonitoringCommand(
       return handleListWebhooks(cmd, ctx, reqId);
     case 'StorageStatus':
       return handleStorageStatus(cmd, ctx, reqId);
+    case 'ClearLogs':
+      return handleClearLogs(cmd, ctx, reqId);
+    case 'SetWebhookEnabled':
+      return handleSetWebhookEnabled(cmd, ctx, reqId);
+    case 'CompactMemory':
+      return handleCompactMemory(cmd, ctx, reqId);
     default:
       return null;
   }

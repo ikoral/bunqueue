@@ -43,7 +43,7 @@ export async function getJob(jobId: JobId, ctx: QueryContext): Promise<Job | nul
     }
     case 'completed':
     case 'dlq':
-      return ctx.storage?.getJob(jobId) ?? null;
+      return ctx.storage?.getJob(jobId) ?? ctx.completedJobsData.get(jobId) ?? null;
   }
 }
 

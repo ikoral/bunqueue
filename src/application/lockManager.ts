@@ -169,8 +169,12 @@ interface RequeueOptions {
 /** Requeue job for retry */
 function requeueExpiredJob(opts: RequeueOptions): void {
   const { jobId, job, queue, idx, ctx, now } = opts;
+  const shard = ctx.shards[idx];
   queue.push(job);
+  const isDelayed = job.runAt > now;
+  shard.incrementQueued(jobId, isDelayed, job.createdAt, job.queue, job.runAt);
   ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
+  shard.notify();
 
   ctx.eventsManager.broadcast({
     eventType: EventType.Stalled,
