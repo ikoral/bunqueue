@@ -40,6 +40,7 @@ export interface ContextDependencies {
   stalledCandidates: Set<JobId>;
   pendingDepChecks: Set<JobId>;
   queueNamesCache: Set<string>;
+  repeatChain: Map<JobId, JobId>;
   eventsManager: EventsManager;
   webhookManager: WebhookManager;
   metrics: {
@@ -190,6 +191,7 @@ export class ContextFactory {
       jobIndex: this.deps.jobIndex,
       webhookManager: this.deps.webhookManager,
       eventsManager: this.deps.eventsManager,
+      repeatChain: this.deps.repeatChain,
     };
   }
 

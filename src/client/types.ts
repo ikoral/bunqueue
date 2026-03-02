@@ -557,8 +557,25 @@ export interface DlqFilter {
   offset?: number;
 }
 
+/**
+ * Flow-injected fields automatically added to job data by FlowProducer.
+ * These fields are present on job.data when a job is part of a flow.
+ */
+export interface FlowJobData {
+  /** Parent job ID (injected by FlowProducer.addChain / addTree) */
+  __flowParentId?: string;
+  /** Array of parent job IDs (injected by FlowProducer.addBulkThen for merge flows) */
+  __flowParentIds?: string[];
+  /** Parent job ID (injected by FlowProducer.add for BullMQ v5 compatible flows) */
+  __parentId?: string;
+  /** Parent job queue name (injected by FlowProducer.add for BullMQ v5 compatible flows) */
+  __parentQueue?: string;
+  /** Children job IDs (injected by FlowProducer.add for BullMQ v5 compatible flows) */
+  __childrenIds?: string[];
+}
+
 /** Job processor function */
-export type Processor<T = unknown, R = unknown> = (job: Job<T>) => Promise<R> | R;
+export type Processor<T = unknown, R = unknown> = (job: Job<T & FlowJobData>) => Promise<R> | R;
 
 /** Queue events */
 export type QueueEventType =

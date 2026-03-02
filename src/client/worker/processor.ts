@@ -5,7 +5,7 @@
 
 import type { EventEmitter } from 'events';
 import type { TcpConnection } from './types';
-import type { Processor, Job } from '../types';
+import type { Processor, Job, FlowJobData } from '../types';
 import { createPublicJob } from '../types';
 import type { Job as InternalJob } from '../../domain/types/job';
 import { jobId } from '../../domain/types/job';
@@ -36,9 +36,10 @@ export async function processJob<T, R>(
   const jobIdStr = String(internalJob.id);
 
   // Use a holder to break the circular reference between job and progress handler
-  const jobHolder: { current: Job<T> | null } = { current: null };
+  type JobData = T & FlowJobData;
+  const jobHolder: { current: Job<JobData> | null } = { current: null };
 
-  const job = createPublicJob<T>({
+  const job = createPublicJob<JobData>({
     job: internalJob,
     name: jobName,
     updateProgress: createProgressHandler(embedded, tcp, emitter, jobHolder),
@@ -68,7 +69,7 @@ export async function processJob<T, R>(
   }
 }
 
-function createProgressHandler<T>(
+function createProgressHandler<T extends FlowJobData>(
   embedded: boolean,
   tcp: TcpConnection | null,
   emitter: EventEmitter,
@@ -97,7 +98,7 @@ function createLogHandler(embedded: boolean, tcp: TcpConnection | null) {
   };
 }
 
-interface FailureContext<T> {
+interface FailureContext<T extends FlowJobData> {
   job: Job<T>;
   jobIdStr: string;
   token?: string | null;
@@ -107,7 +108,7 @@ async function handleJobFailure<T, R>(
   internalJob: InternalJob,
   error: unknown,
   config: ProcessorConfig<T, R>,
-  context: FailureContext<T>
+  context: FailureContext<T & FlowJobData>
 ): Promise<void> {
   const { embedded, tcp, emitter } = config;
   const { job, jobIdStr, token } = context;

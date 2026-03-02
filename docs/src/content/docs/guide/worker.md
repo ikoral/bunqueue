@@ -97,6 +97,8 @@ const worker = new Worker('queue', async (job) => {
 
 ## Events
 
+All events are fully typed — TypeScript will autocomplete event names and infer callback parameter types.
+
 ```typescript
 worker.on('ready', () => {
   console.log('Worker is ready');
@@ -118,14 +120,41 @@ worker.on('progress', (job, progress) => {
   console.log(`Progress: ${job.id} - ${progress}%`);
 });
 
+worker.on('stalled', (jobId, reason) => {
+  console.warn(`Stalled: ${jobId} (${reason})`);
+});
+
+worker.on('drained', () => {
+  console.log('No more jobs in queue');
+});
+
 worker.on('error', (error) => {
   console.error('Worker error:', error);
+});
+
+worker.on('cancelled', ({ jobId, reason }) => {
+  console.log(`Cancelled: ${jobId} - ${reason}`);
 });
 
 worker.on('closed', () => {
   console.log('Worker closed');
 });
 ```
+
+### Event Reference
+
+| Event | Callback Parameters | Description |
+|-------|-------------------|-------------|
+| `ready` | `()` | Worker started polling |
+| `active` | `(job: Job<T>)` | Job started processing |
+| `completed` | `(job: Job<T>, result: R)` | Job completed successfully |
+| `failed` | `(job: Job<T>, error: Error)` | Job processing failed |
+| `progress` | `(job: Job<T> \| null, progress: number)` | Job progress updated |
+| `stalled` | `(jobId: string, reason: string)` | Job stalled (no heartbeat) |
+| `drained` | `()` | Queue has no more waiting jobs |
+| `error` | `(error: Error)` | Worker-level error |
+| `cancelled` | `({ jobId: string, reason: string })` | Job was cancelled |
+| `closed` | `()` | Worker shut down |
 
 ## Control
 

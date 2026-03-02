@@ -105,6 +105,18 @@ export function parseGlobalOptions(): { options: GlobalOptions; commandArgs: str
     }
   }
 
+  // Fall back to environment variables for token if not set via CLI flag
+  // Priority: --token flag > BQ_TOKEN > BUNQUEUE_TOKEN
+  if (!token) {
+    const bqToken = Bun.env.BQ_TOKEN;
+    const bunqueueToken = Bun.env.BUNQUEUE_TOKEN;
+    if (bqToken) {
+      token = bqToken;
+    } else if (bunqueueToken) {
+      token = bunqueueToken;
+    }
+  }
+
   return {
     options: { host, port, token, json, help, version },
     commandArgs,

@@ -37,6 +37,7 @@ export type {
   QueueOptions,
   WorkerOptions,
   Processor,
+  FlowJobData,
   StallConfig,
   DlqConfig,
   DlqEntry,

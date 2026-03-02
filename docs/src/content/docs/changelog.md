@@ -10,6 +10,22 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.5.8] - 2026-03-02
+
+### Fixed
+- **Repeat job updateData** — `updateData()` now propagates to the next repeat execution. Previously, calling `updateData()` on a completed repeated job silently failed because the job was removed from the index. A repeat chain now tracks successor job IDs so updates reach the next scheduled execution. ([#16](https://github.com/egeominotti/bunqueue/issues/16))
+- **Worker event IntelliSense** — Worker now has typed `on()` and `once()` overloads for all 10 events (`ready`, `active`, `completed`, `failed`, `progress`, `stalled`, `drained`, `error`, `cancelled`, `closed`), providing full TypeScript autocomplete. ([#15](https://github.com/egeominotti/bunqueue/issues/15))
+
+### Added
+- **`FlowJobData` type** — New exported interface for flow-injected fields (`__flowParentId`, `__flowParentIds`, `__parentId`, `__parentQueue`, `__childrenIds`). `Processor<T, R>` now intersects `T` with `FlowJobData` for automatic IntelliSense in Worker callbacks. ([#18](https://github.com/egeominotti/bunqueue/issues/18))
+- **CLI env var auth** — CLI now reads `BQ_TOKEN` / `BUNQUEUE_TOKEN` environment variables as fallback when `--token` is not provided. Priority: `--token` flag > `BQ_TOKEN` > `BUNQUEUE_TOKEN`. ([#13](https://github.com/egeominotti/bunqueue/issues/13))
+
+### Docs
+- Updated Worker guide with typed event reference table
+- Updated Flow guide with `FlowJobData` type documentation
+- Updated Queue guide with `updateData()` for repeatable jobs
+- Updated CLI guide and env vars guide with `BQ_TOKEN` / `BUNQUEUE_TOKEN`
+
 ## [2.5.7] - 2026-03-01
 
 ### Added

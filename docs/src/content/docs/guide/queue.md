@@ -120,6 +120,27 @@ await queue.add('weekly', {}, {
 });
 ```
 
+### Updating Repeatable Job Data
+
+You can update the data for the next repeat execution using `updateData()`. This works even after the current execution completes — the update propagates to the successor job automatically.
+
+```typescript
+const job = await queue.add('sync', { endpoint: '/api/v1' }, {
+  repeat: { every: 60000 },
+});
+
+// Update data for the next execution
+await job.updateData({ endpoint: '/api/v2' });
+// Next repeat will use { endpoint: '/api/v2' }
+```
+
+:::tip[Timing]
+`updateData()` works at any point in the job lifecycle:
+- **Before processing** — updates the waiting/delayed job directly
+- **During processing** — updates the active job, and the next repeat inherits the new data
+- **After completion** — follows the repeat chain to update the next scheduled execution
+:::
+
 ### Durable Jobs
 
 By default, bunqueue uses a **write buffer** for high throughput: jobs are batched in memory and flushed to SQLite every 10ms. This achieves ~100k jobs/sec but means jobs could be lost if the process crashes before the buffer is flushed.

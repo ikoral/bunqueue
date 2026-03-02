@@ -73,6 +73,9 @@ export class QueueManager {
   private readonly jobLocks = new Map<JobId, JobLock>();
   private readonly clientJobs = new Map<string, Set<JobId>>();
 
+  // Repeat chain: maps completed job ID -> successor repeat job ID
+  private readonly repeatChain = new Map<JobId, JobId>();
+
   // Cron scheduler
   private readonly cronScheduler: CronScheduler;
 
@@ -180,6 +183,7 @@ export class QueueManager {
       stalledCandidates: this.stalledCandidates,
       pendingDepChecks: this.pendingDepChecks,
       queueNamesCache: this.queueNamesCache,
+      repeatChain: this.repeatChain,
       eventsManager: this.eventsManager,
       webhookManager: this.webhookManager,
       metrics: this.metrics,
@@ -203,6 +207,7 @@ export class QueueManager {
   private handleRepeat(job: Job): void {
     if (!job.repeat) return;
     const delay = job.repeat.every ?? 0;
+    const oldId = job.id;
     void this.push(job.queue, {
       data: job.data,
       priority: job.priority,
@@ -222,6 +227,14 @@ export class QueueManager {
         pattern: job.repeat.pattern,
         count: job.repeat.count + 1,
       },
+    }).then((newJob) => {
+      // Store mapping so updateJobData can find the successor
+      this.repeatChain.set(oldId, newJob.id);
+      // Limit chain size to prevent memory leak (only keep recent mappings)
+      if (this.repeatChain.size > 10000) {
+        const first = this.repeatChain.keys().next().value;
+        if (first !== undefined) this.repeatChain.delete(first);
+      }
     });
   }
 
@@ -810,6 +823,7 @@ export class QueueManager {
     this.jobLocks.clear();
     this.stalledCandidates.clear();
     this.clientJobs.clear();
+    this.repeatChain.clear();
     for (const shard of this.processingShards) shard.clear();
     for (const shard of this.shards) {
       shard.waitingDeps.clear();

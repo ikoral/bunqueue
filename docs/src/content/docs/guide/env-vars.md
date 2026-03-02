@@ -115,6 +115,23 @@ bunqueue push emails '{"to":"test@example.com"}' --token secret-token-1
 curl -H "Authorization: Bearer secret-token-1" http://localhost:6790/api/queues
 ```
 
+### `BQ_TOKEN` / `BUNQUEUE_TOKEN`
+
+CLI auth token for client commands. Avoids repeating `--token` on every command.
+
+| Variable | Type | Default |
+|----------|------|---------|
+| `BQ_TOKEN` | string | (none) |
+| `BUNQUEUE_TOKEN` | string | (none) |
+
+Priority: `--token` flag > `BQ_TOKEN` > `BUNQUEUE_TOKEN`.
+
+```bash
+export BQ_TOKEN=secret-token-1
+bunqueue stats              # no --token needed
+bunqueue push emails '{}'   # uses BQ_TOKEN automatically
+```
+
 ## Logging
 
 ### `LOG_LEVEL`
