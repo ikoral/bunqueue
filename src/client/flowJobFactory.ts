@@ -5,6 +5,20 @@
 
 import type { Job } from './types';
 
+/** Callbacks for flow job mutation operations */
+export interface FlowJobCallbacks {
+  updateData?: (id: string, data: unknown) => Promise<void>;
+  updateProgress?: (id: string, progress: number | object) => Promise<void>;
+  log?: (id: string, message: string) => Promise<void>;
+  promote?: (id: string) => Promise<void>;
+  remove?: (id: string) => Promise<void>;
+  changePriority?: (id: string, priority: number) => Promise<void>;
+  changeDelay?: (id: string, delay: number) => Promise<void>;
+  clearLogs?: (id: string) => Promise<void>;
+  retry?: (id: string) => Promise<void>;
+  getState?: (id: string) => Promise<string>;
+}
+
 /** Extract user data (remove internal fields like __parentId, __childrenIds, name) */
 export function extractUserDataFromInternal(data: Record<string, unknown>): unknown {
   const result: Record<string, unknown> = {};
@@ -21,7 +35,8 @@ export function createFlowJobObject<T>(
   id: string,
   name: string,
   data: T,
-  queueName: string
+  queueName: string,
+  callbacks?: FlowJobCallbacks
 ): Job<T> {
   const ts = Date.now();
   return {
@@ -46,27 +61,55 @@ export function createFlowJobObject<T>(
     deduplicationId: undefined,
     repeatJobKey: undefined,
     attemptsStarted: 0,
-    // Methods - no-op implementations for flow results
-    updateProgress: () => Promise.resolve(),
-    log: () => Promise.resolve(),
-    getState: () => Promise.resolve('waiting' as const),
-    remove: () => Promise.resolve(),
-    retry: () => Promise.resolve(),
+    // Methods - wired to callbacks when available, otherwise no-op
+    updateProgress: (progress) =>
+      callbacks?.updateProgress
+        ? callbacks.updateProgress(id, progress as number | object)
+        : Promise.resolve(),
+    log: (message) => (callbacks?.log ? callbacks.log(id, message) : Promise.resolve()),
+    getState: () =>
+      callbacks?.getState
+        ? (callbacks.getState(id) as Promise<
+            'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | 'unknown'
+          >)
+        : Promise.resolve('waiting' as const),
+    remove: () => (callbacks?.remove ? callbacks.remove(id) : Promise.resolve()),
+    retry: () => (callbacks?.retry ? callbacks.retry(id) : Promise.resolve()),
     getChildrenValues: () => Promise.resolve({}),
     // BullMQ v5 state check methods
-    isWaiting: () => Promise.resolve(true),
-    isActive: () => Promise.resolve(false),
-    isDelayed: () => Promise.resolve(false),
-    isCompleted: () => Promise.resolve(false),
-    isFailed: () => Promise.resolve(false),
+    isWaiting: () =>
+      callbacks?.getState
+        ? callbacks.getState(id).then((s) => s === 'waiting')
+        : Promise.resolve(true),
+    isActive: () =>
+      callbacks?.getState
+        ? callbacks.getState(id).then((s) => s === 'active')
+        : Promise.resolve(false),
+    isDelayed: () =>
+      callbacks?.getState
+        ? callbacks.getState(id).then((s) => s === 'delayed')
+        : Promise.resolve(false),
+    isCompleted: () =>
+      callbacks?.getState
+        ? callbacks.getState(id).then((s) => s === 'completed')
+        : Promise.resolve(false),
+    isFailed: () =>
+      callbacks?.getState
+        ? callbacks.getState(id).then((s) => s === 'failed')
+        : Promise.resolve(false),
     isWaitingChildren: () => Promise.resolve(false),
     // BullMQ v5 mutation methods
-    updateData: () => Promise.resolve(),
-    promote: () => Promise.resolve(),
-    changeDelay: () => Promise.resolve(),
-    changePriority: () => Promise.resolve(),
+    updateData: (newData) =>
+      callbacks?.updateData ? callbacks.updateData(id, newData) : Promise.resolve(),
+    promote: () => (callbacks?.promote ? callbacks.promote(id) : Promise.resolve()),
+    changeDelay: (delay) =>
+      callbacks?.changeDelay ? callbacks.changeDelay(id, delay) : Promise.resolve(),
+    changePriority: (opts) =>
+      callbacks?.changePriority
+        ? callbacks.changePriority(id, (opts as { priority: number }).priority)
+        : Promise.resolve(),
     extendLock: () => Promise.resolve(0),
-    clearLogs: () => Promise.resolve(),
+    clearLogs: () => (callbacks?.clearLogs ? callbacks.clearLogs(id) : Promise.resolve()),
     // BullMQ v5 dependency methods
     getDependencies: () => Promise.resolve({ processed: {}, unprocessed: [] }),
     getDependenciesCount: () => Promise.resolve({ processed: 0, unprocessed: 0 }),

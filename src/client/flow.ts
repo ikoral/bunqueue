@@ -15,8 +15,13 @@ import type {
   JobNode,
   GetFlowOpts,
 } from './flowTypes';
-import { createFlowJobObject, extractUserDataFromInternal } from './flowJobFactory';
+import {
+  createFlowJobObject,
+  extractUserDataFromInternal,
+  type FlowJobCallbacks,
+} from './flowJobFactory';
 import { pushJob, pushJobWithParent, cleanupJobs, type PushContext } from './flowPush';
+import * as managementOps from './queue/operations/management';
 
 // Re-export types for backwards compatibility
 export type {
@@ -255,6 +260,31 @@ export class FlowProducer {
   // Private Methods
   // ============================================================================
 
+  /** Build callbacks that wire flow job methods to actual management operations */
+  private buildCallbacks(queueName: string): FlowJobCallbacks {
+    const ctx = { name: queueName, embedded: this.embedded, tcp: this.tcp };
+    return {
+      updateData: (id, data) => managementOps.updateJobData(ctx, id, data),
+      updateProgress: (id, progress) => managementOps.updateJobProgress(ctx, id, progress),
+      log: (id, msg) => managementOps.addJobLog(ctx, id, msg).then(() => {}),
+      promote: (id) => managementOps.promoteJob(ctx, id),
+      remove: (id) => managementOps.removeAsync(ctx, id),
+      changePriority: (id, p) => managementOps.changeJobPriority(ctx, id, { priority: p }),
+      changeDelay: (id, d) => managementOps.changeJobDelay(ctx, id, d),
+      clearLogs: (id) => managementOps.clearJobLogs(ctx, id),
+      retry: (id) => managementOps.retryJob(ctx, id),
+      getState: (id) => {
+        if (this.embedded) {
+          return getSharedManager().getJobState(jobId(id));
+        }
+        if (!this.tcp) return Promise.resolve('unknown');
+        return this.tcp
+          .send({ cmd: 'GetState', id })
+          .then((r) => (typeof r.state === 'string' ? r.state : 'unknown'));
+      },
+    };
+  }
+
   private async getFlowEmbedded<T>(
     id: string,
     queueName: string,
@@ -288,7 +318,13 @@ export class FlowProducer {
     const data = job.data as Record<string, unknown>;
     const name = typeof data.name === 'string' ? data.name : 'default';
     const userData = extractUserDataFromInternal(data) as T;
-    const jobObj = createFlowJobObject<T>(String(job.id), name, userData, job.queue);
+    const jobObj = createFlowJobObject<T>(
+      String(job.id),
+      name,
+      userData,
+      job.queue,
+      this.buildCallbacks(job.queue)
+    );
 
     if (depth <= 0 || job.childrenIds.length === 0) return { job: jobObj };
 
@@ -315,7 +351,13 @@ export class FlowProducer {
     const userData = extractUserDataFromInternal(data ?? {}) as T;
     const rawChildrenIds = data?.__childrenIds;
     const childrenIds = Array.isArray(rawChildrenIds) ? (rawChildrenIds as string[]) : [];
-    const jobObj = createFlowJobObject<T>(id, name, userData, queueName);
+    const jobObj = createFlowJobObject<T>(
+      id,
+      name,
+      userData,
+      queueName,
+      this.buildCallbacks(queueName)
+    );
 
     if (depth <= 0 || childrenIds.length === 0 || !this.tcp) return { job: jobObj };
 
@@ -371,7 +413,13 @@ export class FlowProducer {
       parentRef,
       childIds,
     });
-    const job = createFlowJobObject<T>(jobIdStr, node.name, node.data as T, node.queueName);
+    const job = createFlowJobObject<T>(
+      jobIdStr,
+      node.name,
+      node.data as T,
+      node.queueName,
+      this.buildCallbacks(node.queueName)
+    );
 
     return { job, children: childNodes.length > 0 ? childNodes : undefined };
   }
