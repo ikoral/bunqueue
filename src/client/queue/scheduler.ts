@@ -22,6 +22,7 @@ interface RepeatOpts {
   prevMillis?: number;
   offset?: number;
   jobId?: string;
+  timezone?: string;
 }
 
 interface JobTemplate {
@@ -56,7 +57,7 @@ export async function upsertJobScheduler(
       data: jobTemplate?.data ?? {},
       schedule: cronPattern,
       repeatEvery,
-      timezone: 'UTC',
+      timezone: repeatOpts.timezone ?? 'UTC',
     });
     return {
       id: schedulerId,
@@ -72,6 +73,7 @@ export async function upsertJobScheduler(
     data: jobTemplate?.data ?? {},
     schedule: cronPattern,
     repeatEvery,
+    timezone: repeatOpts.timezone,
   });
 
   if (!response.ok) return null;
