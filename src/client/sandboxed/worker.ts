@@ -45,6 +45,30 @@ function log(
  * Sandboxed Worker - runs processors in isolated Bun Worker processes
  */
 export class SandboxedWorker extends EventEmitter {
+  // ============ Typed Event Overloads ============
+
+  on(event: 'ready' | 'closed', listener: () => void): this;
+  on(event: 'active', listener: (job: Job) => void): this;
+  on(event: 'completed', listener: (job: Job, result: unknown) => void): this;
+  on(event: 'failed', listener: (job: Job, error: Error) => void): this;
+  on(event: 'progress', listener: (job: Job, progress: number) => void): this;
+  on(event: 'error', listener: (error: Error) => void): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(event: string, listener: (...args: any[]) => void): this {
+    return super.on(event, listener);
+  }
+
+  once(event: 'ready' | 'closed', listener: () => void): this;
+  once(event: 'active', listener: (job: Job) => void): this;
+  once(event: 'completed', listener: (job: Job, result: unknown) => void): this;
+  once(event: 'failed', listener: (job: Job, error: Error) => void): this;
+  once(event: 'progress', listener: (job: Job, progress: number) => void): this;
+  once(event: 'error', listener: (error: Error) => void): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  once(event: string, listener: (...args: any[]) => void): this {
+    return super.once(event, listener);
+  }
+
   private readonly queueName: string;
   private readonly options: RequiredSandboxedWorkerOptions;
   private readonly workers: WorkerProcess[] = [];

@@ -66,7 +66,7 @@ self.onmessage = async (event) => {
     await mkdir(tempDir, { recursive: true });
   }
 
-  const wrapperPath = `${tempDir}/worker-${queueName}-${Date.now()}.ts`;
+  const wrapperPath = `${tempDir}/worker-${queueName}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.ts`;
   await Bun.write(wrapperPath, wrapperCode);
 
   return wrapperPath;

@@ -18,6 +18,40 @@ import { FrameParser } from '../../infrastructure/server/protocol';
  * Supports pipelining for high-throughput operations
  */
 export class TcpClient extends EventEmitter {
+  // ============ Typed Event Overloads ============
+
+  on(
+    event: 'connected' | 'disconnected' | 'maxReconnectAttemptsReached',
+    listener: () => void
+  ): this;
+  on(event: 'reconnecting', listener: (data: { attempt: number; delay: number }) => void): this;
+  on(event: 'error', listener: (error: Error) => void): this;
+  on(event: 'warning', listener: (data: { type: string; reqId?: string }) => void): this;
+  on(
+    event: 'health',
+    listener: (data: { type: string; latency?: number; reason?: string }) => void
+  ): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  on(event: string, listener: (...args: any[]) => void): this {
+    return super.on(event, listener);
+  }
+
+  once(
+    event: 'connected' | 'disconnected' | 'maxReconnectAttemptsReached',
+    listener: () => void
+  ): this;
+  once(event: 'reconnecting', listener: (data: { attempt: number; delay: number }) => void): this;
+  once(event: 'error', listener: (error: Error) => void): this;
+  once(event: 'warning', listener: (data: { type: string; reqId?: string }) => void): this;
+  once(
+    event: 'health',
+    listener: (data: { type: string; latency?: number; reason?: string }) => void
+  ): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  once(event: string, listener: (...args: any[]) => void): this {
+    return super.once(event, listener);
+  }
+
   private socket: SocketWrapper | null = null;
   private connected = false;
   private connecting = false;
