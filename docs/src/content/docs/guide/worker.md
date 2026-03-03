@@ -277,8 +277,22 @@ const worker = new SandboxedWorker('cpu-intensive', {
   pollInterval: 10,             // Job poll interval in ms (default: 10)
 });
 
-worker.start();
+await worker.start();
 ```
+
+### Options Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `processor` | `string` | — | Path to processor file (required) |
+| `concurrency` | `number` | `1` | Number of parallel worker threads |
+| `maxMemory` | `number` | `256` | Max memory per worker thread in MB |
+| `timeout` | `number` | `30000` | Job processing timeout in ms |
+| `autoRestart` | `boolean` | `true` | Auto-restart crashed workers |
+| `maxRestarts` | `number` | `10` | Max restart attempts per worker |
+| `pollInterval` | `number` | `10` | Job poll interval in ms |
+| `heartbeatInterval` | `number` | `0` (embedded) / `10000` (TCP) | Lock renewal interval in ms |
+| `connection` | `ConnectionOptions` | — | TCP connection config (omit for embedded) |
 
 ### TCP Mode
 
@@ -299,7 +313,7 @@ const worker = new SandboxedWorker('cpu-intensive', {
   heartbeatInterval: 10000,    // Lock renewal interval (default: 10000 for TCP)
 });
 
-worker.start();
+await worker.start();
 ```
 
 :::tip[When to use TCP mode]
@@ -327,8 +341,8 @@ export default async (job: {
 
 | Use Case | Worker | SandboxedWorker |
 |----------|--------|-----------------|
-| Fast I/O tasks | ✅ | ❌ |
-| CPU-intensive | ❌ | ✅ |
+| Fast I/O tasks | ✅ Best choice | ⚠️ Works, but overkill |
+| CPU-intensive | ⚠️ Blocks event loop | ✅ Best choice |
 | Untrusted code | ❌ | ✅ |
 | Memory leak protection | ❌ | ✅ |
 | Crash isolation | ❌ | ✅ |
