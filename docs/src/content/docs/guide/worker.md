@@ -259,6 +259,10 @@ For CPU-intensive tasks or jobs that might crash, use `SandboxedWorker` to run p
 Each job runs in a separate Bun Worker thread. If a job crashes (OOM, infinite loop, uncaught exception), only that worker is affected. The main process and other workers continue running. Crashed workers are automatically restarted up to `maxRestarts` times.
 :::
 
+:::tip[Processing large files]
+If your jobs process large files (100MB+), increase `maxMemory` above the default of 256MB. For example, for 300MB files set `maxMemory: 512` or higher to avoid OOM crashes.
+:::
+
 ```typescript
 import { SandboxedWorker } from 'bunqueue/client';
 
@@ -331,7 +335,7 @@ export default async (job: {
 
 ### SandboxedWorker Events
 
-SandboxedWorker supports the same events as the regular Worker:
+SandboxedWorker supports 7 events. Note that `stalled`, `drained`, and `cancelled` are **not available** — these are only on the regular Worker.
 
 ```typescript
 worker.on('ready', () => {
@@ -362,6 +366,22 @@ worker.on('closed', () => {
   console.log('Worker pool stopped');
 });
 ```
+
+#### Event Reference
+
+| Event | Callback Parameters | Description |
+|-------|---------------------|-------------|
+| `ready` | `()` | Worker pool started and all threads spawned |
+| `active` | `(job: Job)` | Job dispatched to a worker thread |
+| `completed` | `(job: Job, result: unknown)` | Job completed successfully |
+| `failed` | `(job: Job, error: Error)` | Job failed, timed out, or worker crashed |
+| `progress` | `(job: Job, progress: number)` | Job progress updated (0-100) |
+| `error` | `(error: Error)` | Worker-level error (dispatch failure, heartbeat error, crash) |
+| `closed` | `()` | Worker pool stopped |
+
+:::caution[Events not available on SandboxedWorker]
+`stalled`, `drained`, and `cancelled` events are only available on the regular `Worker`. If you need these, use a regular Worker instead.
+:::
 
 ### SandboxedWorker API
 
