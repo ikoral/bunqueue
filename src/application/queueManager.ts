@@ -292,25 +292,40 @@ export class QueueManager {
   }
 
   async ack(jobId: JobId, result?: unknown, token?: string): Promise<void> {
-    if (token && !lockMgr.verifyLock(jobId, token, this.contextFactory.getLockContext())) {
-      throw new Error(`Invalid or expired lock token for job ${jobId}`);
+    const lockCtx = this.contextFactory.getLockContext();
+    if (token && !lockMgr.verifyLock(jobId, token, lockCtx)) {
+      this.throwIfOwnershipConflict(jobId, lockCtx);
+      return;
     }
     await ackJob(jobId, result, this.contextFactory.getAckContext());
-    lockMgr.releaseLock(jobId, this.contextFactory.getLockContext(), token);
+    lockMgr.releaseLock(jobId, lockCtx, token);
   }
 
   async ackBatch(jobIds: JobId[], tokens?: string[]): Promise<void> {
     const lockCtx = this.contextFactory.getLockContext();
+    const validJobIds: JobId[] = [];
+    const validTokens: string[] | undefined = tokens ? [] : undefined;
     if (tokens?.length === jobIds.length) {
       for (let i = 0; i < jobIds.length; i++) {
         const t = tokens[i];
         if (t && !lockMgr.verifyLock(jobIds[i], t, lockCtx)) {
-          throw new Error(`Invalid or expired lock token for job ${jobIds[i]}`);
+          this.throwIfOwnershipConflict(jobIds[i], lockCtx);
+          continue;
         }
+        validJobIds.push(jobIds[i]);
+        if (validTokens) validTokens.push(t);
       }
+    } else {
+      validJobIds.push(...jobIds);
     }
-    await ackJobBatch(jobIds, this.contextFactory.getAckContext());
-    if (tokens) {
+    if (validJobIds.length > 0) {
+      await ackJobBatch(validJobIds, this.contextFactory.getAckContext());
+    }
+    if (validTokens) {
+      for (let i = 0; i < validJobIds.length; i++) {
+        lockMgr.releaseLock(validJobIds[i], lockCtx, validTokens[i]);
+      }
+    } else if (tokens) {
       for (let i = 0; i < jobIds.length; i++) {
         lockMgr.releaseLock(jobIds[i], lockCtx, tokens[i]);
       }
@@ -321,13 +336,18 @@ export class QueueManager {
     items: Array<{ id: JobId; result: unknown; token?: string }>
   ): Promise<void> {
     const lockCtx = this.contextFactory.getLockContext();
+    const validItems: typeof items = [];
     for (const item of items) {
       if (item.token && !lockMgr.verifyLock(item.id, item.token, lockCtx)) {
-        throw new Error(`Invalid or expired lock token for job ${item.id}`);
+        this.throwIfOwnershipConflict(item.id, lockCtx);
+        continue;
       }
+      validItems.push(item);
     }
-    await ackJobBatchWithResults(items, this.contextFactory.getAckContext());
-    for (const item of items) {
+    if (validItems.length > 0) {
+      await ackJobBatchWithResults(validItems, this.contextFactory.getAckContext());
+    }
+    for (const item of validItems) {
       lockMgr.releaseLock(item.id, lockCtx, item.token);
     }
   }
@@ -335,10 +355,23 @@ export class QueueManager {
   async fail(jobId: JobId, error?: string, token?: string): Promise<void> {
     const lockCtx = this.contextFactory.getLockContext();
     if (token && !lockMgr.verifyLock(jobId, token, lockCtx)) {
-      throw new Error(`Invalid or expired lock token for job ${jobId}`);
+      this.throwIfOwnershipConflict(jobId, lockCtx);
+      return;
     }
     await failJob(jobId, error, this.contextFactory.getAckContext());
     lockMgr.releaseLock(jobId, lockCtx, token);
+  }
+
+  /**
+   * Check if a failed lock verification is a genuine ownership conflict.
+   * If the job is still in processing with a different lock, throw.
+   * If the job was already requeued by the background lock expiration task, return silently.
+   */
+  private throwIfOwnershipConflict(jobId: JobId, lockCtx: { jobLocks: Map<JobId, JobLock> }): void {
+    const loc = this.jobIndex.get(jobId);
+    if (loc?.type === 'processing' && lockCtx.jobLocks.has(jobId)) {
+      throw new Error(`Invalid or expired lock token for job ${jobId}`);
+    }
   }
 
   jobHeartbeat(jobId: JobId, token?: string): boolean {

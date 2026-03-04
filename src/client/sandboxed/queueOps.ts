@@ -18,6 +18,7 @@ export interface QueueOps {
   ack(id: JobId, result: unknown, token?: string): Promise<void>;
   fail(id: JobId, error: string, token?: string): Promise<void>;
   updateProgress(id: JobId, progress: number): Promise<void>;
+  addLog(id: JobId, message: string): void;
   sendHeartbeat(ids: string[], tokens: string[]): Promise<void>;
 }
 
@@ -29,6 +30,9 @@ export function createEmbeddedOps(manager: SharedManager): QueueOps {
     fail: (id, error, token) => manager.fail(id, error, token),
     updateProgress: async (id, progress) => {
       await manager.updateProgress(id, progress);
+    },
+    addLog: (id, message) => {
+      manager.addLog(id, message);
     },
     sendHeartbeat: async () => {},
   };
@@ -53,6 +57,9 @@ export function createTcpOps(tcp: TcpConnectionPool): QueueOps {
     },
     async updateProgress(id, progress) {
       await tcp.send({ cmd: 'Progress', id: String(id), progress });
+    },
+    addLog(id, message) {
+      tcp.send({ cmd: 'AddLog', id: String(id), message }).catch(() => {});
     },
     async sendHeartbeat(ids, tokens) {
       if (ids.length === 0) return;

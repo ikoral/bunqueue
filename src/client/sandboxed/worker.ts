@@ -43,15 +43,16 @@ function log(
 
 /**
  * Sandboxed Worker - runs processors in isolated Bun Worker processes
+ * @template T - Job data type for typed events
  */
-export class SandboxedWorker extends EventEmitter {
+export class SandboxedWorker<T = unknown> extends EventEmitter {
   // ============ Typed Event Overloads ============
 
   on(event: 'ready' | 'closed', listener: () => void): this;
-  on(event: 'active', listener: (job: Job) => void): this;
-  on(event: 'completed', listener: (job: Job, result: unknown) => void): this;
-  on(event: 'failed', listener: (job: Job, error: Error) => void): this;
-  on(event: 'progress', listener: (job: Job, progress: number) => void): this;
+  on(event: 'active', listener: (job: Job<T>) => void): this;
+  on(event: 'completed', listener: (job: Job<T>, result: unknown) => void): this;
+  on(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
+  on(event: 'progress', listener: (job: Job<T>, progress: number) => void): this;
   on(event: 'error', listener: (error: Error) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: string, listener: (...args: any[]) => void): this {
@@ -59,10 +60,10 @@ export class SandboxedWorker extends EventEmitter {
   }
 
   once(event: 'ready' | 'closed', listener: () => void): this;
-  once(event: 'active', listener: (job: Job) => void): this;
-  once(event: 'completed', listener: (job: Job, result: unknown) => void): this;
-  once(event: 'failed', listener: (job: Job, error: Error) => void): this;
-  once(event: 'progress', listener: (job: Job, progress: number) => void): this;
+  once(event: 'active', listener: (job: Job<T>) => void): this;
+  once(event: 'completed', listener: (job: Job<T>, result: unknown) => void): this;
+  once(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
+  once(event: 'progress', listener: (job: Job<T>, progress: number) => void): this;
   once(event: 'error', listener: (error: Error) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   once(event: string, listener: (...args: any[]) => void): this {
@@ -234,15 +235,27 @@ export class SandboxedWorker extends EventEmitter {
     wp.busy = true;
     wp.currentJob = job;
     wp.currentToken = token;
-    wp.timeoutId = setTimeout(() => {
-      this.handleTimeout(wp, job);
-    }, this.options.timeout);
+
+    // timeout: 0 disables the timeout (for long-running jobs)
+    if (this.options.timeout > 0) {
+      wp.timeoutId = setTimeout(() => {
+        this.handleTimeout(wp, job);
+      }, this.options.timeout);
+    }
 
     this.emit('active', this.createEventJob(job));
 
+    const jobData = job.data as Record<string, unknown> | null;
+    const parentId = jobData?.__flowParentId as string | undefined;
     const request: IPCRequest = {
       type: 'job',
-      job: { id: String(job.id), data: job.data, queue: job.queue, attempts: job.attempts },
+      job: {
+        id: String(job.id),
+        data: job.data,
+        queue: job.queue,
+        attempts: job.attempts,
+        ...(parentId ? { parentId } : {}),
+      },
     };
     try {
       wp.worker.postMessage(request);
@@ -273,10 +286,18 @@ export class SandboxedWorker extends EventEmitter {
       case 'error':
         this.fail(wp, msg.error ?? 'Unknown error');
         break;
+      case 'fail':
+        this.fail(wp, msg.error ?? 'Job explicitly failed');
+        break;
       case 'progress':
         if (msg.progress !== undefined) {
           this.ops.updateProgress(wp.currentJob.id, msg.progress).catch(() => {});
           this.emit('progress', this.createEventJob(wp.currentJob), msg.progress);
+        }
+        break;
+      case 'log':
+        if (msg.message) {
+          this.ops.addLog(wp.currentJob.id, msg.message);
         }
         break;
     }

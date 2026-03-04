@@ -60,14 +60,16 @@ export interface IPCRequest {
     data: unknown;
     queue: string;
     attempts: number;
+    parentId?: string;
   };
 }
 
 /** IPC message from worker to main */
 export interface IPCResponse {
-  type: 'result' | 'error' | 'progress' | 'ready';
+  type: 'result' | 'error' | 'progress' | 'log' | 'fail' | 'ready';
   jobId?: string;
   result?: unknown;
   error?: string;
   progress?: number;
+  message?: string;
 }

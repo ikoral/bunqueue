@@ -44,8 +44,16 @@ self.onmessage = async (event) => {
       data: job.data,
       queue: job.queue,
       attempts: job.attempts,
+      parentId: job.parentId,
       progress: (value) => {
         self.postMessage({ type: 'progress', jobId: job.id, progress: value });
+      },
+      log: (message) => {
+        self.postMessage({ type: 'log', jobId: job.id, message });
+      },
+      fail: (error) => {
+        const msg = typeof error === 'string' ? error : error instanceof Error ? error.message : String(error);
+        self.postMessage({ type: 'fail', jobId: job.id, error: msg });
       },
     });
 
