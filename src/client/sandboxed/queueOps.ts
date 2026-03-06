@@ -4,6 +4,7 @@
  */
 
 import type { Job as DomainJob, JobId } from '../../domain/types/job';
+import { jobId } from '../../domain/types/job';
 import type { SharedManager } from '../manager';
 import type { TcpConnectionPool } from '../tcpPool';
 import { parseJobFromResponse } from '../worker/jobParser';
@@ -34,7 +35,12 @@ export function createEmbeddedOps(manager: SharedManager): QueueOps {
     addLog: (id, message) => {
       manager.addLog(id, message);
     },
-    sendHeartbeat: async () => {},
+    sendHeartbeat: (ids) => {
+      for (const id of ids) {
+        manager.jobHeartbeat(jobId(id));
+      }
+      return Promise.resolve();
+    },
   };
 }
 

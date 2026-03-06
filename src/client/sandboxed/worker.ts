@@ -53,6 +53,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   on(event: 'completed', listener: (job: Job<T>, result: unknown) => void): this;
   on(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
   on(event: 'progress', listener: (job: Job<T>, progress: number) => void): this;
+  on(event: 'log', listener: (job: Job<T>, message: string) => void): this;
   on(event: 'error', listener: (error: Error) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: string, listener: (...args: any[]) => void): this {
@@ -64,6 +65,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   once(event: 'completed', listener: (job: Job<T>, result: unknown) => void): this;
   once(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
   once(event: 'progress', listener: (job: Job<T>, progress: number) => void): this;
+  once(event: 'log', listener: (job: Job<T>, message: string) => void): this;
   once(event: 'error', listener: (error: Error) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   once(event: string, listener: (...args: any[]) => void): this {
@@ -94,7 +96,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
     } else {
       this.tcp = null;
       this.ops = createEmbeddedOps(options.manager ?? getSharedManager());
-      this.heartbeatInterval = options.heartbeatInterval ?? 0;
+      this.heartbeatInterval = options.heartbeatInterval ?? 5000;
     }
 
     this.options = {
@@ -298,6 +300,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
       case 'log':
         if (msg.message) {
           this.ops.addLog(wp.currentJob.id, msg.message);
+          this.emit('log', this.createEventJob(wp.currentJob), msg.message);
         }
         break;
     }
