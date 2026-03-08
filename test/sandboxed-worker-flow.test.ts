@@ -1,0 +1,261 @@
+/**
+ * SandboxedWorker + Flow Tests (Embedded Mode)
+ *
+ * Tests sandboxed worker processing of flow jobs including parent-child
+ * relationships, failure handling, and progress tracking within flows.
+ */
+
+import { describe, test, expect, afterEach, beforeEach } from 'bun:test';
+import { Queue, SandboxedWorker, FlowProducer, shutdownManager } from '../src/client';
+import { unlink, mkdtemp } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
+let tmpDir: string;
+const processorFiles: string[] = [];
+
+async function writeProcessor(name: string, code: string): Promise<string> {
+  const path = join(tmpDir, `${name}-${Date.now()}-${Math.random().toString(36).slice(2)}.ts`);
+  await Bun.write(path, code);
+  processorFiles.push(path);
+  return path;
+}
+
+describe('SandboxedWorker + Flow - Embedded', () => {
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), 'bunq-sandbox-flow-'));
+  });
+
+  afterEach(async () => {
+    shutdownManager();
+    for (const f of processorFiles) {
+      try { await unlink(f); } catch { /* ignore */ }
+    }
+    processorFiles.length = 0;
+  });
+
+  test('sandboxed worker processes child jobs in a flow', async () => {
+    const flow = new FlowProducer({ embedded: true });
+    const queue = new Queue('sbx-flow-children', { embedded: true });
+    queue.obliterate();
+
+    const processorPath = await writeProcessor('flow-children', `
+      export default async (job: any) => {
+        const data = job.data;
+        if (data.role === 'child') {
+          return { childValue: data.value * 2 };
+        }
+        return { parentDone: true };
+      };
+    `);
+
+    const completed: Array<{ name: string; result: any }> = [];
+
+    const worker = new SandboxedWorker('sbx-flow-children', {
+      processor: processorPath,
+      concurrency: 3,
+      timeout: 10000,
+    });
+
+    worker.on('completed', (job, result) => {
+      completed.push({ name: job.name, result });
+    });
+    worker.on('error', () => {});
+
+    await worker.start();
+
+    await flow.add({
+      name: 'parent',
+      queueName: 'sbx-flow-children',
+      data: { role: 'parent' },
+      children: [
+        { name: 'child-a', queueName: 'sbx-flow-children', data: { role: 'child', value: 5 } },
+        { name: 'child-b', queueName: 'sbx-flow-children', data: { role: 'child', value: 10 } },
+      ],
+    });
+
+    // Wait for all 3 jobs (2 children + 1 parent)
+    for (let i = 0; i < 100 && completed.length < 3; i++) await Bun.sleep(100);
+
+    expect(completed.length).toBeGreaterThanOrEqual(3);
+
+    // Children should have been processed
+    const childResults = completed.filter((c) => c.name.startsWith('child-'));
+    expect(childResults.length).toBeGreaterThanOrEqual(2);
+
+    const childValues = childResults.map((c) => c.result.childValue).sort((a: number, b: number) => a - b);
+    expect(childValues).toEqual([10, 20]);
+
+    await worker.stop();
+    flow.close();
+    queue.close();
+  }, 20000);
+
+  test('sandboxed worker processes parent job after children complete', async () => {
+    const flow = new FlowProducer({ embedded: true });
+    const queue = new Queue('sbx-flow-order', { embedded: true });
+    queue.obliterate();
+
+    const processorPath = await writeProcessor('flow-order', `
+      export default async (job: any) => {
+        const data = job.data;
+        return { role: data.role, processed: true };
+      };
+    `);
+
+    const executionOrder: string[] = [];
+
+    const worker = new SandboxedWorker('sbx-flow-order', {
+      processor: processorPath,
+      concurrency: 1,
+      timeout: 10000,
+    });
+
+    worker.on('completed', (job, result: any) => {
+      executionOrder.push(result.role);
+    });
+    worker.on('error', () => {});
+
+    await worker.start();
+
+    await flow.add({
+      name: 'parent',
+      queueName: 'sbx-flow-order',
+      data: { role: 'parent' },
+      children: [
+        { name: 'child-1', queueName: 'sbx-flow-order', data: { role: 'child-1' } },
+        { name: 'child-2', queueName: 'sbx-flow-order', data: { role: 'child-2' } },
+      ],
+    });
+
+    for (let i = 0; i < 100 && executionOrder.length < 3; i++) await Bun.sleep(100);
+
+    expect(executionOrder).toHaveLength(3);
+    // Parent must be the last one processed (after both children)
+    expect(executionOrder[executionOrder.length - 1]).toBe('parent');
+    // Both children should be processed before parent
+    expect(executionOrder.slice(0, 2).sort()).toEqual(['child-1', 'child-2']);
+
+    await worker.stop();
+    flow.close();
+    queue.close();
+  }, 20000);
+
+  test('sandboxed worker handles flow job failure', async () => {
+    const flow = new FlowProducer({ embedded: true });
+    const queue = new Queue('sbx-flow-fail', { embedded: true });
+    queue.obliterate();
+
+    const processorPath = await writeProcessor('flow-fail', `
+      export default async (job: any) => {
+        const data = job.data;
+        if (data.shouldFail) {
+          throw new Error('Flow child failed: ' + data.reason);
+        }
+        return { ok: true, role: data.role };
+      };
+    `);
+
+    const failures: Array<{ name: string; error: string }> = [];
+    const completions: Array<{ name: string }> = [];
+
+    const worker = new SandboxedWorker('sbx-flow-fail', {
+      processor: processorPath,
+      concurrency: 2,
+      timeout: 10000,
+    });
+
+    worker.on('failed', (job, err) => {
+      failures.push({ name: job.name, error: err.message });
+    });
+    worker.on('completed', (job) => {
+      completions.push({ name: job.name });
+    });
+    worker.on('error', () => {});
+
+    await worker.start();
+
+    // Add a chain where step-1 will fail
+    await flow.addChain([
+      { name: 'step-0', queueName: 'sbx-flow-fail', data: { role: 'step-0', shouldFail: false } },
+      { name: 'step-1', queueName: 'sbx-flow-fail', data: { role: 'step-1', shouldFail: true, reason: 'bad data' } },
+    ]);
+
+    // Wait for step-0 to complete and step-1 to fail
+    for (let i = 0; i < 80 && (completions.length === 0 || failures.length === 0); i++) {
+      await Bun.sleep(100);
+    }
+
+    // step-0 should complete successfully
+    expect(completions.length).toBeGreaterThanOrEqual(1);
+    expect(completions.some((c) => c.name === 'step-0')).toBe(true);
+
+    // step-1 should fail
+    expect(failures.length).toBeGreaterThanOrEqual(1);
+    expect(failures[0].error).toContain('Flow child failed: bad data');
+
+    await worker.stop();
+    flow.close();
+    queue.close();
+  }, 20000);
+
+  test('flow with sandboxed worker and job progress updates', async () => {
+    const flow = new FlowProducer({ embedded: true });
+    const queue = new Queue('sbx-flow-progress', { embedded: true });
+    queue.obliterate();
+
+    const processorPath = await writeProcessor('flow-progress', `
+      export default async (job: any) => {
+        const data = job.data;
+        for (let p = 25; p <= 100; p += 25) {
+          job.progress(p);
+          await Bun.sleep(20);
+        }
+        return { role: data.role, done: true };
+      };
+    `);
+
+    const progressUpdates: Array<{ jobName: string; progress: number }> = [];
+    const completions: string[] = [];
+
+    const worker = new SandboxedWorker('sbx-flow-progress', {
+      processor: processorPath,
+      concurrency: 1,
+      timeout: 10000,
+    });
+
+    worker.on('progress', (job, progress) => {
+      progressUpdates.push({ jobName: job.name, progress });
+    });
+    worker.on('completed', (job) => {
+      completions.push(job.name);
+    });
+    worker.on('error', () => {});
+
+    await worker.start();
+
+    await flow.addChain([
+      { name: 'step-0', queueName: 'sbx-flow-progress', data: { role: 'step-0' } },
+      { name: 'step-1', queueName: 'sbx-flow-progress', data: { role: 'step-1' } },
+    ]);
+
+    for (let i = 0; i < 100 && completions.length < 2; i++) await Bun.sleep(100);
+
+    expect(completions).toHaveLength(2);
+
+    // Each step should have reported 4 progress updates (25, 50, 75, 100)
+    const step0Progress = progressUpdates
+      .filter((u) => u.jobName === 'step-0')
+      .map((u) => u.progress);
+    const step1Progress = progressUpdates
+      .filter((u) => u.jobName === 'step-1')
+      .map((u) => u.progress);
+
+    expect(step0Progress).toEqual([25, 50, 75, 100]);
+    expect(step1Progress).toEqual([25, 50, 75, 100]);
+
+    await worker.stop();
+    flow.close();
+    queue.close();
+  }, 20000);
+});
