@@ -626,6 +626,67 @@ const count = await queue.retryCompletedAsync();
 Retrying all completed jobs can re-queue a large number of jobs at once. Consider filtering or limiting the scope when dealing with high-volume queues.
 :::
 
+## Auto-Batching (TCP Mode)
+
+In TCP mode, `queue.add()` calls are automatically batched into `PUSHB` (bulk push) commands for higher throughput. This is enabled by default and requires no code changes.
+
+**How it works:** If no flush is in-flight, the add is sent immediately (zero overhead for sequential `await`). If a flush is already in-flight, subsequent adds are buffered and sent together when the current flush completes or after `maxDelayMs`, whichever comes first.
+
+```typescript
+// Auto-batching is enabled by default in TCP mode
+const queue = new Queue('tasks');
+
+// Sequential: no penalty, each add() sends immediately
+for (const item of items) {
+  await queue.add('task', item);
+}
+
+// Concurrent: adds batch into a single PUSHB round-trip
+await Promise.all([
+  queue.add('a', { x: 1 }),
+  queue.add('b', { x: 2 }),
+  queue.add('c', { x: 3 }),
+]);
+```
+
+### Configuration
+
+```typescript
+const queue = new Queue('tasks', {
+  autoBatch: {
+    maxSize: 100,     // Flush when buffer reaches this size (default: 50)
+    maxDelayMs: 10,   // Max ms to wait before flushing (default: 5)
+  },
+});
+```
+
+### Disabling Auto-Batching
+
+```typescript
+const queue = new Queue('tasks', {
+  autoBatch: { enabled: false },
+});
+```
+
+### Auto-Batch Options Reference
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | `boolean` | `true` | Enable or disable auto-batching |
+| `maxSize` | `number` | `50` | Max items before auto-flush |
+| `maxDelayMs` | `number` | `5` | Max delay in ms before auto-flush |
+
+:::note[Performance impact]
+| Pattern | Throughput | Description |
+|---------|------------|-------------|
+| Sequential `await` | ~10k ops/s | Each add sends immediately, no batching overhead |
+| Concurrent (`Promise.all`) | ~145k ops/s | Adds batch into single PUSHB round-trip |
+:::
+
+:::caution[Durable jobs bypass the batcher]
+Jobs with `durable: true` are always sent as individual `PUSH` commands and are never batched, ensuring immediate disk persistence.
+:::
+
 ## Job Options Reference
 
 | Option | Type | Default | Description |

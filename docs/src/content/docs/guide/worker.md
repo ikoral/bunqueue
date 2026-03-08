@@ -59,6 +59,8 @@ const worker = new Worker('queue', processor, {
 });
 ```
 
+**Connection pool sizing:** When `poolSize` is not specified, it defaults to `min(concurrency, 8)`. A worker with `concurrency: 5` opens 5 TCP connections, while `concurrency: 20` caps at 8. You can override this by setting `poolSize` explicitly.
+
 ### Options Reference
 
 | Option | Type | Default | Description |

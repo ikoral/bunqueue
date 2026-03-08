@@ -686,37 +686,6 @@ interface WorkerOptions {
 
   /** Rate limiter configuration for controlling job processing rate */
   limiter?: RateLimiterOptions;
-
-  /** Lock duration in ms (default: 30000) */
-  lockDuration?: number;
-
-  /** Maximum stalls before moving job to failed (default: 1) */
-  maxStalledCount?: number;
-
-  /** Skip stalled job check entirely (default: false) */
-  skipStalledCheck?: boolean;
-
-  /** Skip lock renewal via heartbeat (default: false) */
-  skipLockRenewal?: boolean;
-
-  /** Delay in ms when draining queue (default: 5000) */
-  drainDelay?: number;
-
-  /**
-   * Remove completed jobs.
-   * - `true`: remove immediately
-   * - `number`: keep for N ms then remove
-   * - `KeepJobs`: keep by age and/or count
-   */
-  removeOnComplete?: boolean | number | KeepJobs;
-
-  /**
-   * Remove failed jobs.
-   * - `true`: remove immediately
-   * - `number`: keep for N ms then remove
-   * - `KeepJobs`: keep by age and/or count
-   */
-  removeOnFail?: boolean | number | KeepJobs;
 }
 ```
 

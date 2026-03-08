@@ -516,10 +516,7 @@ bunqueue queue obliterate emails
 
 **Output:**
 ```
-⚠️  This will remove ALL data for queue 'emails'
-Type 'emails' to confirm: emails
 Queue 'emails' obliterated
-Removed: 125 waiting, 5 active, 10,234 completed, 23 failed
 ```
 
 ---
@@ -573,9 +570,7 @@ bunqueue dlq purge emails
 
 **Output:**
 ```
-⚠️  This will permanently delete all DLQ entries for 'emails'
-Type 'purge' to confirm: purge
-Purged 3 entries from DLQ
+Purged DLQ for 'emails'
 ```
 
 ---
@@ -793,15 +788,12 @@ backups/2024-01-13/bunq-103000.db     43.2 MB   2024-01-13 10:30:00
 ### Restore Backup
 
 ```bash
-bunqueue backup restore backups/2024-01-14/bunq-103000.db
+# Restore requires --force (-f) flag to confirm
+bunqueue backup restore backups/2024-01-14/bunq-103000.db --force
 ```
 
 **Output:**
 ```
-⚠️  This will overwrite the current database
-Type 'restore' to confirm: restore
-Downloading backup...
-Restoring database...
 Restore completed successfully
 ```
 
@@ -834,8 +826,8 @@ Next backup: 2024-01-15 16:30:00
 | `--port` | `-p` | TCP port | `6789` |
 | `--token` | `-t` | Authentication token (env: `BQ_TOKEN`, `BUNQUEUE_TOKEN`) | - |
 | `--json` | - | Output as JSON | `false` |
-| `--help` | `-h` | Show help | - |
-| `--version` | `-v` | Show version | - |
+| `--help` | - | Show help | - |
+| `--version` | - | Show version | - |
 
 ### Authentication
 
