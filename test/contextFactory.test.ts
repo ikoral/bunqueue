@@ -1004,7 +1004,7 @@ describe('ContextFactory', () => {
     test('factory with default config should use DEFAULT_CONFIG values', () => {
       const bgCtx = factory.getBackgroundContext();
       expect(bgCtx.config.maxCompletedJobs).toBe(50_000);
-      expect(bgCtx.config.maxJobResults).toBe(5_000);
+      expect(bgCtx.config.maxJobResults).toBe(10_000);
       expect(bgCtx.config.maxJobLogs).toBe(10_000);
       expect(bgCtx.config.maxCustomIds).toBe(50_000);
       expect(bgCtx.config.cleanupIntervalMs).toBe(10_000);

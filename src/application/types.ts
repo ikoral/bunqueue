@@ -8,7 +8,7 @@ import type { JobLogEntry } from '../domain/types/worker';
 import type { Shard } from '../domain/queue/shard';
 import type { SqliteStorage } from '../infrastructure/persistence/sqlite';
 import type { RWLock } from '../shared/lock';
-import type { LRUMap, BoundedSet, BoundedMap, SetLike } from '../shared/lru';
+import type { LRUMap, BoundedSet, SetLike } from '../shared/lru';
 import type { EventsManager } from './eventsManager';
 import type { WebhookManager } from './webhookManager';
 
@@ -29,7 +29,7 @@ export interface QueueManagerConfig {
 
 export const DEFAULT_CONFIG = {
   maxCompletedJobs: 50_000,
-  maxJobResults: 5_000,
+  maxJobResults: 10_000,
   maxJobLogs: 10_000,
   maxCustomIds: 50_000,
   maxWaitingDeps: 10_000,
@@ -54,7 +54,7 @@ export interface QueueManagerState {
   // Global indexes
   readonly jobIndex: Map<JobId, JobLocation>;
   readonly completedJobs: BoundedSet<JobId>;
-  readonly jobResults: BoundedMap<JobId, unknown>;
+  readonly jobResults: LRUMap<JobId, unknown>;
   readonly customIdMap: LRUMap<string, JobId>;
   readonly jobLogs: LRUMap<JobId, JobLogEntry[]>;
 
@@ -111,7 +111,7 @@ export interface StatsContext {
   processingShards: Map<JobId, Job>[];
   completedJobs: SetLike<JobId>;
   jobIndex: Map<JobId, JobLocation>;
-  jobResults: BoundedMap<JobId, unknown>;
+  jobResults: LRUMap<JobId, unknown>;
   jobLogs: LRUMap<JobId, JobLogEntry[]>;
   customIdMap: LRUMap<string, JobId>;
   jobLocks: Map<JobId, JobLock>;

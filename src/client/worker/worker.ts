@@ -549,8 +549,17 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   }
 
   private startJob(job: InternalJob, token: string | null): void {
-    this.activeJobs++;
     const jobIdStr = String(job.id);
+
+    // Dedup: skip if this job is already being processed (Issue #33)
+    // This happens when stall detection retries a job while the worker
+    // is still processing it, and the worker's other concurrency slot
+    // pulls the retried job from the queue.
+    if (this.activeJobIds.has(jobIdStr)) {
+      return;
+    }
+
+    this.activeJobs++;
     this.activeJobIds.add(jobIdStr);
 
     if (this.opts.useLocks && token && !this.jobTokens.has(jobIdStr)) {

@@ -219,17 +219,24 @@ export class CronScheduler {
       this.nextTimer = null;
     }
 
-    // Find next non-stale entry
-    const entry = this.cronHeap.peek();
-    if (!entry) return;
+    // Find next non-stale entry, popping stale ones from the heap
+    while (!this.cronHeap.isEmpty) {
+      const entry = this.cronHeap.peek();
+      if (!entry) return;
 
-    if (this.cronJobs.get(entry.cron.name)?.generation !== entry.generation) return; // stale top
+      // Check if stale (cron was removed or updated since this heap entry was created)
+      if (this.cronJobs.get(entry.cron.name)?.generation !== entry.generation) {
+        this.cronHeap.pop(); // Remove stale entry and continue looking
+        continue;
+      }
 
-    const delay = Math.max(0, entry.cron.nextRun - Date.now());
-    this.nextTimer = setTimeout(() => {
-      this.nextTimer = null;
-      void this.tick();
-    }, delay);
+      const delay = Math.max(0, entry.cron.nextRun - Date.now());
+      this.nextTimer = setTimeout(() => {
+        this.nextTimer = null;
+        void this.tick();
+      }, delay);
+      return;
+    }
   }
 
   /**

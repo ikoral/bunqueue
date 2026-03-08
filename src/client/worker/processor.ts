@@ -53,13 +53,25 @@ export async function processJob<T, R>(
   try {
     const result = await processor(job);
 
-    if (embedded) {
-      const manager = getSharedManager();
-      // Pass token for lock verification
-      await manager.ack(internalJob.id, result, token ?? undefined);
-    } else {
-      // Queue with token for batch ACK
-      void ackBatcher.queue(jobIdStr, result, token ?? undefined);
+    try {
+      if (embedded) {
+        const manager = getSharedManager();
+        // Pass token for lock verification
+        await manager.ack(internalJob.id, result, token ?? undefined);
+      } else {
+        // Queue with token for batch ACK
+        void ackBatcher.queue(jobIdStr, result, token ?? undefined);
+      }
+    } catch (ackErr) {
+      // If stall detection already removed the job from processing,
+      // the ACK will fail with "Job not found". This is expected
+      // behavior (Issue #33) - emit error event but don't re-throw.
+      const ackError = ackErr instanceof Error ? ackErr : new Error(String(ackErr));
+      if (isJobNotFoundError(ackError)) {
+        emitter.emit('error', Object.assign(ackError, { context: 'ack-stale', jobId: jobIdStr }));
+        return;
+      }
+      throw ackErr;
     }
 
     (job as { returnvalue?: unknown }).returnvalue = result;
@@ -104,6 +116,11 @@ interface FailureContext<T extends FlowJobData> {
   token?: string | null;
 }
 
+/** Check if error is a "job not found" error from stale ACK/FAIL (Issue #33) */
+function isJobNotFoundError(err: Error): boolean {
+  return err.message.includes('not found') || err.message.includes('not in processing');
+}
+
 async function handleJobFailure<T, R>(
   internalJob: InternalJob,
   error: unknown,
@@ -130,6 +147,11 @@ async function handleJobFailure<T, R>(
     }
   } catch (failError) {
     const wrappedError = failError instanceof Error ? failError : new Error(String(failError));
+    // If stall detection already removed the job, the FAIL will throw
+    // "Job not found". This is expected (Issue #33) - don't emit as error.
+    if (isJobNotFoundError(wrappedError)) {
+      return;
+    }
     emitter.emit('error', Object.assign(wrappedError, { context: 'fail', jobId: jobIdStr }));
   }
 

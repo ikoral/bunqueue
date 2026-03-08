@@ -10,6 +10,28 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.7] - 2026-03-08
+
+### Fixed
+- **CronScheduler stale heap bug** — When a cron job was removed, `scheduleNext()` encountered the stale heap entry and returned early without setting any timer, preventing all subsequent crons from firing. Now properly pops stale entries from the min-heap until a valid one is found. ([#33](https://github.com/egeominotti/bunqueue/issues/33))
+- **Graceful shutdown burst load** — Fixed `worker.close(true)` causing unhandled AckBatcher errors when jobs were still completing during burst load scenarios. Changed to graceful close with proper drain.
+
+### Added
+- **37 new test suites** — Comprehensive test coverage across embedded and TCP modes:
+  - **Batch 1 (7 embedded + 7 TCP):** stress testing, ETL pipeline, retry resilience, cron advanced, queue group advanced, graceful shutdown, backpressure
+  - **Batch 2 (6 embedded + 6 TCP):** priority & delayed jobs, job lifecycle events, data integrity, idempotency & deduplication, long-running & timeout, flow patterns advanced
+  - **Batch 3 (6 embedded + 6 TCP):** job removal & cleanup, pause/resume patterns, worker scaling, job cancellation, DLQ patterns, bulk operations advanced
+- Total test count increased from ~4,000 to 4,610 (embedded) + 324 (TCP)
+
+### Performance
+- CronScheduler `scheduleNext()` now handles stale entries in O(k) amortized instead of blocking indefinitely
+
+## [2.6.6] - 2026-03-07
+
+### Fixed
+- **Parent-child flow race condition** — Resolved race where concurrent ack/fail operations on parent-child flows could cause inconsistent state. ([#31](https://github.com/egeominotti/bunqueue/issues/31))
+- **Embedded Worker heartbeats** — Fixed embedded Worker heartbeat mechanism not properly keeping jobs alive during long processing. ([#32](https://github.com/egeominotti/bunqueue/issues/32))
+
 ## [2.6.5] - 2026-03-06
 
 ### Fixed

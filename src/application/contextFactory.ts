@@ -32,7 +32,7 @@ export interface ContextDependencies {
   jobIndex: Map<JobId, JobLocation>;
   completedJobs: BoundedSet<JobId>;
   completedJobsData: BoundedMap<JobId, Job>;
-  jobResults: BoundedMap<JobId, unknown>;
+  jobResults: LRUMap<JobId, unknown>;
   customIdMap: LRUMap<string, JobId>;
   jobLogs: LRUMap<JobId, JobLogEntry[]>;
   jobLocks: Map<JobId, JobLock>;

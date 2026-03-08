@@ -5,7 +5,7 @@
 
 import type { Job, JobId, JobInput, JobLock, LockToken } from '../domain/types/job';
 import { DEFAULT_LOCK_TTL } from '../domain/types/job';
-import type { JobLocation, JobEvent } from '../domain/types/queue';
+import type { JobLocation, JobEvent, EventType } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry } from '../domain/types/worker';
 import { Shard } from '../domain/queue/shard';
@@ -14,7 +14,7 @@ import { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
 import { WebhookManager } from './webhookManager';
 import { WorkerManager } from './workerManager';
 import { EventsManager } from './eventsManager';
-import { RWLock } from '../shared/lock';
+import { RWLock, withWriteLock } from '../shared/lock';
 import { shardIndex, SHARD_COUNT } from '../shared/hash';
 import { pushJob, pushJobBatch } from './operations/push';
 import { pullJob, pullJobBatch } from './operations/pull';
@@ -55,7 +55,7 @@ export class QueueManager {
   private readonly jobIndex = new Map<JobId, JobLocation>();
   private readonly completedJobs!: BoundedSet<JobId>;
   private readonly completedJobsData!: BoundedMap<JobId, Job>;
-  private readonly jobResults!: BoundedMap<JobId, unknown>;
+  private readonly jobResults!: LRUMap<JobId, unknown>;
   private readonly customIdMap!: LRUMap<string, JobId>;
   private readonly jobLogs!: LRUMap<JobId, JobLogEntry[]>;
 
@@ -115,7 +115,7 @@ export class QueueManager {
       this.jobIndex.delete(jobId);
       this.completedJobsData.delete(jobId);
     });
-    this.jobResults = new BoundedMap<JobId, unknown>(this.config.maxJobResults);
+    this.jobResults = new LRUMap<JobId, unknown>(this.config.maxJobResults);
     this.customIdMap = new LRUMap<string, JobId>(this.config.maxCustomIds);
     this.jobLogs = new LRUMap<JobId, JobLogEntry[]>(this.config.maxJobLogs);
 
@@ -295,9 +295,34 @@ export class QueueManager {
     const lockCtx = this.contextFactory.getLockContext();
     if (token && !lockMgr.verifyLock(jobId, token, lockCtx)) {
       this.throwIfOwnershipConflict(jobId, lockCtx);
-      return;
+      // No ownership conflict. If job is still in processing (dedup case
+      // from Issue #33: lock removed but job still there), proceed with ACK.
+      // Otherwise (lock expiration: job requeued), return gracefully.
+      const loc = this.jobIndex.get(jobId);
+      if (loc?.type !== 'processing') {
+        // Job may have been stall-retried to queue while we processed it.
+        // Complete it from queue to prevent duplicate execution (Issue #33).
+        if (loc?.type === 'queue') {
+          await this.completeStallRetriedJob(jobId, result);
+          lockMgr.releaseLock(jobId, lockCtx, token);
+        }
+        return;
+      }
     }
-    await ackJob(jobId, result, this.contextFactory.getAckContext());
+    try {
+      await ackJob(jobId, result, this.contextFactory.getAckContext());
+    } catch (err) {
+      // Job removed from processing by stall detection but lock still valid.
+      // Only applies when caller has a lock token (worker with ownership).
+      // Try to complete from queue to prevent duplicate execution (Issue #33).
+      if (token && err instanceof Error && err.message.includes('not found')) {
+        if (await this.completeStallRetriedJob(jobId, result)) {
+          lockMgr.releaseLock(jobId, lockCtx, token);
+          return;
+        }
+      }
+      throw err;
+    }
     lockMgr.releaseLock(jobId, lockCtx, token);
   }
 
@@ -356,9 +381,21 @@ export class QueueManager {
     const lockCtx = this.contextFactory.getLockContext();
     if (token && !lockMgr.verifyLock(jobId, token, lockCtx)) {
       this.throwIfOwnershipConflict(jobId, lockCtx);
-      return;
+      const loc = this.jobIndex.get(jobId);
+      if (loc?.type !== 'processing') return;
     }
-    await failJob(jobId, error, this.contextFactory.getAckContext());
+    try {
+      await failJob(jobId, error, this.contextFactory.getAckContext());
+    } catch (err) {
+      // Job removed from processing by stall detection. The stall retry
+      // already handles requeuing, so the fail is redundant — return silently.
+      // Only applies when caller has a lock token (worker with ownership).
+      if (token && err instanceof Error && err.message.includes('not found')) {
+        const loc = this.jobIndex.get(jobId);
+        if (loc?.type === 'queue') return;
+      }
+      throw err;
+    }
     lockMgr.releaseLock(jobId, lockCtx, token);
   }
 
@@ -372,6 +409,61 @@ export class QueueManager {
     if (loc?.type === 'processing' && lockCtx.jobLocks.has(jobId)) {
       throw new Error(`Invalid or expired lock token for job ${jobId}`);
     }
+  }
+
+  /**
+   * Complete a job that stall detection moved back to the queue while still processing.
+   * Removes from queue and marks completed to prevent duplicate execution (Issue #33).
+   */
+  private async completeStallRetriedJob(jId: JobId, result: unknown): Promise<boolean> {
+    const loc = this.jobIndex.get(jId);
+    if (loc?.type !== 'queue') return false;
+
+    const idx = loc.shardIdx;
+    const queueName = loc.queueName;
+    const shard = this.shards[idx];
+
+    let job: Job | null = null;
+    await withWriteLock(this.shardLocks[idx], () => {
+      const pq = shard.getQueue(queueName);
+      job = pq.remove(jId);
+      if (job) {
+        shard.decrementQueued(jId);
+        shard.releaseJobResources(queueName, job.uniqueKey, job.groupId);
+      }
+    });
+
+    if (!job) {
+      // Job was already pulled from queue by another worker — can't prevent.
+      return false;
+    }
+
+    const ctx = this.contextFactory.getAckContext();
+    if (!(job as Job).removeOnComplete) {
+      ctx.completedJobs.add(jId);
+      ctx.completedJobsData.set(jId, job);
+      if (result !== undefined) {
+        ctx.jobResults.set(jId, result);
+        ctx.storage?.storeResult(jId, result);
+      }
+      ctx.jobIndex.set(jId, { type: 'completed' });
+      ctx.storage?.markCompleted(jId, Date.now());
+    } else {
+      ctx.jobIndex.delete(jId);
+      ctx.storage?.deleteJob(jId);
+    }
+
+    ctx.totalCompleted.value++;
+    ctx.broadcast({
+      eventType: 'completed' as EventType,
+      queue: queueName,
+      jobId: jId,
+      timestamp: Date.now(),
+      data: result,
+    });
+
+    ctx.onJobCompleted(jId);
+    return true;
   }
 
   jobHeartbeat(jobId: JobId, token?: string): boolean {
@@ -400,6 +492,11 @@ export class QueueManager {
   }
 
   // ============ Lock Management ============
+
+  /** Remove a lock unconditionally (used by worker dedup to clear stale locks) */
+  removeLock(jobId: JobId): void {
+    this.contextFactory.getLockContext().jobLocks.delete(jobId);
+  }
 
   createLock(jobId: JobId, owner: string, ttl: number = DEFAULT_LOCK_TTL): LockToken | null {
     return lockMgr.createLock(jobId, owner, this.contextFactory.getLockContext(), ttl);
