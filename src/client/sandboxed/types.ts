@@ -29,6 +29,8 @@ export interface SandboxedWorkerOptions {
   connection?: ConnectionOptions;
   /** Heartbeat interval in ms for TCP lock renewal (default: 10000 for TCP, 0 for embedded) */
   heartbeatInterval?: number;
+  /** Auto-stop after this many ms of inactivity (0 = disabled, default: 0) */
+  idleTimeout?: number;
 }
 
 /** Required options with defaults applied */

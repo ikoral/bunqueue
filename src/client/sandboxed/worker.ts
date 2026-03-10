@@ -83,6 +83,8 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   private readonly workerId: string;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private readonly heartbeatInterval: number;
+  private readonly idleTimeout: number;
+  private lastActivityTime: number = 0;
 
   constructor(queueName: string, options: SandboxedWorkerOptions) {
     super();
@@ -99,6 +101,8 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
       this.heartbeatInterval = options.heartbeatInterval ?? 5000;
     }
 
+    this.idleTimeout = options.idleTimeout ?? 0;
+
     this.options = {
       processor: options.processor,
       concurrency: options.concurrency ?? 1,
@@ -114,6 +118,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    this.lastActivityTime = Date.now();
 
     if (this.tcp) await this.tcp.connect();
 
@@ -150,6 +155,11 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
     await cleanupWrapperScript(this.wrapperPath);
     if (this.tcp) releaseSharedPool(this.tcp);
     this.emit('closed');
+  }
+
+  /** Check if the worker is currently running */
+  isRunning(): boolean {
+    return this.running;
   }
 
   /** Get worker pool stats */
@@ -229,11 +239,17 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
       }
 
       const { job, token } = await this.ops.pull(this.queueName, this.workerId, 1000);
-      if (job) this.dispatch(idle, job, token);
+      if (job) {
+        this.dispatch(idle, job, token);
+      } else if (this.idleTimeout > 0 && Date.now() - this.lastActivityTime >= this.idleTimeout) {
+        this.stop().catch(() => {});
+        return;
+      }
     }
   }
 
   private dispatch(wp: WorkerProcess, job: DomainJob, token: string | null): void {
+    this.lastActivityTime = Date.now();
     wp.busy = true;
     wp.currentJob = job;
     wp.currentToken = token;
@@ -307,6 +323,7 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   }
 
   private complete(wp: WorkerProcess, result: unknown): void {
+    this.lastActivityTime = Date.now();
     const job = wp.currentJob;
     if (job) {
       const token = wp.currentToken ?? undefined;
