@@ -137,9 +137,20 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   }
 
   /** Stop all workers gracefully */
-  async stop(): Promise<void> {
+  async stop(force = false): Promise<void> {
     this.running = false;
 
+    // Wait for pull loop to exit (it checks this.running)
+    if (this.pullPromise) await this.pullPromise;
+
+    // Unless force, wait for all busy workers to finish their current jobs
+    if (!force) {
+      while (this.workers.some((w) => w.busy)) {
+        await Bun.sleep(50);
+      }
+    }
+
+    // Now safe to stop heartbeat and terminate workers
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
@@ -151,7 +162,6 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
     }
     this.workers.length = 0;
 
-    if (this.pullPromise) await this.pullPromise;
     await cleanupWrapperScript(this.wrapperPath);
     if (this.tcp) releaseSharedPool(this.tcp);
     this.emit('closed');
