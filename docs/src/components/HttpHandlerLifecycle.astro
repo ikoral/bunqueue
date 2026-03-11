@@ -1,0 +1,470 @@
+---
+/**
+ * Animated HTTP Handler lifecycle flow (5 steps, sequential).
+ * Agent registers → MCP spawns Worker → Worker pulls → HTTP call → Result saved
+ */
+---
+
+<div class="hl-wrap">
+  <div class="hl-flow">
+    <!-- Step 1 -->
+    <div class="hl-step hl-s1">
+      <div class="hl-num">1</div>
+      <div class="hl-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <line x1="19" y1="8" x2="19" y2="14"/>
+          <line x1="22" y1="11" x2="16" y2="11"/>
+        </svg>
+      </div>
+      <span class="hl-label">Agent registers</span>
+      <span class="hl-sub">handler</span>
+    </div>
+
+    <div class="hl-conn"><div class="hl-line"></div><div class="hl-arrow"></div><div class="hl-dot hl-d1"></div></div>
+
+    <!-- Step 2 -->
+    <div class="hl-step hl-s2">
+      <div class="hl-num">2</div>
+      <div class="hl-icon hl-icon-pink">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </div>
+      <span class="hl-label">MCP spawns</span>
+      <span class="hl-sub">Worker</span>
+    </div>
+
+    <div class="hl-conn"><div class="hl-line"></div><div class="hl-arrow"></div><div class="hl-dot hl-d2"></div></div>
+
+    <!-- Step 3 -->
+    <div class="hl-step hl-s3">
+      <div class="hl-num">3</div>
+      <div class="hl-icon hl-icon-pink">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 6 2 18 2 18 9"/>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+          <rect x="6" y="14" width="12" height="8"/>
+        </svg>
+      </div>
+      <span class="hl-label">Worker pulls</span>
+      <span class="hl-sub">jobs</span>
+    </div>
+
+    <div class="hl-conn"><div class="hl-line"></div><div class="hl-arrow"></div><div class="hl-dot hl-d3"></div></div>
+
+    <!-- Step 4 -->
+    <div class="hl-step hl-s4">
+      <div class="hl-num">4</div>
+      <div class="hl-icon hl-icon-blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+      </div>
+      <span class="hl-label">Calls HTTP</span>
+      <span class="hl-sub">endpoint</span>
+    </div>
+
+    <div class="hl-conn"><div class="hl-line"></div><div class="hl-arrow"></div><div class="hl-dot hl-d4 hl-dot-green"></div></div>
+
+    <!-- Step 5 -->
+    <div class="hl-step hl-s5">
+      <div class="hl-num hl-num-green">5</div>
+      <div class="hl-icon hl-icon-green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+      </div>
+      <span class="hl-label">Response saved</span>
+      <span class="hl-sub">as job result</span>
+    </div>
+  </div>
+
+  <!-- Progress trail -->
+  <div class="hl-trail">
+    <div class="hl-trail-bar"></div>
+    <div class="hl-trail-fill"></div>
+  </div>
+
+  <!-- Mobile vertical -->
+  <div class="hl-vert">
+    <div class="hl-vrow">
+      <div class="hl-vnum">1</div>
+      <div class="hl-vicon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>
+      <div><span class="hl-vlabel">Agent registers handler</span></div>
+    </div>
+    <div class="hl-vconn"><div class="hl-vline"></div><div class="hl-vdot hl-vd1"></div></div>
+
+    <div class="hl-vrow">
+      <div class="hl-vnum">2</div>
+      <div class="hl-vicon hl-vicon-pink"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+      <div><span class="hl-vlabel">MCP spawns Worker</span></div>
+    </div>
+    <div class="hl-vconn"><div class="hl-vline"></div><div class="hl-vdot hl-vd2"></div></div>
+
+    <div class="hl-vrow">
+      <div class="hl-vnum">3</div>
+      <div class="hl-vicon hl-vicon-pink"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></div>
+      <div><span class="hl-vlabel">Worker pulls jobs</span></div>
+    </div>
+    <div class="hl-vconn"><div class="hl-vline"></div><div class="hl-vdot hl-vd3"></div></div>
+
+    <div class="hl-vrow">
+      <div class="hl-vnum">4</div>
+      <div class="hl-vicon hl-vicon-blue"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+      <div><span class="hl-vlabel">Calls HTTP endpoint</span></div>
+    </div>
+    <div class="hl-vconn"><div class="hl-vline"></div><div class="hl-vdot hl-vd4 hl-vdot-green"></div></div>
+
+    <div class="hl-vrow">
+      <div class="hl-vnum hl-vnum-green">5</div>
+      <div class="hl-vicon hl-vicon-green"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      <div><span class="hl-vlabel">Response saved as result</span></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .hl-wrap {
+    margin: 1.5rem 0;
+    padding: 1.75rem 1.25rem 1.25rem;
+    border-radius: 16px;
+    border: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+    overflow-x: auto;
+  }
+  :root[data-theme='dark'] .hl-wrap {
+    background: rgba(12, 12, 15, 0.8);
+    border-color: rgba(255, 255, 255, 0.06);
+  }
+
+  /* === Desktop horizontal === */
+  .hl-flow {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    min-width: 580px;
+  }
+  .hl-vert { display: none; }
+
+  /* Steps */
+  .hl-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    position: relative;
+    min-width: 72px;
+    animation: hlAppear 0.5s ease-out both;
+  }
+  .hl-s1 { animation-delay: 0s; }
+  .hl-s2 { animation-delay: 0.1s; }
+  .hl-s3 { animation-delay: 0.2s; }
+  .hl-s4 { animation-delay: 0.3s; }
+  .hl-s5 { animation-delay: 0.4s; }
+
+  @keyframes hlAppear {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Step number */
+  .hl-num {
+    position: absolute;
+    top: -8px;
+    right: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--sl-color-accent);
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  :root[data-theme='dark'] .hl-num {
+    background: #ec4899;
+  }
+  .hl-num-green {
+    background: #22c55e;
+  }
+  :root[data-theme='dark'] .hl-num-green {
+    background: #22c55e;
+  }
+
+  /* Icons */
+  .hl-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+    position: relative;
+  }
+  :root[data-theme='dark'] .hl-icon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .hl-icon-pink {
+    border-color: var(--sl-color-accent);
+    color: var(--sl-color-accent);
+    animation: hlPulse 3s ease-in-out infinite;
+  }
+  :root[data-theme='dark'] .hl-icon-pink {
+    border-color: #f9a8d4;
+    color: #f9a8d4;
+  }
+  @keyframes hlPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(219, 39, 119, 0.1); }
+    50% { box-shadow: 0 0 18px rgba(219, 39, 119, 0.25); }
+  }
+
+  .hl-icon-blue {
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  :root[data-theme='dark'] .hl-icon-blue {
+    color: #93c5fd;
+    border-color: rgba(147, 197, 253, 0.3);
+  }
+
+  .hl-icon-green {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+  :root[data-theme='dark'] .hl-icon-green {
+    color: #4ade80;
+    border-color: rgba(74, 222, 128, 0.3);
+  }
+
+  .hl-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+    text-align: center;
+    white-space: nowrap;
+  }
+  .hl-sub {
+    font-size: 0.63rem;
+    color: var(--sl-color-gray-3);
+    text-align: center;
+  }
+
+  /* Connectors */
+  .hl-conn {
+    position: relative;
+    width: 44px;
+    height: 46px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .hl-line {
+    width: 100%;
+    height: 2px;
+    background: var(--sl-color-hairline);
+  }
+  :root[data-theme='dark'] .hl-line {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  .hl-arrow {
+    position: absolute;
+    right: -1px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    border-left: 6px solid var(--sl-color-hairline);
+  }
+  :root[data-theme='dark'] .hl-arrow {
+    border-left-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Dots */
+  .hl-dot {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--sl-color-accent);
+    top: 50%;
+    transform: translateY(-50%);
+    left: -3px;
+    box-shadow: 0 0 8px rgba(219, 39, 119, 0.5);
+    animation: hlDot 4s ease-in-out infinite;
+  }
+  :root[data-theme='dark'] .hl-dot {
+    background: #f9a8d4;
+    box-shadow: 0 0 10px rgba(249, 168, 212, 0.6);
+  }
+  .hl-dot-green {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  }
+  :root[data-theme='dark'] .hl-dot-green {
+    background: #4ade80;
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+  }
+
+  .hl-d1 { animation-delay: 0s; }
+  .hl-d2 { animation-delay: 0.8s; }
+  .hl-d3 { animation-delay: 1.6s; }
+  .hl-d4 { animation-delay: 2.4s; }
+
+  @keyframes hlDot {
+    0% { left: -3px; opacity: 0; }
+    6% { opacity: 1; }
+    88% { opacity: 1; }
+    100% { left: calc(100% - 3px); opacity: 0; }
+  }
+
+  /* Progress trail */
+  .hl-trail {
+    position: relative;
+    height: 3px;
+    margin: 1rem auto 0;
+    max-width: 500px;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .hl-trail-bar {
+    width: 100%;
+    height: 100%;
+    background: var(--sl-color-hairline);
+    border-radius: 2px;
+  }
+  :root[data-theme='dark'] .hl-trail-bar {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .hl-trail-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--sl-color-accent), #22c55e);
+    animation: hlTrail 4s ease-in-out infinite;
+  }
+  :root[data-theme='dark'] .hl-trail-fill {
+    background: linear-gradient(90deg, #f9a8d4, #4ade80);
+  }
+  @keyframes hlTrail {
+    0% { width: 0%; opacity: 0.6; }
+    90% { width: 100%; opacity: 1; }
+    100% { width: 100%; opacity: 0; }
+  }
+
+  /* === Mobile vertical === */
+  .hl-vrow {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.35rem 0;
+  }
+  .hl-vnum {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    border-radius: 50%;
+    background: var(--sl-color-accent);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  :root[data-theme='dark'] .hl-vnum { background: #ec4899; }
+  .hl-vnum-green { background: #22c55e; }
+
+  .hl-vicon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1.5px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+  }
+  :root[data-theme='dark'] .hl-vicon {
+    background: rgba(17, 17, 22, 0.9);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .hl-vicon-pink { color: var(--sl-color-accent); border-color: var(--sl-color-accent); }
+  :root[data-theme='dark'] .hl-vicon-pink { color: #f9a8d4; border-color: rgba(249, 168, 212, 0.4); }
+  .hl-vicon-blue { color: #3b82f6; border-color: rgba(59, 130, 246, 0.3); }
+  :root[data-theme='dark'] .hl-vicon-blue { color: #93c5fd; border-color: rgba(147, 197, 253, 0.3); }
+  .hl-vicon-green { color: #22c55e; border-color: rgba(34, 197, 94, 0.3); }
+  :root[data-theme='dark'] .hl-vicon-green { color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+
+  .hl-vlabel {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--sl-color-text);
+  }
+
+  .hl-vconn {
+    position: relative;
+    height: 20px;
+    margin-left: 10px;
+    width: 20px;
+  }
+  .hl-vline {
+    width: 2px;
+    height: 100%;
+    background: var(--sl-color-hairline);
+    margin: 0 auto;
+  }
+  :root[data-theme='dark'] .hl-vline { background: rgba(255, 255, 255, 0.1); }
+
+  .hl-vdot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--sl-color-accent);
+    left: 50%;
+    transform: translateX(-50%);
+    top: -3px;
+    box-shadow: 0 0 6px rgba(219, 39, 119, 0.4);
+    animation: hlVdot 4s ease-in-out infinite;
+  }
+  :root[data-theme='dark'] .hl-vdot { background: #f9a8d4; box-shadow: 0 0 8px rgba(249, 168, 212, 0.5); }
+  .hl-vdot-green { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.4); }
+  :root[data-theme='dark'] .hl-vdot-green { background: #4ade80; }
+
+  .hl-vd1 { animation-delay: 0s; }
+  .hl-vd2 { animation-delay: 0.8s; }
+  .hl-vd3 { animation-delay: 1.6s; }
+  .hl-vd4 { animation-delay: 2.4s; }
+
+  @keyframes hlVdot {
+    0% { top: -3px; opacity: 0; }
+    6% { opacity: 1; }
+    88% { opacity: 1; }
+    100% { top: calc(100% - 3px); opacity: 0; }
+  }
+
+  @media (max-width: 700px) {
+    .hl-flow, .hl-trail { display: none; }
+    .hl-vert { display: flex; flex-direction: column; }
+    .hl-wrap { padding: 1.25rem 1rem; }
+  }
+</style>

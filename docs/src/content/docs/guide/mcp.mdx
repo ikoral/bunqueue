@@ -23,6 +23,7 @@ head:
 import { Tabs, TabItem, Aside, Badge, Card, CardGrid, Steps } from '@astrojs/starlight/components';
 import McpArchitecture from '../../../components/McpArchitecture.astro';
 import HttpHandlerFlow from '../../../components/HttpHandlerFlow.astro';
+import HttpHandlerLifecycle from '../../../components/HttpHandlerLifecycle.astro';
 
 bunqueue ships with a built-in **MCP (Model Context Protocol)** server that gives AI agents full programmatic control over job queues, scheduling, monitoring, and execution.
 
@@ -470,10 +471,7 @@ The agent registers an HTTP endpoint on a queue via `bunqueue_register_handler`.
 
 No external process, no deployment, no code. The agent controls the entire lifecycle: register, schedule with cron, monitor results, unregister.
 
-```
-Agent registers handler → MCP spawns Worker → Worker pulls jobs →
-Worker calls HTTP endpoint → Response saved as job result
-```
+<HttpHandlerLifecycle />
 
 **When to use:** API polling, webhook forwarding, external service calls, health checks, monitoring endpoints. Any use case where the processing logic is just an HTTP call.
 
