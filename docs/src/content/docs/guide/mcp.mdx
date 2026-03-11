@@ -21,6 +21,8 @@ head:
 ---
 
 import { Tabs, TabItem, Aside, Badge, Card, CardGrid, Steps } from '@astrojs/starlight/components';
+import McpArchitecture from '../../../components/McpArchitecture.astro';
+import HttpHandlerFlow from '../../../components/HttpHandlerFlow.astro';
 
 bunqueue ships with a built-in **MCP (Model Context Protocol)** server that gives AI agents full programmatic control over job queues, scheduling, monitoring, and execution.
 
@@ -77,29 +79,7 @@ The MCP server runs as a subprocess spawned by your AI client. It communicates v
 
 The server supports two backend modes: **embedded** (direct SQLite access in the same process) and **TCP** (connects to a remote bunqueue server). In embedded mode, everything runs locally with zero configuration. In TCP mode, the MCP server acts as a client that forwards operations to your production bunqueue instance.
 
-```
-┌──────────────────────────────────────┐
-│  AI Agent (Claude, Cursor, Windsurf) │
-│  "Schedule a cleanup job every hour" │
-└──────────────────┬───────────────────┘
-                   │ stdio (JSON-RPC)
-                   ▼
-┌──────────────────────────────────────┐
-│         bunqueue MCP Server          │
-│   73 tools · 3 prompts · 5 resources │
-├──────────────────────────────────────┤
-│  ┌──────────┐      ┌──────────────┐  │
-│  │ Embedded │      │  TCP Client  │  │
-│  │  SQLite  │      │  (remote)    │  │
-│  └──────────┘      └──────┬───────┘  │
-└──────────────────────────┼───────────┘
-                           │ TCP :6789
-                           ▼
-                    ┌──────────────┐
-                    │   bunqueue   │
-                    │    Server    │
-                    └──────────────┘
-```
+<McpArchitecture />
 
 **Embedded mode** is ideal for local development, single-machine deployments, and CLI tools. The MCP server manages its own SQLite database with WAL mode for concurrent access.
 
@@ -214,18 +194,7 @@ When the agent calls `bunqueue_register_handler`, the MCP server spawns an **emb
 
 This means the agent can set up a fully autonomous pipeline — schedule recurring jobs with cron, auto-process them via HTTP, and check results later — without writing any code or deploying any external service.
 
-```
-┌──────────┐     ┌───────────┐     ┌────────────┐     ┌────────────┐
-│ Cron or  │────▶│   Queue   │────▶│  Embedded  │────▶│  HTTP API  │
-│ Add Job  │     │ (waiting) │     │  Worker    │     │  endpoint  │
-└──────────┘     └───────────┘     └────────────┘     └────────────┘
-                                          │
-                                          ▼
-                                   ┌────────────┐
-                                   │ Job Result │
-                                   │ (saved)    │
-                                   └────────────┘
-```
+<HttpHandlerFlow />
 
 The embedded Worker inherits all standard Worker features: heartbeat, stall detection, retry with backoff, and dead letter queue. It processes jobs sequentially (concurrency 1) to avoid overwhelming the target endpoint.
 
