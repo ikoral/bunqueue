@@ -35,9 +35,9 @@ export function createEmbeddedOps(manager: SharedManager): QueueOps {
     addLog: (id, message) => {
       manager.addLog(id, message);
     },
-    sendHeartbeat: (ids) => {
-      for (const id of ids) {
-        manager.jobHeartbeat(jobId(id));
+    sendHeartbeat: (ids, tokens) => {
+      for (let i = 0; i < ids.length; i++) {
+        manager.jobHeartbeat(jobId(ids[i]), tokens[i]);
       }
       return Promise.resolve();
     },
