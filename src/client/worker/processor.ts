@@ -5,7 +5,7 @@
 
 import type { EventEmitter } from 'events';
 import type { TcpConnection } from './types';
-import type { Processor, Job, FlowJobData } from '../types';
+import type { Processor, Job, FlowJobData, JobStateType } from '../types';
 import { createPublicJob } from '../types';
 import type { Job as InternalJob } from '../../domain/types/job';
 import { jobId } from '../../domain/types/job';
@@ -44,6 +44,7 @@ export async function processJob<T, R>(
     name: jobName,
     updateProgress: createProgressHandler(embedded, tcp, emitter, jobHolder),
     log: createLogHandler(embedded, tcp),
+    getState: createGetStateHandler(embedded, tcp),
   });
 
   jobHolder.current = job;
@@ -107,6 +108,19 @@ function createLogHandler(embedded: boolean, tcp: TcpConnection | null) {
     } else if (tcp) {
       await tcp.send({ cmd: 'AddLog', id, message });
     }
+  };
+}
+
+function createGetStateHandler(embedded: boolean, tcp: TcpConnection | null) {
+  return async (id: string): Promise<JobStateType> => {
+    if (embedded) {
+      const manager = getSharedManager();
+      return (await manager.getJobState(jobId(id))) as JobStateType;
+    } else if (tcp) {
+      const response = await tcp.send({ cmd: 'GetState', id });
+      return ((response as { state?: string }).state ?? 'unknown') as JobStateType;
+    }
+    return 'unknown' as JobStateType;
   };
 }
 

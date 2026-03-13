@@ -7,8 +7,9 @@ import { EventEmitter } from 'events';
 import { getSharedManager } from '../manager';
 import { getSharedPool, releaseSharedPool, type TcpConnectionPool } from '../tcpPool';
 import { createPublicJob } from '../jobConversion';
-import type { Job } from '../types';
+import type { Job, JobStateType } from '../types';
 import type { Job as DomainJob } from '../../domain/types/job';
+import { jobId } from '../../domain/types/job';
 import type {
   SandboxedWorkerOptions,
   RequiredSandboxedWorkerOptions,
@@ -497,6 +498,14 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
       name: data?.name ?? 'default',
       updateProgress: async () => {},
       log: async () => {},
+      getState: async (id: string): Promise<JobStateType> => {
+        if (this.tcp) {
+          const response = await this.tcp.send({ cmd: 'GetState', id });
+          return ((response as { state?: string }).state ?? 'unknown') as JobStateType;
+        }
+        const manager = getSharedManager();
+        return (await manager.getJobState(jobId(id))) as JobStateType;
+      },
     });
   }
 }
