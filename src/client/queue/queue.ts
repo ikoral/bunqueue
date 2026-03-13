@@ -358,6 +358,9 @@ export class Queue<T = unknown> {
   getStallConfig(): StallConfig {
     return stallOps.getStallConfig(this.ctx);
   }
+  getStallConfigAsync(): Promise<StallConfig> {
+    return stallOps.getStallConfigAsync(this.ctx);
+  }
 
   // ============ DLQ Operations ============
   setDlqConfig(config: Partial<DlqConfig>) {
@@ -365,6 +368,9 @@ export class Queue<T = unknown> {
   }
   getDlqConfig(): DlqConfig {
     return dlqOps.getDlqConfig(this.ctx);
+  }
+  getDlqConfigAsync(): Promise<DlqConfig> {
+    return dlqOps.getDlqConfigAsync(this.ctx);
   }
   getDlq(filter?: DlqFilter): DlqEntry<T>[] {
     return dlqOps.getDlq<T>(this.ctx, filter);

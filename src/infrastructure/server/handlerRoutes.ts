@@ -63,6 +63,10 @@ import {
   handleChangeDelay,
   handleMoveToWait,
   handlePromoteJobs,
+  handleSetStallConfig,
+  handleGetStallConfig,
+  handleSetDlqConfig,
+  handleGetDlqConfig,
 } from './handlers/advanced';
 
 import {
@@ -271,6 +275,27 @@ export function routeCronCommand(
       return handleCronDelete(cmd, ctx, reqId);
     case 'CronList':
       return handleCronList(cmd, ctx, reqId);
+    default:
+      return null;
+  }
+}
+
+/** Route config commands (stall/DLQ config) */
+export function routeConfigCommand(
+  cmd: Command,
+  ctx: HandlerContext,
+  reqId?: string
+): Response | null {
+  // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
+  switch (cmd.cmd) {
+    case 'SetStallConfig':
+      return handleSetStallConfig(cmd, ctx, reqId);
+    case 'GetStallConfig':
+      return handleGetStallConfig(cmd, ctx, reqId);
+    case 'SetDlqConfig':
+      return handleSetDlqConfig(cmd, ctx, reqId);
+    case 'GetDlqConfig':
+      return handleGetDlqConfig(cmd, ctx, reqId);
     default:
       return null;
   }

@@ -15,6 +15,7 @@ import {
   routeQueueControlCommand,
   routeDlqCommand,
   routeRateLimitCommand,
+  routeConfigCommand,
   routeCronCommand,
   routeMonitoringCommand,
 } from './handlerRoutes';
@@ -75,6 +76,9 @@ export async function handleCommand(cmd: Command, ctx: HandlerContext): Promise<
     if (result) return result;
 
     result = routeRateLimitCommand(cmd, ctx, reqId);
+    if (result) return result;
+
+    result = routeConfigCommand(cmd, ctx, reqId);
     if (result) return result;
 
     result = routeCronCommand(cmd, ctx, reqId);

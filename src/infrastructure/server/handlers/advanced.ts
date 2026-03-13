@@ -185,6 +185,48 @@ export function handleClearConcurrency(
   return resp.ok(undefined, reqId);
 }
 
+// ============ Config Commands ============
+
+/** Handle SetStallConfig command */
+export function handleSetStallConfig(
+  cmd: Extract<Command, { cmd: 'SetStallConfig' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  ctx.queueManager.setStallConfig(cmd.queue, cmd.config);
+  return resp.ok(undefined, reqId);
+}
+
+/** Handle GetStallConfig command */
+export function handleGetStallConfig(
+  cmd: Extract<Command, { cmd: 'GetStallConfig' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const config = ctx.queueManager.getStallConfig(cmd.queue);
+  return { ok: true, config, reqId } as Response;
+}
+
+/** Handle SetDlqConfig command */
+export function handleSetDlqConfig(
+  cmd: Extract<Command, { cmd: 'SetDlqConfig' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  ctx.queueManager.setDlqConfig(cmd.queue, cmd.config);
+  return resp.ok(undefined, reqId);
+}
+
+/** Handle GetDlqConfig command */
+export function handleGetDlqConfig(
+  cmd: Extract<Command, { cmd: 'GetDlqConfig' }>,
+  ctx: HandlerContext,
+  reqId?: string
+): Response {
+  const config = ctx.queueManager.getDlqConfig(cmd.queue);
+  return { ok: true, config, reqId } as Response;
+}
+
 /** Handle ChangeDelay command - change delay for a delayed/active job */
 export async function handleChangeDelay(
   cmd: Extract<Command, { cmd: 'ChangeDelay' }>,

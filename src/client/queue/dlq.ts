@@ -15,19 +15,29 @@ interface DlqContext {
   tcp: TcpConnectionPool | null;
 }
 
-/** Set DLQ configuration (embedded only) */
+/** Set DLQ configuration */
 export function setDlqConfig(ctx: DlqContext, config: Partial<DlqConfig>): void {
-  if (!ctx.embedded) {
-    console.warn('setDlqConfig: embedded only');
-    return;
+  if (ctx.embedded) {
+    dlqOps.setDlqConfig(ctx.name, config);
+  } else if (ctx.tcp) {
+    void ctx.tcp.send({ cmd: 'SetDlqConfig', queue: ctx.name, config });
   }
-  dlqOps.setDlqConfig(ctx.name, config);
 }
 
 /** Get DLQ configuration */
 export function getDlqConfig(ctx: DlqContext): DlqConfig {
-  if (!ctx.embedded) return {};
-  return dlqOps.getDlqConfigEmbedded(ctx.name);
+  if (ctx.embedded) return dlqOps.getDlqConfigEmbedded(ctx.name);
+  // Return empty defaults synchronously; use getDlqConfigAsync for TCP
+  return {} as DlqConfig;
+}
+
+/** Get DLQ configuration (async, works in TCP mode) */
+export async function getDlqConfigAsync(ctx: DlqContext): Promise<DlqConfig> {
+  if (ctx.embedded) return dlqOps.getDlqConfigEmbedded(ctx.name);
+  if (!ctx.tcp) return {} as DlqConfig;
+  const response = await ctx.tcp.send({ cmd: 'GetDlqConfig', queue: ctx.name });
+  if (!response.ok) return {} as DlqConfig;
+  return (response as { config: DlqConfig }).config;
 }
 
 /** Get DLQ entries */

@@ -267,6 +267,30 @@ export interface ClearConcurrencyCommand extends BaseCommand {
   readonly queue: string;
 }
 
+// ============ Config Commands ============
+
+export interface SetStallConfigCommand extends BaseCommand {
+  readonly cmd: 'SetStallConfig';
+  readonly queue: string;
+  readonly config: Record<string, unknown>;
+}
+
+export interface GetStallConfigCommand extends BaseCommand {
+  readonly cmd: 'GetStallConfig';
+  readonly queue: string;
+}
+
+export interface SetDlqConfigCommand extends BaseCommand {
+  readonly cmd: 'SetDlqConfig';
+  readonly queue: string;
+  readonly config: Record<string, unknown>;
+}
+
+export interface GetDlqConfigCommand extends BaseCommand {
+  readonly cmd: 'GetDlqConfig';
+  readonly queue: string;
+}
+
 // ============ Cron Commands ============
 
 export interface CronCommand extends BaseCommand {
@@ -507,6 +531,10 @@ export type Command =
   | SetConcurrencyCommand
   | RateLimitClearCommand
   | ClearConcurrencyCommand
+  | SetStallConfigCommand
+  | GetStallConfigCommand
+  | SetDlqConfigCommand
+  | GetDlqConfigCommand
   | CronCommand
   | CronDeleteCommand
   | CronListCommand

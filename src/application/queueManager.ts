@@ -8,6 +8,8 @@ import { DEFAULT_LOCK_TTL } from '../domain/types/job';
 import type { JobLocation, JobEvent, EventType } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry } from '../domain/types/worker';
+import type { StallConfig } from '../domain/types/stall';
+import type { DlqConfig } from '../domain/types/dlq';
 import { Shard } from '../domain/queue/shard';
 import { SqliteStorage } from '../infrastructure/persistence/sqlite';
 import { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
@@ -723,6 +725,24 @@ export class QueueManager {
 
   clearConcurrency(queue: string): void {
     this.shards[shardIndex(queue)].clearConcurrency(queue);
+  }
+
+  // ============ Stall & DLQ Config ============
+
+  setStallConfig(queue: string, config: Record<string, unknown>): void {
+    this.shards[shardIndex(queue)].setStallConfig(queue, config);
+  }
+
+  getStallConfig(queue: string): StallConfig {
+    return this.shards[shardIndex(queue)].getStallConfig(queue);
+  }
+
+  setDlqConfig(queue: string, config: Record<string, unknown>): void {
+    this.shards[shardIndex(queue)].setDlqConfig(queue, config as Partial<DlqConfig>);
+  }
+
+  getDlqConfig(queue: string): DlqConfig {
+    return this.shards[shardIndex(queue)].getDlqConfig(queue);
   }
 
   // ============ Job Management ============
