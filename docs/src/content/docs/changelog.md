@@ -10,6 +10,15 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.22] - 2026-03-14
+
+### Fixed
+- **dlq:added WebSocket event** — Now emitted when a job moves to DLQ after max attempts exceeded. Previously this event was defined but never fired.
+- **job:progress WebSocket event** — Progress value now included in event payload. Previously `progress` was `undefined` because the broadcast didn't set the top-level field.
+
+### Added
+- **Comprehensive WebSocket pub/sub integration test** — 47 assertions covering all 9 event categories (job lifecycle, queue, DLQ, cron, worker, rate-limit, concurrency, webhook, config, system periodic) plus protocol tests (subscribe, unsubscribe, wildcard, invalid patterns, Ping over WS).
+
 ## [2.6.21] - 2026-03-14
 
 ### Performance
