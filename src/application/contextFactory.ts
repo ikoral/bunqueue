@@ -62,6 +62,7 @@ export interface ContextCallbacks {
   onJobsCompleted: (completedIds: JobId[]) => void;
   hasPendingDeps: () => boolean;
   onRepeat: (job: Job) => void;
+  emitDashboardEvent?: (event: string, data: Record<string, unknown>) => void;
 }
 
 /**
@@ -178,6 +179,7 @@ export class ContextFactory {
       needsBroadcast: this.deps.eventsManager.needsBroadcast.bind(this.deps.eventsManager),
       hasPendingDeps: this.callbacks.hasPendingDeps,
       onRepeat: this.callbacks.onRepeat,
+      emitDashboardEvent: this.callbacks.emitDashboardEvent,
     };
   }
 

@@ -50,6 +50,7 @@ export interface AckContext {
   onJobCompleted: (jobId: JobId) => void;
   onJobsCompleted?: (jobIds: JobId[]) => void;
   needsBroadcast?: () => boolean;
+  emitDashboardEvent?: (event: string, data: Record<string, unknown>) => void;
   hasPendingDeps?: () => boolean;
   onRepeat?: (job: Job) => void;
 }
@@ -176,6 +177,12 @@ export async function failJob(
       if (job.customId && ctx.customIdMap) {
         ctx.customIdMap.delete(job.customId);
       }
+      // Emit dlq:added dashboard event
+      ctx.emitDashboardEvent?.('dlq:added', {
+        queue: job.queue,
+        jobId: String(jobId),
+        reason: FailureReason.MaxAttemptsExceeded,
+      });
     }
   });
 

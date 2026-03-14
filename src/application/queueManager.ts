@@ -206,6 +206,7 @@ export class QueueManager {
       onJobsCompleted: this.onJobsCompleted.bind(this),
       hasPendingDeps: this.hasPendingDeps.bind(this),
       onRepeat: this.handleRepeat.bind(this),
+      emitDashboardEvent: this.emitDashboardEvent.bind(this),
     };
   }
 

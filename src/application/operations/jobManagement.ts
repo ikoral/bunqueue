@@ -86,6 +86,7 @@ export async function updateJobProgress(
       jobId,
       queue: job.queue,
       timestamp: Date.now(),
+      progress: job.progress,
       data: { progress: job.progress, message: job.progressMessage },
     });
 
