@@ -365,7 +365,7 @@ describe('CleanupTasks', () => {
 
       // id1 is not in jobIndex (no longer tracked)
       // id2 is in jobIndex but as 'completed' (not processing)
-      ctx.jobIndex.set(id2, { type: 'completed' });
+      ctx.jobIndex.set(id2, { type: 'completed', queueName: 'lock-test' });
 
       await cleanup(ctx);
 

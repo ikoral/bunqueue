@@ -193,6 +193,8 @@ export function getQueueJobCounts(
   active: number;
   completed: number;
   failed: number;
+  totalCompleted: number;
+  totalFailed: number;
 } {
   const idx = shardIndex(queueName);
   const shard = ctx.shards[idx];
@@ -225,8 +227,7 @@ export function getQueueJobCounts(
   // Count completed jobs for this queue
   let completed = 0;
   for (const [jobId, loc] of ctx.jobIndex) {
-    if (loc.type === 'completed' && ctx.completedJobs.has(jobId)) {
-      // We don't store queueName in completed location, so this is approximate
+    if (loc.type === 'completed' && loc.queueName === queueName && ctx.completedJobs.has(jobId)) {
       completed++;
     }
   }
@@ -234,7 +235,12 @@ export function getQueueJobCounts(
   // Count failed (DLQ) jobs for this queue
   const failed = shard.getDlq(queueName).length;
 
-  return { waiting, delayed, active, completed, failed };
+  // Per-queue cumulative counters
+  const perQueue = ctx.perQueueMetrics?.get(queueName);
+  const totalCompleted = Number(perQueue?.totalCompleted ?? 0n);
+  const totalFailed = Number(perQueue?.totalFailed ?? 0n);
+
+  return { waiting, delayed, active, completed, failed, totalCompleted, totalFailed };
 }
 
 /**

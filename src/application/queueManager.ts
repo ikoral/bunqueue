@@ -9,7 +9,7 @@ import type { JobLocation, JobEvent, EventType } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
 import type { JobLogEntry } from '../domain/types/worker';
 import type { StallConfig } from '../domain/types/stall';
-import type { DlqConfig } from '../domain/types/dlq';
+import type { DlqConfig, DlqEntry, DlqStats } from '../domain/types/dlq';
 import { Shard } from '../domain/queue/shard';
 import { SqliteStorage } from '../infrastructure/persistence/sqlite';
 import { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
@@ -99,6 +99,10 @@ export class QueueManager {
     totalCompleted: { value: 0n },
     totalFailed: { value: 0n },
   };
+  private readonly perQueueMetrics = new Map<
+    string,
+    { totalCompleted: bigint; totalFailed: bigint }
+  >();
   private readonly startTime = Date.now();
 
   // Background task handles
@@ -194,6 +198,7 @@ export class QueueManager {
       metrics: this.metrics,
       startTime: this.startTime,
       maxLogsPerJob: this.maxLogsPerJob,
+      perQueueMetrics: this.perQueueMetrics,
     };
   }
 
@@ -452,7 +457,7 @@ export class QueueManager {
         ctx.jobResults.set(jId, result);
         ctx.storage?.storeResult(jId, result);
       }
-      ctx.jobIndex.set(jId, { type: 'completed' });
+      ctx.jobIndex.set(jId, { type: 'completed', queueName: (job as Job).queue });
       ctx.storage?.markCompleted(jId, Date.now());
     } else {
       ctx.jobIndex.delete(jId);
@@ -706,6 +711,14 @@ export class QueueManager {
     return dlqOps.getDlqJobs(queue, this.contextFactory.getDlqContext(), count);
   }
 
+  getDlqEntries(queue: string): DlqEntry[] {
+    return dlqOps.getDlqEntries(queue, this.contextFactory.getDlqContext());
+  }
+
+  getDlqStats(queue: string): DlqStats {
+    return dlqOps.getDlqStats(queue, this.contextFactory.getDlqContext());
+  }
+
   retryDlq(queue: string, jobId?: JobId): number {
     return dlqOps.retryDlqJobs(queue, this.contextFactory.getDlqContext(), jobId);
   }
@@ -887,8 +900,8 @@ export class QueueManager {
   }
 
   /** Register worker with dashboard event */
-  registerWorker(name: string, queues: string[]) {
-    const worker = this.workerManager.register(name, queues);
+  registerWorker(name: string, queues: string[], concurrency?: number) {
+    const worker = this.workerManager.register(name, queues, concurrency);
     this.dashboardEmit?.('worker:connected', {
       workerId: worker.id,
       name: worker.name,

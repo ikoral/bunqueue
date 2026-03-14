@@ -161,6 +161,7 @@ export function statsEndpoint(queueManager: QueueManager, corsOrigins?: Set<stri
   const stats = queueManager.getStats();
   const memStats = queueManager.getMemoryStats();
   const mem = process.memoryUsage();
+  const rates = throughputTracker.getRates();
 
   return jsonResponse(
     {
@@ -171,6 +172,10 @@ export function statsEndpoint(queueManager: QueueManager, corsOrigins?: Set<stri
         totalPulled: Number(stats.totalPulled),
         totalCompleted: Number(stats.totalCompleted),
         totalFailed: Number(stats.totalFailed),
+        pushPerSec: rates.pushPerSec,
+        pullPerSec: rates.pullPerSec,
+        completePerSec: rates.completePerSec,
+        failPerSec: rates.failPerSec,
       },
       memory: {
         heapUsed: Math.round(mem.heapUsed / 1024 / 1024),

@@ -8,6 +8,7 @@ import type { HandlerContext } from './types';
 import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
 // Pre-compiled regex patterns for URL matching
+const RE_QUEUE_DLQ_STATS = /^\/queues\/([^/]+)\/dlq\/stats$/;
 const RE_QUEUE_DLQ = /^\/queues\/([^/]+)\/dlq$/;
 const RE_QUEUE_DLQ_RETRY = /^\/queues\/([^/]+)\/dlq\/retry$/;
 const RE_QUEUE_DLQ_PURGE = /^\/queues\/([^/]+)\/dlq\/purge$/;
@@ -24,13 +25,20 @@ export async function routeQueueConfigRoutes(
   ctx: HandlerContext,
   cors: Set<string>
 ): Promise<Response | null> {
-  // DLQ: GET /queues/:queue/dlq
+  // DLQ Stats: GET /queues/:queue/dlq/stats (must be checked before /dlq)
+  const dlqStatsMatch = path.match(RE_QUEUE_DLQ_STATS);
+  if (dlqStatsMatch && method === 'GET') {
+    const queue = decodeURIComponent(dlqStatsMatch[1]);
+    const stats = ctx.queueManager.getDlqStats(queue);
+    return jsonResponse({ ok: true, stats }, 200, cors);
+  }
+
+  // DLQ: GET /queues/:queue/dlq - returns full DlqEntry objects with metadata
   const dlqMatch = path.match(RE_QUEUE_DLQ);
   if (dlqMatch && method === 'GET') {
     const queue = decodeURIComponent(dlqMatch[1]);
-    const count = parseInt(new URL(req.url).searchParams.get('count') ?? '100');
-    const r = await handleCommand({ cmd: 'Dlq', queue, count }, ctx);
-    return jsonResponse(r, 200, cors);
+    const entries = ctx.queueManager.getDlqEntries(queue);
+    return jsonResponse({ ok: true, entries }, 200, cors);
   }
 
   // POST /queues/:queue/dlq/retry

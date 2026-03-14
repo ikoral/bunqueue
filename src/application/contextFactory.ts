@@ -51,6 +51,7 @@ export interface ContextDependencies {
   };
   startTime: number;
   maxLogsPerJob: number;
+  perQueueMetrics: Map<string, { totalCompleted: bigint; totalFailed: bigint }>;
 }
 
 /** Callbacks needed for some contexts */
@@ -109,6 +110,7 @@ export class ContextFactory {
       webhookManager: this.deps.webhookManager,
       metrics: this.deps.metrics,
       startTime: this.deps.startTime,
+      perQueueMetrics: this.deps.perQueueMetrics,
       fail: this.callbacks.fail,
       registerQueueName: this.callbacks.registerQueueName,
       unregisterQueueName: this.callbacks.unregisterQueueName,
@@ -130,6 +132,7 @@ export class ContextFactory {
       stalledCandidates: this.deps.stalledCandidates,
       metrics: this.deps.metrics,
       startTime: this.deps.startTime,
+      perQueueMetrics: this.deps.perQueueMetrics,
     };
   }
 
@@ -173,6 +176,7 @@ export class ContextFactory {
       customIdMap: this.deps.customIdMap,
       totalCompleted: this.deps.metrics.totalCompleted,
       totalFailed: this.deps.metrics.totalFailed,
+      perQueueMetrics: this.deps.perQueueMetrics,
       broadcast: this.deps.eventsManager.broadcast.bind(this.deps.eventsManager),
       onJobCompleted: this.callbacks.onJobCompleted,
       onJobsCompleted: this.callbacks.onJobsCompleted,

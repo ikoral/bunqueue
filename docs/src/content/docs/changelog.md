@@ -10,6 +10,20 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.24] - 2026-03-14
+
+### Fixed
+- **Per-queue completed count** — `GET /queues/:q/counts` `completed` field now counts only jobs completed in the requested queue instead of returning the global total across all queues.
+- **DLQ endpoint returns full metadata** — `GET /queues/:q/dlq` now returns `DlqEntry[]` with `enteredAt`, `reason`, `error`, `retryCount`, `lastRetryAt`, `nextRetryAt`, `expiresAt` instead of raw `Job[]`.
+- **Worker registration accepts `queue` (singular)** — `POST /workers` now accepts both `queue` (string) and `queues` (array), plus `workerId` as alias for `name`.
+
+### Added
+- **Per-queue `totalCompleted`/`totalFailed` counters** — `GET /queues/:q/counts` now includes cumulative per-queue counters for completed and failed jobs.
+- **`GET /queues/:q/workers` endpoint** — New endpoint to list workers registered for a specific queue.
+- **`GET /queues/:q/dlq/stats` endpoint** — Server-side DLQ stats aggregation: `total`, `byReason`, `pendingRetry`, `oldestEntry`.
+- **Worker `concurrency`, `status`, `currentJob` fields** — `GET /workers` and `POST /workers` responses now include `concurrency`, computed `status` (active/stale), and `currentJob`.
+- **Throughput rates in `GET /stats`** — Added `pushPerSec`, `pullPerSec`, `completePerSec`, `failPerSec` from the built-in throughput tracker.
+
 ## [2.6.23] - 2026-03-14
 
 ### Added

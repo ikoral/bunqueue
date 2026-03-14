@@ -83,6 +83,9 @@ export interface QueueManagerState {
     totalFailed: { value: bigint };
   };
   readonly startTime: number;
+
+  // Per-queue metrics
+  readonly perQueueMetrics: Map<string, { totalCompleted: bigint; totalFailed: bigint }>;
 }
 
 /** Context for lock operations */
@@ -125,4 +128,5 @@ export interface StatsContext {
     totalFailed: { value: bigint };
   };
   startTime: number;
+  perQueueMetrics?: Map<string, { totalCompleted: bigint; totalFailed: bigint }>;
 }

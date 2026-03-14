@@ -742,7 +742,7 @@ describe('finalizeBatchAck', () => {
 
     // kept job should be in completedJobs and jobIndex
     expect(finalizeCtx.completedJobs.has(idKeep)).toBe(true);
-    expect(finalizeCtx.jobIndex.get(idKeep)).toEqual({ type: 'completed' });
+    expect(finalizeCtx.jobIndex.get(idKeep)).toEqual({ type: 'completed', queueName: 'q1' });
     expect(finalizeCtx.jobResults.get(idKeep)).toBe(42);
 
     // removed job should not be in completedJobs or jobIndex

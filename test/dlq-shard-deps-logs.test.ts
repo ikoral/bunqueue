@@ -925,7 +925,7 @@ describe('JobLogsManager (direct)', () => {
       ctx.jobIndex.set(jid(1), { type: 'processing', shardIdx: 0 });
       expect(addJobLog(jid(1), 'processing log', ctx)).toBe(true);
 
-      ctx.jobIndex.set(jid(2), { type: 'completed' });
+      ctx.jobIndex.set(jid(2), { type: 'completed', queueName: 'test' });
       expect(addJobLog(jid(2), 'completed log', ctx)).toBe(true);
     });
   });

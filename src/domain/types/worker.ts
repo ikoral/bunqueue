@@ -12,25 +12,29 @@ export interface Worker {
   id: WorkerId;
   name: string;
   queues: string[];
+  concurrency: number;
   registeredAt: number;
   lastSeen: number;
   activeJobs: number;
   processedJobs: number;
   failedJobs: number;
+  currentJob: string | null;
 }
 
 /** Create a new worker */
-export function createWorker(name: string, queues: string[]): Worker {
+export function createWorker(name: string, queues: string[], concurrency: number = 1): Worker {
   const now = Date.now();
   return {
     id: uuid(),
     name,
     queues,
+    concurrency,
     registeredAt: now,
     lastSeen: now,
     activeJobs: 0,
     processedJobs: 0,
     failedJobs: 0,
+    currentJob: null,
   };
 }
 

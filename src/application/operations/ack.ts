@@ -38,6 +38,7 @@ export interface AckContext {
   customIdMap?: MapLike<string, JobId>;
   totalCompleted: { value: bigint };
   totalFailed: { value: bigint };
+  perQueueMetrics?: Map<string, { totalCompleted: bigint; totalFailed: bigint }>;
   broadcast: (event: {
     eventType: EventType;
     queue: string;
@@ -91,7 +92,7 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
       ctx.jobResults.set(jobId, result);
       ctx.storage?.storeResult(jobId, result);
     }
-    ctx.jobIndex.set(jobId, { type: 'completed' });
+    ctx.jobIndex.set(jobId, { type: 'completed', queueName: job.queue });
     ctx.storage?.markCompleted(jobId, Date.now());
   } else {
     ctx.jobIndex.delete(jobId);
@@ -99,6 +100,14 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
   }
 
   ctx.totalCompleted.value++;
+  if (ctx.perQueueMetrics) {
+    const pq = ctx.perQueueMetrics.get(job.queue);
+    if (pq) {
+      pq.totalCompleted++;
+    } else {
+      ctx.perQueueMetrics.set(job.queue, { totalCompleted: 1n, totalFailed: 0n });
+    }
+  }
   throughputTracker.completeRate.increment();
   ctx.broadcast({
     eventType: 'completed' as EventType,
@@ -162,6 +171,14 @@ export async function failJob(
       ctx.jobIndex.delete(jobId);
       ctx.storage?.deleteJob(jobId);
       ctx.totalFailed.value++;
+      if (ctx.perQueueMetrics) {
+        const pq = ctx.perQueueMetrics.get(job.queue);
+        if (pq) {
+          pq.totalFailed++;
+        } else {
+          ctx.perQueueMetrics.set(job.queue, { totalCompleted: 0n, totalFailed: 1n });
+        }
+      }
       throughputTracker.failRate.increment();
       // Release customId when job is removed on fail
       if (job.customId && ctx.customIdMap) {
@@ -172,6 +189,14 @@ export async function failJob(
       ctx.jobIndex.set(jobId, { type: 'dlq', queueName: job.queue });
       ctx.storage?.saveDlqEntry(entry);
       ctx.totalFailed.value++;
+      if (ctx.perQueueMetrics) {
+        const pq = ctx.perQueueMetrics.get(job.queue);
+        if (pq) {
+          pq.totalFailed++;
+        } else {
+          ctx.perQueueMetrics.set(job.queue, { totalCompleted: 0n, totalFailed: 1n });
+        }
+      }
       throughputTracker.failRate.increment();
       // Release customId when job goes to DLQ
       if (job.customId && ctx.customIdMap) {

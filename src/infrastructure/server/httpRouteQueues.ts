@@ -25,6 +25,7 @@ const RE_QUEUE_OBLITERATE = /^\/queues\/([^/]+)\/obliterate$/;
 const RE_QUEUE_CLEAN = /^\/queues\/([^/]+)\/clean$/;
 const RE_QUEUE_PROMOTE_JOBS = /^\/queues\/([^/]+)\/promote-jobs$/;
 const RE_QUEUE_RETRY_COMPLETED = /^\/queues\/([^/]+)\/retry-completed$/;
+const RE_QUEUE_WORKERS = /^\/queues\/([^/]+)\/workers$/;
 
 /** Route push/pull/bulk job operations */
 async function routeJobOps(
@@ -162,6 +163,31 @@ export async function routeQueueRoutes(
   // Delegate push/pull/bulk/list operations
   const jobOpsResult = await routeJobOps(req, path, method, ctx, cors);
   if (jobOpsResult) return jobOpsResult;
+
+  // GET /queues/:queue/workers
+  const queueWorkersMatch = path.match(RE_QUEUE_WORKERS);
+  if (queueWorkersMatch && method === 'GET') {
+    const queue = decodeURIComponent(queueWorkersMatch[1]);
+    const workers = ctx.queueManager.workerManager.getForQueue(queue);
+    return jsonResponse(
+      {
+        ok: true,
+        workers: workers.map((w) => ({
+          id: w.id,
+          name: w.name,
+          queues: w.queues,
+          concurrency: w.concurrency,
+          registeredAt: w.registeredAt,
+          lastSeen: w.lastSeen,
+          activeJobs: w.activeJobs,
+          processedJobs: w.processedJobs,
+          failedJobs: w.failedJobs,
+        })),
+      },
+      200,
+      cors
+    );
+  }
 
   // GET /queues/:queue/counts
   const countsMatch = path.match(RE_QUEUE_COUNTS);

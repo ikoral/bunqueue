@@ -28,8 +28,8 @@ export class WorkerManager {
   }
 
   /** Register a new worker */
-  register(name: string, queues: string[]): Worker {
-    const worker = createWorker(name, queues);
+  register(name: string, queues: string[], concurrency: number = 1): Worker {
+    const worker = createWorker(name, queues, concurrency);
     this.workers.set(worker.id, worker);
     return worker;
   }
@@ -58,12 +58,15 @@ export class WorkerManager {
   }
 
   /** Increment active jobs count */
-  incrementActive(id: WorkerId): void {
+  incrementActive(id: WorkerId, jobId?: string): void {
     const worker = this.workers.get(id);
     if (worker) {
       worker.activeJobs++;
       this.totalActiveJobsCounter++;
       worker.lastSeen = Date.now();
+      if (jobId) {
+        worker.currentJob = jobId;
+      }
     }
   }
 
@@ -78,6 +81,9 @@ export class WorkerManager {
       worker.processedJobs++;
       this.totalProcessedCounter++;
       worker.lastSeen = Date.now();
+      if (worker.activeJobs === 0) {
+        worker.currentJob = null;
+      }
     }
   }
 
@@ -92,6 +98,9 @@ export class WorkerManager {
       worker.failedJobs++;
       this.totalFailedCounter++;
       worker.lastSeen = Date.now();
+      if (worker.activeJobs === 0) {
+        worker.currentJob = null;
+      }
     }
   }
 

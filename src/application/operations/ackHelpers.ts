@@ -160,6 +160,7 @@ export interface FinalizeContext {
   jobIndex: Map<JobId, JobLocation>;
   customIdMap?: MapLike<string, JobId>;
   totalCompleted: { value: bigint };
+  perQueueMetrics?: Map<string, { totalCompleted: bigint; totalFailed: bigint }>;
   broadcast: (event: {
     eventType: EventType;
     queue: string;
@@ -184,7 +185,6 @@ export function finalizeBatchAck<T>(
   includeResults: boolean
 ): void {
   const now = Date.now();
-  const completedLocation: JobLocation = { type: 'completed' };
   const storage = ctx.storage;
   const hasStorage = storage !== null;
   const jobCount = extractedJobs.length;
@@ -194,6 +194,19 @@ export function finalizeBatchAck<T>(
 
   // Batch counter update
   ctx.totalCompleted.value += BigInt(jobCount);
+
+  // Per-queue completed counter update
+  if (ctx.perQueueMetrics) {
+    for (let i = 0; i < jobCount; i++) {
+      const qName = extractedJobs[i].job.queue;
+      const pq = ctx.perQueueMetrics.get(qName);
+      if (pq) {
+        pq.totalCompleted++;
+      } else {
+        ctx.perQueueMetrics.set(qName, { totalCompleted: 1n, totalFailed: 0n });
+      }
+    }
+  }
 
   // Main loop
   // IMPORTANT: Order of operations matters for race condition prevention.
@@ -214,7 +227,7 @@ export function finalizeBatchAck<T>(
         if (hasStorage) storage.storeResult(jobId, result);
       }
       // 2. Update job index and store job data for completed listing
-      ctx.jobIndex.set(jobId, completedLocation);
+      ctx.jobIndex.set(jobId, { type: 'completed' as const, queueName: job.queue });
       ctx.completedJobsData.set(jobId, job);
       if (hasStorage) storage.markCompleted(jobId, now);
       // 3. Mark as completed LAST - this is the signal other threads wait for

@@ -69,7 +69,7 @@ jobIndex: Map<JobId, JobLocation>
 JobLocation =
   | { type: 'queue' }       → waiting/delayed
   | { type: 'processing' }  → active
-  | { type: 'completed' }   → completed
+  | { type: 'completed', queueName }   → completed
   | { type: 'dlq' }         → failed
 ```
 

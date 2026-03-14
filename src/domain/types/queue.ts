@@ -104,7 +104,7 @@ export class ConcurrencyLimiter {
 export type JobLocation =
   | { type: 'queue'; shardIdx: number; queueName: string }
   | { type: 'processing'; shardIdx: number }
-  | { type: 'completed' }
+  | { type: 'completed'; queueName: string }
   | { type: 'dlq'; queueName: string };
 
 /** Event types for subscribers */

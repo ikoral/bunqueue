@@ -361,6 +361,7 @@ export interface RegisterWorkerCommand extends BaseCommand {
   readonly cmd: 'RegisterWorker';
   readonly name: string;
   readonly queues: string[];
+  readonly concurrency?: number;
 }
 
 export interface UnregisterWorkerCommand extends BaseCommand {

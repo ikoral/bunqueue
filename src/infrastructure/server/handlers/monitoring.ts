@@ -124,13 +124,20 @@ export function handleRegisterWorker(
   ctx: HandlerContext,
   reqId?: string
 ): Response {
-  const worker = ctx.queueManager.registerWorker(cmd.name, cmd.queues);
+  const worker = ctx.queueManager.registerWorker(cmd.name, cmd.queues, cmd.concurrency);
   return resp.data(
     {
       workerId: worker.id,
       name: worker.name,
       queues: worker.queues,
+      concurrency: worker.concurrency,
+      status: 'active' as const,
       registeredAt: worker.registeredAt,
+      lastSeen: worker.lastSeen,
+      activeJobs: worker.activeJobs,
+      processedJobs: worker.processedJobs,
+      failedJobs: worker.failedJobs,
+      currentJob: worker.currentJob,
     },
     reqId
   );
@@ -148,23 +155,35 @@ export function handleUnregisterWorker(
   return resp.error('Worker not found', reqId);
 }
 
+/** Worker timeout for status computation */
+const WORKER_TIMEOUT_MS = parseInt(Bun.env.WORKER_TIMEOUT_MS ?? '30000', 10);
+
+/** Compute worker status from lastSeen timestamp */
+function computeWorkerStatus(lastSeen: number, now: number): 'active' | 'stale' {
+  return now - lastSeen < WORKER_TIMEOUT_MS ? 'active' : 'stale';
+}
+
 export function handleListWorkers(
   _cmd: ListWorkersCommand,
   ctx: HandlerContext,
   reqId?: string
 ): Response {
   const workers = ctx.queueManager.workerManager.list();
+  const now = Date.now();
   return resp.data(
     {
       workers: workers.map((w) => ({
         id: w.id,
         name: w.name,
         queues: w.queues,
+        concurrency: w.concurrency,
+        status: computeWorkerStatus(w.lastSeen, now),
         registeredAt: w.registeredAt,
         lastSeen: w.lastSeen,
         activeJobs: w.activeJobs,
         processedJobs: w.processedJobs,
         failedJobs: w.failedJobs,
+        currentJob: w.currentJob,
       })),
       stats: ctx.queueManager.workerManager.getStats(),
     },
