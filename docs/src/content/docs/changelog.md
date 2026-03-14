@@ -10,6 +10,32 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.16] - 2026-03-14
+
+### Fixed
+- **PUSH `maxAttempts` silently ignored via HTTP** — The HTTP endpoint mapped `attempts` instead of `maxAttempts`, causing retry configuration to be discarded. Now correctly maps to `maxAttempts` (also accepts `attempts` for backwards compatibility).
+- **GetJobs pagination broken via HTTP** — The HTTP endpoint sent `start`/`end` instead of `offset`/`limit`, causing query parameters to be silently ignored. Pagination now works correctly.
+- **Batch HTTP endpoints unreachable** — `/jobs/ack-batch`, `/jobs/extend-locks`, and `/jobs/heartbeat-batch` were intercepted by the generic `/jobs/:id` pattern. Fixed by matching exact batch paths before the wildcard pattern.
+
+## [2.6.15] - 2026-03-14
+
+### Added
+- **Full HTTP REST API parity with TCP protocol** — All 76 TCP commands are now accessible via HTTP endpoints. Previously only 17 endpoints were available. New endpoints include:
+  - **Job management**: promote, update data, get state, get result, get/update progress, change priority, discard to DLQ, move to delayed, change delay, wait for completion, get children values
+  - **Job logs**: add, get, and clear structured logs per job
+  - **Job locking**: heartbeat, extend lock, batch heartbeat, batch extend locks
+  - **Batch operations**: bulk push (`PUSHB`), batch pull (`PULLB`), batch acknowledge (`ACKB`)
+  - **Queue control**: list queues, list jobs by state, job counts, priority counts, pause/resume, drain, obliterate, clean with grace period, promote all delayed, retry completed
+  - **DLQ**: list DLQ jobs, retry (single or all), purge
+  - **Rate limiting & concurrency**: set/clear per-queue rate limits and concurrency limits
+  - **Queue configuration**: get/set stall detection config, get/set DLQ config
+  - **Cron jobs**: full CRUD (list, add, get, delete)
+  - **Webhooks**: full CRUD (list, add, remove, enable/disable)
+  - **Workers**: list, register, unregister, worker heartbeat
+  - **Monitoring**: ping, storage status
+- **HTTP route architecture** — Routes split into 4 files (`httpRouteJobs.ts`, `httpRouteQueues.ts`, `httpRouteQueueConfig.ts`, `httpRouteResources.ts`) for maintainability.
+- **HTTP API documentation rewritten** — Enterprise-grade docs with curl examples, full request/response specs, parameter tables, and error cases for every endpoint (1,640 lines).
+
 ## [2.6.14] - 2026-03-14
 
 ### Fixed
