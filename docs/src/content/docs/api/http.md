@@ -1,6 +1,6 @@
 ---
-title: "bunqueue HTTP REST API Reference"
-description: "Complete HTTP API reference for bunqueue: job push/pull endpoints, health checks, Prometheus metrics, WebSocket events, and auth."
+title: "HTTP REST API Reference"
+description: "Complete HTTP API reference for bunqueue — 76 endpoints covering jobs, queues, DLQ, crons, webhooks, workers, rate limiting, and real-time events."
 head:
   - tag: meta
     attrs:
@@ -8,20 +8,24 @@ head:
       content: https://bunqueue.dev/og/server-mode.png
 ---
 
-The HTTP API is available on port `6790` by default (configurable via `HTTP_PORT`). All request and response bodies use JSON (`Content-Type: application/json`) unless otherwise noted.
+The HTTP API runs on port `6790` by default (`HTTP_PORT` env var). All request and response bodies are JSON (`Content-Type: application/json`) unless noted otherwise.
+
+Every successful response includes `"ok": true`. Every error response includes `"ok": false` and an `"error"` string.
+
+---
 
 ## Authentication
 
-When `AUTH_TOKENS` is set, all endpoints (except health probes and CORS preflight) require a Bearer token.
-
-```http
-Authorization: Bearer <token>
-```
-
-Configure one or more tokens via the `AUTH_TOKENS` environment variable (comma-separated):
+When `AUTH_TOKENS` is configured, all endpoints (except health probes and CORS preflight) require a Bearer token:
 
 ```bash
+# Environment variable (comma-separated for multiple tokens)
 AUTH_TOKENS=secret-token-1,secret-token-2
+```
+
+```bash
+# Usage
+curl -H "Authorization: Bearer secret-token-1" http://localhost:6790/stats
 ```
 
 Token comparison uses constant-time equality to prevent timing attacks.
@@ -30,63 +34,44 @@ Token comparison uses constant-time equality to prevent timing attacks.
 
 | Endpoint | Reason |
 |---|---|
-| `GET /health` | Health check |
-| `GET /healthz` | Kubernetes liveness probe |
-| `GET /live` | Kubernetes liveness probe |
+| `GET /health` | Health check for load balancers |
+| `GET /healthz`, `GET /live` | Kubernetes liveness probe |
 | `GET /ready` | Kubernetes readiness probe |
-| `POST /gc` | Debug endpoint |
-| `GET /heapstats` | Debug endpoint |
 | `OPTIONS *` | CORS preflight |
 
-The `GET /prometheus` endpoint optionally requires auth when `requireAuthForMetrics` is enabled in the server configuration.
+`GET /prometheus` optionally requires auth when `requireAuthForMetrics` is enabled.
 
-**Unauthorized response:**
+**Unauthorized response** (`401`):
 
 ```json
 { "ok": false, "error": "Unauthorized" }
 ```
 
-Status code: `401`
-
 ---
 
 ## CORS
 
-CORS is configured via the `CORS_ALLOW_ORIGIN` environment variable. The default is `*` (allow all origins).
+Configured via `CORS_ALLOW_ORIGIN` (default: `*`).
 
-**Preflight response** (`OPTIONS` on any path):
+Preflight (`OPTIONS`) returns:
 
 ```
-HTTP/1.1 204 No Content
 Access-Control-Allow-Origin: *
 Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Authorization
 Access-Control-Max-Age: 86400
 ```
 
-All JSON responses include the `Access-Control-Allow-Origin` header.
-
 ---
 
-## Error Response Format
-
-All errors follow a consistent format:
-
-```json
-{
-  "ok": false,
-  "error": "Description of the error"
-}
-```
-
-**Standard status codes:**
+## Error Responses
 
 | Code | Meaning |
 |---|---|
 | `200` | Success |
-| `400` | Bad request (invalid JSON, missing fields, validation failure) |
-| `401` | Unauthorized (missing or invalid token) |
-| `404` | Not found (unknown endpoint or job not found) |
+| `400` | Bad request — invalid JSON, missing required fields, validation failure |
+| `401` | Unauthorized — missing or invalid Bearer token |
+| `404` | Not found — unknown endpoint, job not found |
 | `429` | Rate limit exceeded |
 | `500` | Internal server error |
 
@@ -94,89 +79,59 @@ All errors follow a consistent format:
 
 ## Rate Limiting
 
-HTTP requests are rate-limited per client IP. The client IP is determined from the `X-Forwarded-For` or `X-Real-IP` headers, falling back to `"unknown"`.
-
-Configure via environment variables:
+Per-IP rate limiting using a sliding window. Client IP is resolved from `X-Forwarded-For` > `X-Real-IP` > `unknown`.
 
 | Variable | Default | Description |
 |---|---|---|
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Sliding window duration (ms) |
+| `RATE_LIMIT_WINDOW_MS` | `60000` | Window duration (ms) |
 | `RATE_LIMIT_MAX_REQUESTS` | `Infinity` | Max requests per window per IP |
-| `RATE_LIMIT_CLEANUP_MS` | `60000` | Cleanup interval for expired entries (ms) |
-
-**Rate-limited response:**
-
-```json
-{ "ok": false, "error": "Rate limit exceeded" }
-```
-
-Status code: `429`
+| `RATE_LIMIT_CLEANUP_MS` | `60000` | Cleanup interval for expired entries |
 
 ---
 
-## Job Endpoints
+## Jobs
 
 ### Push a Job
-
-Add a new job to a queue.
 
 ```
 POST /queues/:queue/jobs
 ```
 
-**Request body:**
-
-```json
-{
-  "data": { "to": "user@test.com", "subject": "Welcome" },
-  "priority": 10,
-  "delay": 5000,
-  "maxAttempts": 5,
-  "backoff": 2000,
-  "ttl": 86400000,
-  "timeout": 30000,
-  "uniqueKey": "email-user-123",
-  "jobId": "custom-id-1",
-  "tags": ["email", "onboarding"],
-  "groupId": "batch-1",
-  "lifo": false,
-  "removeOnComplete": false,
-  "removeOnFail": false,
-  "durable": false,
-  "dependsOn": ["job-id-1", "job-id-2"],
-  "repeat": { "every": 60000, "limit": 10 }
-}
+```bash
+curl -X POST http://localhost:6790/queues/emails/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"to": "user@test.com", "subject": "Welcome"}, "priority": 10}'
 ```
 
-Only `data` is required. All other fields are optional.
+**Request body** — only `data` is required:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `data` | `any` | *(required)* | Job payload |
-| `priority` | `number` | `0` | Higher value = processed sooner |
-| `delay` | `number` | `0` | Delay before processing (ms) |
-| `maxAttempts` | `number` | `3` | Maximum retry attempts |
-| `backoff` | `number` | `1000` | Retry backoff delay (ms) |
-| `ttl` | `number` | `null` | Time-to-live from creation (ms) |
-| `timeout` | `number` | `null` | Processing timeout (ms) |
-| `uniqueKey` | `string` | `null` | Deduplication key |
-| `jobId` | `string` | `null` | Custom job ID (idempotent) |
+| `priority` | `number` | `0` | Higher = processed sooner |
+| `delay` | `number` | `0` | Delay before available (ms) |
+| `attempts` | `number` | `3` | Max retry attempts |
+| `backoff` | `number` | `1000` | Retry backoff (ms) |
+| `ttl` | `number` | — | Time-to-live from creation (ms) |
+| `timeout` | `number` | — | Processing timeout (ms) |
+| `uniqueKey` | `string` | — | Deduplication key |
+| `jobId` | `string` | — | Custom ID (idempotent upsert) |
 | `tags` | `string[]` | `[]` | Metadata tags |
-| `groupId` | `string` | `null` | Group identifier |
+| `groupId` | `string` | — | Group identifier for per-group concurrency |
 | `lifo` | `boolean` | `false` | Last-in-first-out ordering |
 | `removeOnComplete` | `boolean` | `false` | Auto-remove on completion |
 | `removeOnFail` | `boolean` | `false` | Auto-remove on failure |
-| `durable` | `boolean` | `false` | Bypass write buffer for immediate disk persistence |
+| `durable` | `boolean` | `false` | Bypass write buffer, immediate disk write |
 | `dependsOn` | `string[]` | `[]` | Job IDs that must complete first |
-| `repeat` | `object` | `null` | Repeat configuration |
+| `repeat` | `object` | — | `{ every: ms, limit: n }` or `{ cron: "..." }` |
 
-**Success response** (`200`):
+**Response** (`200`):
 
 ```json
-{ "ok": true, "id": "01924f5a-7b3c-7def-8a12-3456789abcde" }
+{ "ok": true, "id": "019ce9d7-6983-7000-946f-48737be2b0f9" }
 ```
 
-**Error response** (`400`):
+**Error** (`400`):
 
 ```json
 { "ok": false, "error": "Invalid JSON body" }
@@ -184,77 +139,119 @@ Only `data` is required. All other fields are optional.
 
 ---
 
+### Push Jobs in Bulk
+
+```
+POST /queues/:queue/jobs/bulk
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/jobs/bulk \
+  -H "Content-Type: application/json" \
+  -d '{"jobs": [{"data": {"x": 1}}, {"data": {"x": 2}, "priority": 5}]}'
+```
+
+Each item in `jobs` supports all the same fields as a single push.
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "ids": ["id-1", "id-2"] }
+```
+
+---
+
 ### Pull a Job
 
-Pull the next available job from a queue.
-
 ```
-GET /queues/:queue/jobs
+GET /queues/:queue/jobs[?timeout=ms]
 ```
 
-**Query parameters:**
+```bash
+# Immediate return (no wait)
+curl http://localhost:6790/queues/emails/jobs
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `timeout` | `number` | `0` | Long-poll timeout in ms (0 = return immediately) |
-
-**Example:**
-
-```
-GET /queues/emails/jobs?timeout=5000
+# Long-poll for up to 5 seconds
+curl http://localhost:6790/queues/emails/jobs?timeout=5000
 ```
 
-**Success response with job** (`200`):
+**Response with job** (`200`):
 
 ```json
 {
   "ok": true,
   "job": {
-    "id": "01924f5a-7b3c-7def-8a12-3456789abcde",
+    "id": "019ce9d7-6983-7000-946f-48737be2b0f9",
     "queue": "emails",
     "data": { "to": "user@test.com" },
     "priority": 10,
     "createdAt": 1700000000000,
+    "runAt": 1700000000000,
     "attempts": 0,
     "maxAttempts": 3,
-    "progress": 0
-  },
-  "token": "01924f5a-9c4d-7abc-b123-456789abcdef"
+    "progress": 0,
+    "tags": []
+  }
 }
 ```
-
-The `token` is a lock token for job ownership. Use it when acknowledging or failing the job.
 
 **No job available** (`200`):
 
 ```json
-{ "ok": true, "job": null, "token": null }
+{ "ok": true, "job": null }
+```
+
+---
+
+### Pull Jobs in Batch
+
+```
+POST /queues/:queue/jobs/pull-batch
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/jobs/pull-batch \
+  -H "Content-Type: application/json" \
+  -d '{"count": 10, "timeout": 5000}'
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `count` | `number` | Yes | Number of jobs to pull |
+| `timeout` | `number` | No | Long-poll timeout (ms) |
+| `owner` | `string` | No | Lock owner identifier |
+| `lockTtl` | `number` | No | Lock time-to-live (ms) |
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "jobs": [{ ... }, { ... }], "tokens": ["tok-1", "tok-2"] }
 ```
 
 ---
 
 ### Get a Job
 
-Retrieve a job by ID.
-
 ```
 GET /jobs/:id
 ```
 
-**Success response** (`200`):
+```bash
+curl http://localhost:6790/jobs/019ce9d7-6983-7000-946f-48737be2b0f9
+```
+
+**Response** (`200`):
 
 ```json
 {
   "ok": true,
   "job": {
-    "id": "01924f5a-7b3c-7def-8a12-3456789abcde",
+    "id": "019ce9d7-6983-7000-946f-48737be2b0f9",
     "queue": "emails",
     "data": { "to": "user@test.com" },
     "priority": 0,
     "createdAt": 1700000000000,
     "runAt": 1700000000000,
-    "startedAt": null,
-    "completedAt": null,
     "attempts": 0,
     "maxAttempts": 3,
     "backoff": 1000,
@@ -275,86 +272,434 @@ GET /jobs/:id
 
 ---
 
-### Cancel a Job
+### Get Job by Custom ID
 
-Cancel a job by ID.
+```
+GET /jobs/custom/:customId
+```
+
+```bash
+curl http://localhost:6790/jobs/custom/email-user-123
+```
+
+Looks up a job by the `jobId` specified at push time.
+
+---
+
+### Get Job State
+
+```
+GET /jobs/:id/state
+```
+
+```bash
+curl http://localhost:6790/jobs/019ce9d7-.../state
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "id": "019ce9d7-...", "state": "waiting" }
+```
+
+States: `waiting` | `delayed` | `active` | `completed` | `failed`
+
+---
+
+### Get Job Result
+
+Retrieve the result of a completed job.
+
+```
+GET /jobs/:id/result
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "id": "019ce9d7-...", "result": { "sent": true, "messageId": "abc-123" } }
+```
+
+---
+
+### Cancel a Job
 
 ```
 DELETE /jobs/:id
 ```
 
-**Success response** (`200`):
-
-```json
-{ "ok": true }
+```bash
+curl -X DELETE http://localhost:6790/jobs/019ce9d7-...
 ```
+
+**Response** (`200`): `{ "ok": true }`
 
 ---
 
 ### Acknowledge a Job
 
-Mark a job as completed, optionally with a result.
+Mark a job as successfully completed, optionally storing a result.
 
 ```
 POST /jobs/:id/ack
 ```
 
-**Request body** (optional):
-
-```json
-{
-  "result": { "sent": true, "messageId": "abc-123" }
-}
+```bash
+curl -X POST http://localhost:6790/jobs/019ce9d7-.../ack \
+  -H "Content-Type: application/json" \
+  -d '{"result": {"sent": true, "messageId": "abc-123"}}'
 ```
 
-**Success response** (`200`):
+**Response** (`200`): `{ "ok": true }`
 
-```json
-{ "ok": true }
+**Error** (`400`): `{ "ok": false, "error": "Job not found or not active" }`
+
+---
+
+### Acknowledge Jobs in Batch
+
+```
+POST /jobs/ack-batch
 ```
 
-**Error response** (`400`):
-
-```json
-{ "ok": false, "error": "Job not found or not active" }
+```bash
+curl -X POST http://localhost:6790/jobs/ack-batch \
+  -H "Content-Type: application/json" \
+  -d '{"ids": ["id-1", "id-2", "id-3"], "results": [{"a": 1}, null, {"c": 3}]}'
 ```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `ids` | `string[]` | Yes | Job IDs to acknowledge |
+| `results` | `unknown[]` | No | Per-job results (positional) |
+| `tokens` | `string[]` | No | Lock tokens (positional) |
 
 ---
 
 ### Fail a Job
 
-Mark a job as failed, optionally with an error message.
+Mark a job as failed. If retry attempts remain, it's re-queued with exponential backoff. Otherwise it moves to the DLQ.
 
 ```
 POST /jobs/:id/fail
 ```
 
-**Request body** (optional):
-
-```json
-{
-  "error": "SMTP connection refused"
-}
+```bash
+curl -X POST http://localhost:6790/jobs/019ce9d7-.../fail \
+  -H "Content-Type: application/json" \
+  -d '{"error": "SMTP connection refused"}'
 ```
-
-**Success response** (`200`):
-
-```json
-{ "ok": true }
-```
-
-If the job has remaining retry attempts, it will be re-queued with exponential backoff. Otherwise it moves to the dead-letter queue (DLQ).
 
 ---
 
-## Monitoring Endpoints
+### Update Job Data
 
-### Health Check
-
-Detailed health information including queue counts, connection counts, and memory usage.
+Edit the JSON payload of a job in-place (waiting, delayed, or active).
 
 ```
-GET /health
+PUT /jobs/:id/data
+```
+
+```bash
+curl -X PUT http://localhost:6790/jobs/019ce9d7-.../data \
+  -H "Content-Type: application/json" \
+  -d '{"data": {"to": "new@email.com", "subject": "Updated subject"}}'
+```
+
+**Response** (`200`): `{ "ok": true }`
+
+**Error** (`400`): `{ "ok": false, "error": "Job not found or cannot be updated" }`
+
+---
+
+### Change Job Priority
+
+```
+PUT /jobs/:id/priority
+```
+
+```bash
+curl -X PUT http://localhost:6790/jobs/019ce9d7-.../priority \
+  -H "Content-Type: application/json" \
+  -d '{"priority": 100}'
+```
+
+Only works on queued jobs (waiting/delayed).
+
+---
+
+### Promote a Delayed Job
+
+Move a delayed job to waiting state for immediate processing.
+
+```
+POST /jobs/:id/promote
+```
+
+```bash
+curl -X POST http://localhost:6790/jobs/019ce9d7-.../promote
+```
+
+**Error** (`400`): `{ "ok": false, "error": "Job not found or not delayed" }`
+
+---
+
+### Move to Waiting
+
+Alias for Promote.
+
+```
+POST /jobs/:id/move-to-wait
+```
+
+---
+
+### Move to Delayed
+
+Move an active job back to delayed state.
+
+```
+POST /jobs/:id/move-to-delayed
+```
+
+```bash
+curl -X POST http://localhost:6790/jobs/019ce9d7-.../move-to-delayed \
+  -H "Content-Type: application/json" \
+  -d '{"delay": 60000}'
+```
+
+---
+
+### Change Delay
+
+Update the delay of a delayed job.
+
+```
+PUT /jobs/:id/delay
+```
+
+```json
+{ "delay": 30000 }
+```
+
+---
+
+### Discard to DLQ
+
+Move a job directly to the Dead Letter Queue.
+
+```
+POST /jobs/:id/discard
+```
+
+```bash
+curl -X POST http://localhost:6790/jobs/019ce9d7-.../discard
+```
+
+---
+
+### Wait for Job Completion
+
+Long-poll until a job completes or the timeout expires.
+
+```
+POST /jobs/:id/wait
+```
+
+```bash
+curl -X POST http://localhost:6790/jobs/019ce9d7-.../wait \
+  -H "Content-Type: application/json" \
+  -d '{"timeout": 30000}'
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "completed": true, "result": { "sent": true } }
+```
+
+---
+
+### Get/Update Job Progress
+
+**Get:**
+
+```
+GET /jobs/:id/progress
+```
+
+```json
+{ "ok": true, "progress": 75, "message": "Processing attachments..." }
+```
+
+**Update:**
+
+```
+POST /jobs/:id/progress
+```
+
+```json
+{ "progress": 75, "message": "Processing attachments..." }
+```
+
+---
+
+### Get Children Values
+
+Get the results of child jobs in a flow/pipeline.
+
+```
+GET /jobs/:id/children
+```
+
+```json
+{ "ok": true, "values": { "child-1": { "result": "..." }, "child-2": { "result": "..." } } }
+```
+
+---
+
+### Job Heartbeat
+
+Send a heartbeat to prevent stall detection from marking the job as stalled.
+
+```
+POST /jobs/:id/heartbeat
+```
+
+```json
+{ "token": "lock-token", "duration": 30000 }
+```
+
+Both fields are optional.
+
+---
+
+### Job Heartbeat Batch
+
+```
+POST /jobs/heartbeat-batch
+```
+
+```json
+{ "ids": ["id-1", "id-2"], "tokens": ["tok-1", "tok-2"] }
+```
+
+---
+
+### Extend Lock
+
+Extend the lock TTL on an active job.
+
+```
+POST /jobs/:id/extend-lock
+```
+
+```json
+{ "duration": 30000, "token": "lock-token" }
+```
+
+---
+
+### Extend Locks (Batch)
+
+```
+POST /jobs/extend-locks
+```
+
+```json
+{
+  "ids": ["id-1", "id-2"],
+  "tokens": ["tok-1", "tok-2"],
+  "durations": [30000, 60000]
+}
+```
+
+---
+
+### Job Logs
+
+Structured logging attached to individual jobs.
+
+**Add a log entry:**
+
+```
+POST /jobs/:id/logs
+```
+
+```bash
+curl -X POST http://localhost:6790/jobs/019ce9d7-.../logs \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Connecting to SMTP server...", "level": "info"}'
+```
+
+Levels: `info` | `warn` | `error`
+
+**Get all logs:**
+
+```
+GET /jobs/:id/logs
+```
+
+**Clear logs:**
+
+```
+DELETE /jobs/:id/logs
+```
+
+---
+
+## Queues
+
+### List All Queues
+
+```
+GET /queues
+```
+
+```bash
+curl http://localhost:6790/queues
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "queues": ["emails", "notifications", "reports"] }
+```
+
+---
+
+### List Jobs by State
+
+```
+GET /queues/:queue/jobs/list[?state=waiting&limit=10&offset=0]
+```
+
+```bash
+curl "http://localhost:6790/queues/emails/jobs/list?state=waiting&limit=20"
+```
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `state` | `string` | all | `waiting`, `delayed`, `active` |
+| `limit` | `number` | all | Max jobs to return |
+| `offset` | `number` | `0` | Skip N jobs |
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "jobs": [{ "id": "...", "data": { ... }, "priority": 5, "createdAt": 1700000000000 }] }
+```
+
+---
+
+### Get Job Counts
+
+```
+GET /queues/:queue/counts
+```
+
+```bash
+curl http://localhost:6790/queues/emails/counts
 ```
 
 **Response** (`200`):
@@ -362,74 +707,649 @@ GET /health
 ```json
 {
   "ok": true,
-  "status": "healthy",
-  "uptime": 3600,
-  "version": "2.1.8",
-  "queues": {
-    "waiting": 150,
-    "active": 12,
-    "delayed": 30,
-    "completed": 5000,
-    "dlq": 3
-  },
-  "connections": {
-    "tcp": 0,
-    "ws": 4,
-    "sse": 2
-  },
-  "memory": {
-    "heapUsed": 45,
-    "heapTotal": 64,
-    "rss": 82
+  "counts": { "waiting": 150, "active": 12, "delayed": 30, "completed": 5000, "failed": 3 }
+}
+```
+
+---
+
+### Get Total Count
+
+```
+GET /queues/:queue/count
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "count": 192 }
+```
+
+---
+
+### Get Counts per Priority
+
+```
+GET /queues/:queue/priority-counts
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "queue": "emails", "counts": { "0": 100, "5": 30, "10": 12 } }
+```
+
+---
+
+### Check If Paused
+
+```
+GET /queues/:queue/paused
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "paused": false }
+```
+
+---
+
+### Pause a Queue
+
+Stop processing new jobs. Active jobs continue to completion.
+
+```
+POST /queues/:queue/pause
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/pause
+```
+
+---
+
+### Resume a Queue
+
+```
+POST /queues/:queue/resume
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/resume
+```
+
+---
+
+### Drain a Queue
+
+Remove all waiting and delayed jobs. Active jobs are not affected.
+
+```
+POST /queues/:queue/drain
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/drain
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "count": 150 }
+```
+
+---
+
+### Obliterate a Queue
+
+Completely destroy a queue and remove all its jobs from memory.
+
+```
+POST /queues/:queue/obliterate
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/obliterate
+```
+
+:::caution
+This is irreversible. All jobs in the queue are permanently deleted.
+:::
+
+---
+
+### Clean a Queue
+
+Remove jobs older than a grace period, optionally filtered by state.
+
+```
+POST /queues/:queue/clean
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/clean \
+  -H "Content-Type: application/json" \
+  -d '{"grace": 86400000, "state": "waiting", "limit": 500}'
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `grace` | `number` | `0` | Only remove jobs older than this (ms) |
+| `state` | `string` | all | `waiting` or `delayed` |
+| `limit` | `number` | `1000` | Max jobs to remove per call |
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "count": 42 }
+```
+
+---
+
+### Promote All Delayed Jobs
+
+Move all (or N) delayed jobs in a queue to waiting state.
+
+```
+POST /queues/:queue/promote-jobs
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/promote-jobs \
+  -H "Content-Type: application/json" \
+  -d '{"count": 50}'
+```
+
+Omit `count` to promote all delayed jobs.
+
+---
+
+### Retry Completed Jobs
+
+Re-queue completed jobs for reprocessing.
+
+```
+POST /queues/:queue/retry-completed
+```
+
+```bash
+# Retry a specific job
+curl -X POST http://localhost:6790/queues/emails/retry-completed \
+  -H "Content-Type: application/json" \
+  -d '{"id": "019ce9d7-..."}'
+
+# Retry all completed jobs
+curl -X POST http://localhost:6790/queues/emails/retry-completed
+```
+
+---
+
+## Dead Letter Queue (DLQ)
+
+Jobs that exhaust all retry attempts or are explicitly discarded land in the DLQ.
+
+### List DLQ Jobs
+
+```
+GET /queues/:queue/dlq[?count=100]
+```
+
+```bash
+curl "http://localhost:6790/queues/emails/dlq?count=50"
+```
+
+**Response** (`200`):
+
+```json
+{
+  "ok": true,
+  "jobs": [
+    { "id": "...", "data": { ... }, "attempts": 3, "createdAt": 1700000000000 }
+  ]
+}
+```
+
+---
+
+### Retry DLQ Jobs
+
+```
+POST /queues/:queue/dlq/retry
+```
+
+```bash
+# Retry a specific DLQ job
+curl -X POST http://localhost:6790/queues/emails/dlq/retry \
+  -H "Content-Type: application/json" \
+  -d '{"jobId": "019ce9d7-..."}'
+
+# Retry all DLQ jobs
+curl -X POST http://localhost:6790/queues/emails/dlq/retry
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "count": 5 }
+```
+
+---
+
+### Purge DLQ
+
+Remove all jobs from the DLQ permanently.
+
+```
+POST /queues/:queue/dlq/purge
+```
+
+```bash
+curl -X POST http://localhost:6790/queues/emails/dlq/purge
+```
+
+**Response** (`200`):
+
+```json
+{ "ok": true, "count": 12 }
+```
+
+---
+
+## Rate Limiting & Concurrency
+
+Per-queue controls for throughput and parallelism.
+
+### Set Rate Limit
+
+```
+PUT /queues/:queue/rate-limit
+```
+
+```bash
+curl -X PUT http://localhost:6790/queues/emails/rate-limit \
+  -H "Content-Type: application/json" \
+  -d '{"limit": 100}'
+```
+
+### Clear Rate Limit
+
+```
+DELETE /queues/:queue/rate-limit
+```
+
+```bash
+curl -X DELETE http://localhost:6790/queues/emails/rate-limit
+```
+
+### Set Concurrency Limit
+
+```
+PUT /queues/:queue/concurrency
+```
+
+```bash
+curl -X PUT http://localhost:6790/queues/emails/concurrency \
+  -H "Content-Type: application/json" \
+  -d '{"limit": 5}'
+```
+
+### Clear Concurrency Limit
+
+```
+DELETE /queues/:queue/concurrency
+```
+
+---
+
+## Queue Configuration
+
+### Stall Detection
+
+**Get current config:**
+
+```
+GET /queues/:queue/stall-config
+```
+
+**Update config:**
+
+```
+PUT /queues/:queue/stall-config
+```
+
+```bash
+curl -X PUT http://localhost:6790/queues/emails/stall-config \
+  -H "Content-Type: application/json" \
+  -d '{"config": {"stallInterval": 30000, "maxStalls": 3, "gracePeriod": 5000}}'
+```
+
+### DLQ Configuration
+
+**Get current config:**
+
+```
+GET /queues/:queue/dlq-config
+```
+
+**Update config:**
+
+```
+PUT /queues/:queue/dlq-config
+```
+
+```bash
+curl -X PUT http://localhost:6790/queues/emails/dlq-config \
+  -H "Content-Type: application/json" \
+  -d '{"config": {"autoRetry": true, "maxAge": 604800000, "maxEntries": 10000}}'
+```
+
+---
+
+## Cron Jobs
+
+### List All Crons
+
+```
+GET /crons
+```
+
+```bash
+curl http://localhost:6790/crons
+```
+
+**Response** (`200`):
+
+```json
+{
+  "ok": true,
+  "crons": [
+    { "name": "daily-cleanup", "queue": "maintenance", "schedule": "0 2 * * *", "nextRun": 1700100000000, "executions": 42 }
+  ]
+}
+```
+
+---
+
+### Add a Cron Job
+
+```
+POST /crons
+```
+
+```bash
+curl -X POST http://localhost:6790/crons \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "daily-cleanup",
+    "queue": "maintenance",
+    "data": {"task": "cleanup-stale-sessions"},
+    "schedule": "0 2 * * *",
+    "timezone": "America/New_York",
+    "priority": 5,
+    "maxLimit": 100
+  }'
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | `string` | Yes | Unique cron identifier |
+| `queue` | `string` | Yes | Target queue |
+| `data` | `any` | Yes | Job payload |
+| `schedule` | `string` | * | Cron expression (e.g. `"*/5 * * * *"`) |
+| `repeatEvery` | `number` | * | Repeat interval in ms |
+| `timezone` | `string` | No | IANA timezone (default: UTC) |
+| `priority` | `number` | No | Job priority |
+| `maxLimit` | `number` | No | Max total executions |
+
+\* Either `schedule` or `repeatEvery` is required.
+
+---
+
+### Get a Cron Job
+
+```
+GET /crons/:name
+```
+
+```bash
+curl http://localhost:6790/crons/daily-cleanup
+```
+
+---
+
+### Delete a Cron Job
+
+```
+DELETE /crons/:name
+```
+
+```bash
+curl -X DELETE http://localhost:6790/crons/daily-cleanup
+```
+
+---
+
+## Webhooks
+
+### List All Webhooks
+
+```
+GET /webhooks
+```
+
+```bash
+curl http://localhost:6790/webhooks
+```
+
+---
+
+### Add a Webhook
+
+```
+POST /webhooks
+```
+
+```bash
+curl -X POST http://localhost:6790/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/hooks/bunqueue",
+    "events": ["completed", "failed"],
+    "queue": "emails",
+    "secret": "whsec_abc123"
+  }'
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `url` | `string` | Yes | Webhook endpoint URL |
+| `events` | `string[]` | Yes | Event types to subscribe to |
+| `queue` | `string` | No | Filter to specific queue |
+| `secret` | `string` | No | HMAC signing secret |
+
+**Response** (`200`):
+
+```json
+{
+  "ok": true,
+  "data": { "webhookId": "wh-abc123", "url": "https://...", "events": ["completed", "failed"], "createdAt": 1700000000000 }
+}
+```
+
+---
+
+### Remove a Webhook
+
+```
+DELETE /webhooks/:id
+```
+
+```bash
+curl -X DELETE http://localhost:6790/webhooks/wh-abc123
+```
+
+---
+
+### Enable/Disable a Webhook
+
+```
+PUT /webhooks/:id/enabled
+```
+
+```bash
+curl -X PUT http://localhost:6790/webhooks/wh-abc123/enabled \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+```
+
+---
+
+## Workers
+
+### List All Workers
+
+```
+GET /workers
+```
+
+```bash
+curl http://localhost:6790/workers
+```
+
+**Response** (`200`):
+
+```json
+{
+  "ok": true,
+  "data": {
+    "workers": [
+      { "id": "w-1", "name": "email-worker", "queues": ["emails"], "lastSeen": 1700000000000, "activeJobs": 3, "processedJobs": 1500, "failedJobs": 12 }
+    ],
+    "stats": { "total": 4, "active": 3 }
   }
 }
 ```
 
-Memory values are in MB. Uptime is in seconds.
+---
+
+### Register a Worker
+
+```
+POST /workers
+```
+
+```bash
+curl -X POST http://localhost:6790/workers \
+  -H "Content-Type: application/json" \
+  -d '{"name": "email-worker-1", "queues": ["emails", "notifications"]}'
+```
+
+---
+
+### Unregister a Worker
+
+```
+DELETE /workers/:id
+```
+
+```bash
+curl -X DELETE http://localhost:6790/workers/w-1
+```
+
+---
+
+### Worker Heartbeat
+
+Keep a worker's registration alive.
+
+```
+POST /workers/:id/heartbeat
+```
+
+```bash
+curl -X POST http://localhost:6790/workers/w-1/heartbeat
+```
+
+---
+
+## Monitoring
+
+### Health Check
+
+Detailed health info including queue counts, connections, and memory.
+
+```
+GET /health
+```
+
+No authentication required.
+
+**Response** (`200`):
+
+```json
+{
+  "ok": true,
+  "status": "healthy",
+  "uptime": 86400,
+  "version": "2.6.13",
+  "queues": { "waiting": 150, "active": 12, "delayed": 30, "completed": 50000, "dlq": 3 },
+  "connections": { "tcp": 8, "ws": 4, "sse": 2 },
+  "memory": { "heapUsed": 45, "heapTotal": 64, "rss": 82 }
+}
+```
+
+Memory in MB. Uptime in seconds.
 
 ---
 
 ### Liveness Probes
-
-Simple endpoints for Kubernetes liveness checks. No authentication required.
 
 ```
 GET /healthz
 GET /live
 ```
 
-**Response** (`200`):
-
-```
-OK
-```
-
-Content-Type: `text/plain`
+Returns plain text `OK` with status `200`. No auth.
 
 ---
 
 ### Readiness Probe
 
-Kubernetes readiness check. No authentication required.
-
 ```
 GET /ready
 ```
 
-**Response** (`200`):
-
 ```json
 { "ok": true, "ready": true }
+```
+
+No auth.
+
+---
+
+### Ping
+
+```
+GET /ping
+```
+
+```json
+{ "ok": true, "data": { "pong": true, "time": 1700000000000 } }
 ```
 
 ---
 
 ### Stats
 
-Detailed server statistics including throughput counters, memory usage, and internal collection sizes.
+Server statistics with throughput counters, memory, and internal collection sizes.
 
 ```
 GET /stats
+```
+
+```bash
+curl http://localhost:6790/stats
 ```
 
 **Response** (`200`):
@@ -438,33 +1358,12 @@ GET /stats
 {
   "ok": true,
   "stats": {
-    "queued": 150,
-    "processing": 12,
-    "delayed": 30,
-    "dlq": 3,
-    "completed": 5000,
-    "uptime": 3600,
-    "pushPerSec": 245,
-    "pullPerSec": 240,
-    "totalPushed": 100000,
-    "totalPulled": 99500,
-    "totalCompleted": 98000,
-    "totalFailed": 200
+    "waiting": 150, "active": 12, "delayed": 30, "completed": 50000, "dlq": 3,
+    "totalPushed": 100000, "totalPulled": 99500, "totalCompleted": 98000, "totalFailed": 200,
+    "uptime": 86400
   },
-  "memory": {
-    "heapUsed": 45,
-    "heapTotal": 64,
-    "rss": 82,
-    "external": 2,
-    "arrayBuffers": 1
-  },
-  "collections": {
-    "jobIndex": 1500,
-    "completedJobs": 5000,
-    "processingTotal": 12,
-    "queuedTotal": 150,
-    "temporalIndexTotal": 30
-  }
+  "memory": { "heapUsed": 45, "heapTotal": 64, "rss": 82, "external": 2, "arrayBuffers": 1 },
+  "collections": { "jobIndex": 1500, "completedJobs": 5000, "processingTotal": 12, "queuedTotal": 150, "temporalIndexTotal": 30 }
 }
 ```
 
@@ -472,402 +1371,270 @@ GET /stats
 
 ### Metrics (JSON)
 
-Aggregated throughput counters in JSON format.
-
 ```
 GET /metrics
 ```
 
-**Response** (`200`):
-
 ```json
 {
   "ok": true,
-  "metrics": {
-    "totalPushed": 100000,
-    "totalPulled": 99500,
-    "totalCompleted": 98000,
-    "totalFailed": 200
-  }
+  "metrics": { "totalPushed": 100000, "totalPulled": 99500, "totalCompleted": 98000, "totalFailed": 200 }
 }
 ```
-
-> **Note:** This endpoint returns JSON, not Prometheus text format. For Prometheus scraping, use `/prometheus`.
 
 ---
 
 ### Prometheus Metrics
 
-Prometheus-compatible text format for scraping.
-
 ```
 GET /prometheus
 ```
 
-Optionally requires authentication when `requireAuthForMetrics` is enabled.
+Returns `text/plain; version=0.0.4` for Prometheus scraping. Includes per-queue gauges and latency histograms.
 
-**Response** (`200`):
+Optionally requires auth (`requireAuthForMetrics`).
+
+---
+
+### Storage Status
 
 ```
-Content-Type: text/plain; version=0.0.4; charset=utf-8
+GET /storage
 ```
 
-```
-# HELP bunqueue_jobs_pushed_total Total jobs pushed
-# TYPE bunqueue_jobs_pushed_total counter
-bunqueue_jobs_pushed_total 100000
-# HELP bunqueue_jobs_completed_total Total jobs completed
-# TYPE bunqueue_jobs_completed_total counter
-bunqueue_jobs_completed_total 98000
+Returns disk health. When `diskFull` is `true`, the server stops accepting new jobs.
 
-# Per-queue metrics with labels
-bunqueue_queue_jobs_waiting{queue="emails"} 30
-bunqueue_queue_jobs_active{queue="emails"} 5
-bunqueue_queue_jobs_delayed{queue="emails"} 0
-bunqueue_queue_jobs_dlq{queue="emails"} 2
-
-# Latency histograms
-# HELP bunqueue_push_duration_ms Push operation latency in ms
-# TYPE bunqueue_push_duration_ms histogram
-bunqueue_push_duration_ms_bucket{le="0.1"} 120
-bunqueue_push_duration_ms_bucket{le="1"} 95000
-bunqueue_push_duration_ms_bucket{le="+Inf"} 100000
-bunqueue_push_duration_ms_sum 8500.2
-bunqueue_push_duration_ms_count 100000
-...
+```json
+{ "ok": true, "diskFull": false }
 ```
 
 ---
 
-## Debug Endpoints
-
 ### Force Garbage Collection
-
-Trigger garbage collection and memory compaction. No authentication required.
 
 ```
 POST /gc
 ```
 
-**Response** (`200`):
+Triggers Bun GC and `compactMemory()`. Returns before/after heap stats.
 
 ```json
 {
   "ok": true,
-  "before": {
-    "heapUsed": 52,
-    "heapTotal": 64,
-    "rss": 90
-  },
-  "after": {
-    "heapUsed": 45,
-    "heapTotal": 64,
-    "rss": 85
-  }
+  "before": { "heapUsed": 52, "heapTotal": 64, "rss": 90 },
+  "after": { "heapUsed": 45, "heapTotal": 64, "rss": 85 }
 }
 ```
-
-Memory values are in MB.
 
 ---
 
 ### Heap Stats
 
-Detailed heap statistics for debugging memory leaks. No authentication required.
-
 ```
 GET /heapstats
 ```
 
-**Response** (`200`):
-
-```json
-{
-  "ok": true,
-  "memory": {
-    "heapUsed": 45,
-    "heapTotal": 64,
-    "rss": 82
-  },
-  "heap": {
-    "objectCount": 125000,
-    "protectedCount": 1200,
-    "globalCount": 350
-  },
-  "collections": {
-    "jobIndex": 1500,
-    "completedJobs": 5000,
-    "processingTotal": 12,
-    "queuedTotal": 150,
-    "temporalIndexTotal": 30
-  },
-  "topObjectTypes": [
-    { "type": "Object", "count": 45000 },
-    { "type": "Array", "count": 12000 },
-    { "type": "String", "count": 8500 }
-  ]
-}
-```
-
-The `topObjectTypes` list shows the top 20 object types by count.
+Detailed V8/JSC heap breakdown. Returns top 20 object types by count. Useful for debugging memory leaks.
 
 ---
 
-## Server-Sent Events (SSE)
+## Real-time Events
 
-Subscribe to real-time job events over an SSE connection.
-
-### Connect to All Events
+### Server-Sent Events (SSE)
 
 ```
 GET /events
-```
-
-### Filter by Queue
-
-```
 GET /events/queues/:queue
 ```
 
-**Example:**
-
-```
-GET /events/queues/emails
-```
-
-Authentication is required when `AUTH_TOKENS` is configured. Pass the token via the `Authorization` header.
-
-### Connection Message
-
-On connect, the server sends an initial message:
-
-```
-data: {"connected":true,"clientId":"01924f5a-7b3c-7def-8a12-3456789abcde"}
-```
-
-### Event Format
-
-All events are sent as `data:` messages (no named event types). Each message is a JSON object:
-
-```
-data: {"eventType":"completed","queue":"emails","jobId":"01924f5a-7b3c-7def-8a12-3456789abcde","timestamp":1700000000000}
-```
-
-### Event Types
-
-| eventType | Description | Extra Fields |
-|---|---|---|
-| `pushed` | Job was added to a queue | `data` |
-| `pulled` | Job was pulled for processing | |
-| `completed` | Job completed successfully | |
-| `failed` | Job processing failed | `error` |
-| `progress` | Job progress was updated | `progress` |
-| `stalled` | Job was detected as stalled | |
-| `removed` | Job was removed | `prev` (previous state) |
-| `delayed` | Job was moved to delayed state | `delay` (ms) |
-| `duplicated` | Duplicate job was detected | |
-| `retried` | Job was retried | `prev` (previous state) |
-| `waiting-children` | Job is waiting for child jobs | |
-| `drained` | Queue was drained | |
-
-### JavaScript Example
-
 ```javascript
 const events = new EventSource('http://localhost:6790/events/queues/emails');
-
 events.onmessage = (event) => {
   const data = JSON.parse(event.data);
-  if (data.connected) {
-    console.log('Connected with client ID:', data.clientId);
-    return;
-  }
-  console.log(`[${data.eventType}] Job ${data.jobId} in queue ${data.queue}`);
-};
-
-events.onerror = () => {
-  console.log('SSE connection error, will auto-reconnect');
+  if (data.connected) return; // initial connection message
+  console.log(`[${data.eventType}] Job ${data.jobId}`);
 };
 ```
 
-### Authenticated SSE Example
+For authenticated SSE, use a library like `@microsoft/fetch-event-source` (native `EventSource` does not support custom headers).
 
-```javascript
-// EventSource does not support custom headers natively.
-// Use a library like eventsource or fetch-event-source:
-import { fetchEventSource } from '@microsoft/fetch-event-source';
-
-await fetchEventSource('http://localhost:6790/events/queues/emails', {
-  headers: { Authorization: 'Bearer my-secret-token' },
-  onmessage(event) {
-    const data = JSON.parse(event.data);
-    console.log(data.eventType, data.jobId);
-  },
-});
-```
-
----
-
-## WebSocket
-
-Connect to a WebSocket for bidirectional communication. You can subscribe to real-time events and send commands.
-
-### Connect
+### WebSocket
 
 ```
 ws://localhost:6790/ws
-```
-
-### Filter by Queue
-
-```
 ws://localhost:6790/ws/queues/:queue
 ```
 
-**Example:**
-
-```
-ws://localhost:6790/ws/queues/emails
-```
-
-Authentication is validated at connection time via the `Authorization` header. If `AUTH_TOKENS` is configured and the token is missing or invalid, the upgrade request is rejected with a `401` response.
-
-### Event Broadcasts
-
-Connected WebSocket clients receive the same job events as SSE clients. Events are JSON strings:
-
-```json
-{
-  "eventType": "completed",
-  "queue": "emails",
-  "jobId": "01924f5a-7b3c-7def-8a12-3456789abcde",
-  "timestamp": 1700000000000
-}
-```
-
-Events are filtered by queue when connected to `/ws/queues/:queue`.
-
-### Sending Commands
-
-WebSocket clients can send commands as JSON messages. Every command must include a `cmd` field. An optional `reqId` field is echoed back in the response for request/response correlation.
-
-**Example -- push a job:**
-
-```json
-{ "cmd": "PUSH", "queue": "emails", "data": { "to": "user@test.com" }, "reqId": "req-1" }
-```
-
-**Response:**
-
-```json
-{ "ok": true, "id": "01924f5a-7b3c-7def-8a12-3456789abcde", "reqId": "req-1" }
-```
-
-**Example -- pull a job:**
-
-```json
-{ "cmd": "PULL", "queue": "emails", "reqId": "req-2" }
-```
-
-**Example -- acknowledge a job:**
-
-```json
-{ "cmd": "ACK", "id": "01924f5a-7b3c-7def-8a12-3456789abcde", "result": { "sent": true }, "reqId": "req-3" }
-```
-
-**Example -- fail a job:**
-
-```json
-{ "cmd": "FAIL", "id": "01924f5a-7b3c-7def-8a12-3456789abcde", "error": "Timeout", "reqId": "req-4" }
-```
-
-### Authentication via WebSocket
-
-If auth tokens are configured, the `Authorization: Bearer <token>` header must be sent during the WebSocket handshake. Alternatively, after connecting, you can authenticate with the `Auth` command:
-
-```json
-{ "cmd": "Auth", "token": "my-secret-token" }
-```
-
-**Success:**
-
-```json
-{ "ok": true }
-```
-
-**Failure:**
-
-```json
-{ "ok": false, "error": "Invalid token" }
-```
-
-### Error Response
-
-Invalid or failed commands return:
-
-```json
-{ "ok": false, "error": "Description of error", "reqId": "req-1" }
-```
-
-### Connection Cleanup
-
-When a WebSocket connection closes, all jobs owned by that client are released back to the queue automatically.
-
-### JavaScript Example
+WebSocket clients receive the same events as SSE and can send commands as JSON:
 
 ```javascript
 const ws = new WebSocket('ws://localhost:6790/ws');
-
 ws.onopen = () => {
-  // Push a job
-  ws.send(JSON.stringify({
-    cmd: 'PUSH',
-    queue: 'emails',
-    data: { to: 'user@test.com' },
-    reqId: '1'
-  }));
+  ws.send(JSON.stringify({ cmd: 'PUSH', queue: 'emails', data: { to: 'user@test.com' }, reqId: '1' }));
 };
-
 ws.onmessage = (event) => {
   const msg = JSON.parse(event.data);
-
-  if (msg.reqId) {
-    // This is a response to a command we sent
-    console.log('Response:', msg);
-  } else if (msg.eventType) {
-    // This is a broadcast event
-    console.log('Event:', msg.eventType, msg.jobId);
-  }
+  if (msg.reqId) console.log('Response:', msg);        // command response
+  else if (msg.eventType) console.log('Event:', msg);  // broadcast event
 };
 ```
+
+Authentication via `Authorization: Bearer` header at handshake, or `{ "cmd": "Auth", "token": "..." }` after connect.
+
+When a WebSocket disconnects, all jobs owned by that client are released back to the queue.
+
+### Event Types
+
+| eventType | Description |
+|---|---|
+| `pushed` | Job added to queue |
+| `pulled` | Job pulled for processing |
+| `completed` | Job completed successfully |
+| `failed` | Job processing failed |
+| `progress` | Job progress updated |
+| `stalled` | Job detected as stalled |
+| `removed` | Job removed |
+| `delayed` | Job moved to delayed state |
+| `duplicated` | Duplicate job detected |
+| `retried` | Job retried |
+| `waiting-children` | Job waiting for children |
+| `drained` | Queue was drained |
 
 ---
 
 ## Endpoint Summary
 
+### Jobs (30 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/queues/:q/jobs` | Push a job |
+| `POST` | `/queues/:q/jobs/bulk` | Push jobs in bulk |
+| `GET` | `/queues/:q/jobs` | Pull a job |
+| `POST` | `/queues/:q/jobs/pull-batch` | Pull jobs in batch |
+| `GET` | `/jobs/:id` | Get job by ID |
+| `GET` | `/jobs/custom/:customId` | Get job by custom ID |
+| `DELETE` | `/jobs/:id` | Cancel a job |
+| `POST` | `/jobs/:id/ack` | Acknowledge a job |
+| `POST` | `/jobs/ack-batch` | Acknowledge batch |
+| `POST` | `/jobs/:id/fail` | Fail a job |
+| `GET` | `/jobs/:id/state` | Get job state |
+| `GET` | `/jobs/:id/result` | Get job result |
+| `GET` | `/jobs/:id/progress` | Get progress |
+| `POST` | `/jobs/:id/progress` | Update progress |
+| `PUT` | `/jobs/:id/data` | Update job data |
+| `PUT` | `/jobs/:id/priority` | Change priority |
+| `POST` | `/jobs/:id/promote` | Promote delayed job |
+| `POST` | `/jobs/:id/move-to-wait` | Move to waiting |
+| `POST` | `/jobs/:id/move-to-delayed` | Move to delayed |
+| `PUT` | `/jobs/:id/delay` | Change delay |
+| `POST` | `/jobs/:id/discard` | Discard to DLQ |
+| `POST` | `/jobs/:id/wait` | Wait for completion |
+| `GET` | `/jobs/:id/children` | Get children values |
+| `POST` | `/jobs/:id/heartbeat` | Job heartbeat |
+| `POST` | `/jobs/heartbeat-batch` | Job heartbeat batch |
+| `POST` | `/jobs/:id/extend-lock` | Extend lock |
+| `POST` | `/jobs/extend-locks` | Extend locks batch |
+| `GET` | `/jobs/:id/logs` | Get logs |
+| `POST` | `/jobs/:id/logs` | Add log |
+| `DELETE` | `/jobs/:id/logs` | Clear logs |
+
+### Queues (13 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/queues` | List all queues |
+| `GET` | `/queues/:q/jobs/list` | List jobs by state |
+| `GET` | `/queues/:q/counts` | Job counts per state |
+| `GET` | `/queues/:q/count` | Total job count |
+| `GET` | `/queues/:q/priority-counts` | Counts per priority |
+| `GET` | `/queues/:q/paused` | Check if paused |
+| `POST` | `/queues/:q/pause` | Pause queue |
+| `POST` | `/queues/:q/resume` | Resume queue |
+| `POST` | `/queues/:q/drain` | Drain queue |
+| `POST` | `/queues/:q/obliterate` | Obliterate queue |
+| `POST` | `/queues/:q/clean` | Clean old jobs |
+| `POST` | `/queues/:q/promote-jobs` | Promote delayed jobs |
+| `POST` | `/queues/:q/retry-completed` | Retry completed jobs |
+
+### DLQ (3 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/queues/:q/dlq` | List DLQ jobs |
+| `POST` | `/queues/:q/dlq/retry` | Retry DLQ jobs |
+| `POST` | `/queues/:q/dlq/purge` | Purge DLQ |
+
+### Rate Limiting & Concurrency (4 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `PUT` | `/queues/:q/rate-limit` | Set rate limit |
+| `DELETE` | `/queues/:q/rate-limit` | Clear rate limit |
+| `PUT` | `/queues/:q/concurrency` | Set concurrency |
+| `DELETE` | `/queues/:q/concurrency` | Clear concurrency |
+
+### Configuration (4 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET/PUT` | `/queues/:q/stall-config` | Stall detection config |
+| `GET/PUT` | `/queues/:q/dlq-config` | DLQ config |
+
+### Crons (4 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/crons` | List crons |
+| `POST` | `/crons` | Add cron |
+| `GET` | `/crons/:name` | Get cron |
+| `DELETE` | `/crons/:name` | Delete cron |
+
+### Webhooks (4 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/webhooks` | List webhooks |
+| `POST` | `/webhooks` | Add webhook |
+| `DELETE` | `/webhooks/:id` | Remove webhook |
+| `PUT` | `/webhooks/:id/enabled` | Toggle webhook |
+
+### Workers (4 endpoints)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/workers` | List workers |
+| `POST` | `/workers` | Register worker |
+| `DELETE` | `/workers/:id` | Unregister worker |
+| `POST` | `/workers/:id/heartbeat` | Worker heartbeat |
+
+### Monitoring (11 endpoints)
+
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/queues/:queue/jobs` | Yes | Push a job to a queue |
-| `GET` | `/queues/:queue/jobs` | Yes | Pull the next job from a queue |
-| `GET` | `/jobs/:id` | Yes | Get a job by ID |
-| `DELETE` | `/jobs/:id` | Yes | Cancel a job by ID |
-| `POST` | `/jobs/:id/ack` | Yes | Acknowledge (complete) a job |
-| `POST` | `/jobs/:id/fail` | Yes | Fail a job |
-| `GET` | `/health` | No | Detailed health check |
-| `GET` | `/healthz` | No | Liveness probe (returns `OK`) |
-| `GET` | `/live` | No | Liveness probe (returns `OK`) |
+| `GET` | `/health` | No | Health check |
+| `GET` | `/healthz` | No | Liveness probe |
+| `GET` | `/live` | No | Liveness probe |
 | `GET` | `/ready` | No | Readiness probe |
-| `GET` | `/stats` | Yes | Server statistics (JSON) |
-| `GET` | `/metrics` | Yes | Throughput metrics (JSON) |
-| `GET` | `/prometheus` | Optional | Prometheus text format metrics |
-| `POST` | `/gc` | No | Force garbage collection |
-| `GET` | `/heapstats` | No | Heap statistics for debugging |
-| `GET` | `/events` | Yes | SSE stream (all queues) |
-| `GET` | `/events/queues/:queue` | Yes | SSE stream (filtered by queue) |
-| -- | `/ws` | Yes | WebSocket (all queues) |
-| -- | `/ws/queues/:queue` | Yes | WebSocket (filtered by queue) |
+| `GET` | `/ping` | Yes | Ping/pong |
+| `GET` | `/stats` | Yes | Server statistics |
+| `GET` | `/metrics` | Yes | Throughput metrics |
+| `GET` | `/prometheus` | Optional | Prometheus metrics |
+| `GET` | `/storage` | Yes | Storage health |
+| `POST` | `/gc` | Yes | Force GC + compact |
+| `GET` | `/heapstats` | Yes | Heap statistics |
+
+### Real-time (4 channels)
+
+| Protocol | Path | Description |
+|---|---|---|
+| SSE | `/events` | All events |
+| SSE | `/events/queues/:q` | Queue-filtered events |
+| WebSocket | `/ws` | Bidirectional (all) |
+| WebSocket | `/ws/queues/:q` | Bidirectional (filtered) |
 
 :::tip[Related]
-- [TCP Protocol Reference](/api/tcp/) - Binary TCP protocol alternative
-- [TypeScript Types](/api/types/) - Type definitions for all APIs
-- [Server Mode](/guide/server/) - Run the HTTP API server
+- [TCP Protocol Reference](/api/tcp/) — binary TCP protocol (same 76 commands)
+- [TypeScript Types](/api/types/) — type definitions for all APIs
+- [Server Mode](/guide/server/) — run the HTTP API server
 :::

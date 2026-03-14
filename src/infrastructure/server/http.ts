@@ -5,7 +5,7 @@
 
 import type { Server, ServerWebSocket } from 'bun';
 import type { QueueManager } from '../../application/queueManager';
-import { handleCommand, type HandlerContext } from './handler';
+import type { HandlerContext } from './types';
 import { constantTimeEqual, uuid } from '../../shared/hash';
 import type { JobEvent } from '../../domain/types/queue';
 import { httpLog } from '../../shared/logger';
@@ -24,6 +24,10 @@ import {
   dashboardQueuesEndpoint,
   dashboardQueueDetailEndpoint,
 } from './httpEndpoints';
+import { routeJobRoutes } from './httpRouteJobs';
+import { routeQueueRoutes } from './httpRouteQueues';
+import { routeQueueConfigRoutes } from './httpRouteQueueConfig';
+import { routeResourceRoutes } from './httpRouteResources';
 
 /**
  * Validate auth token against valid tokens set
@@ -177,19 +181,16 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
         queueManager,
         authTokens,
         authenticated: ws.data.authenticated,
-        clientId: ws.data.id, // Use WebSocket connection ID for job ownership tracking
+        clientId: ws.data.id,
       };
       await wsHandler.onMessage(ws, message, ctx);
     },
     close(ws: ServerWebSocket<WsData>) {
       const clientId = ws.data.id;
       wsHandler.onClose(ws);
-      // Release all jobs owned by this WebSocket client back to queue
       queueManager
         .releaseClientJobs(clientId)
-        .then(() => {
-          // Jobs released successfully
-        })
+        .then(() => {})
         .catch((err: unknown) => {
           httpLog.error('Failed to release WebSocket client jobs', {
             clientId,
@@ -238,8 +239,6 @@ async function routeRequest(
   if (path === '/stats' && method === 'GET') {
     return statsEndpoint(ctx.queueManager, corsOrigins);
   }
-
-  // Metrics endpoint
   if (path === '/metrics' && method === 'GET') {
     return metricsEndpoint(ctx.queueManager, corsOrigins);
   }
@@ -259,86 +258,20 @@ async function routeRequest(
     return dashboardQueueDetailEndpoint(ctx.queueManager, queue, includeJobs, corsOrigins);
   }
 
-  // Queue operations: POST/GET /queues/:queue/jobs
-  const queueJobsMatch = path.match(/^\/queues\/([^/]+)\/jobs$/);
-  if (queueJobsMatch) {
-    const queue = decodeURIComponent(queueJobsMatch[1]);
+  // Route through sub-routers
+  let result: Response | null;
 
-    if (method === 'POST') {
-      let body: Record<string, unknown>;
-      try {
-        body = (await req.json()) as Record<string, unknown>;
-      } catch {
-        return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400, corsOrigins);
-      }
-      const cmd = {
-        cmd: 'PUSH' as const,
-        queue,
-        data: body.data,
-        priority: body.priority,
-        delay: body.delay,
-        attempts: body.attempts,
-        backoff: body.backoff,
-        timeout: body.timeout,
-        jobId: body.jobId,
-        removeOnComplete: body.removeOnComplete,
-        removeOnFail: body.removeOnFail,
-        durable: body.durable,
-        ttl: body.ttl,
-        uniqueKey: body.uniqueKey,
-        groupId: body.groupId,
-        dependsOn: body.dependsOn,
-        tags: body.tags,
-        lifo: body.lifo,
-        repeat: body.repeat,
-      } as Parameters<typeof handleCommand>[0];
-      const response = await handleCommand(cmd, ctx);
-      return jsonResponse(response, response.ok ? 200 : 400, corsOrigins);
-    }
+  result = await routeJobRoutes(req, path, method, ctx, corsOrigins);
+  if (result) return result;
 
-    if (method === 'GET') {
-      const timeout = parseInt(new URL(req.url).searchParams.get('timeout') ?? '0');
-      const cmd = { cmd: 'PULL' as const, queue, timeout };
-      const response = await handleCommand(cmd, ctx);
-      return jsonResponse(response, 200, corsOrigins);
-    }
-  }
+  result = await routeQueueRoutes(req, path, method, ctx, corsOrigins);
+  if (result) return result;
 
-  // Job operations: GET/DELETE /jobs/:id
-  const jobMatch = path.match(/^\/jobs\/([^/]+)$/);
-  if (jobMatch) {
-    const id = jobMatch[1];
-    if (method === 'GET') {
-      const cmd = { cmd: 'GetJob' as const, id };
-      const response = await handleCommand(cmd, ctx);
-      return jsonResponse(response, response.ok ? 200 : 404, corsOrigins);
-    }
-    if (method === 'DELETE') {
-      const cmd = { cmd: 'Cancel' as const, id };
-      const response = await handleCommand(cmd, ctx);
-      return jsonResponse(response, 200, corsOrigins);
-    }
-  }
+  result = await routeQueueConfigRoutes(req, path, method, ctx, corsOrigins);
+  if (result) return result;
 
-  // Job ack: POST /jobs/:id/ack
-  const ackMatch = path.match(/^\/jobs\/([^/]+)\/ack$/);
-  if (ackMatch && method === 'POST') {
-    const id = ackMatch[1];
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const cmd = { cmd: 'ACK' as const, id, result: body['result'] };
-    const response = await handleCommand(cmd, ctx);
-    return jsonResponse(response, response.ok ? 200 : 400, corsOrigins);
-  }
-
-  // Job fail: POST /jobs/:id/fail
-  const failMatch = path.match(/^\/jobs\/([^/]+)\/fail$/);
-  if (failMatch && method === 'POST') {
-    const id = failMatch[1];
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    const cmd = { cmd: 'FAIL' as const, id, error: body['error'] as string | undefined };
-    const response = await handleCommand(cmd, ctx);
-    return jsonResponse(response, response.ok ? 200 : 400, corsOrigins);
-  }
+  result = await routeResourceRoutes(req, path, method, ctx, corsOrigins);
+  if (result) return result;
 
   return jsonResponse({ ok: false, error: 'Not found' }, 404, corsOrigins);
 }
