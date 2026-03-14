@@ -10,6 +10,13 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.20] - 2026-03-14
+
+### Fixed
+- **Centralized HTTP JSON body parsing** — Replaced per-file `parseBody()` with shared `parseJsonBody()` that returns proper 400 responses for invalid JSON instead of silently falling back to `{}`.
+- **Dashboard pagination** — Added `limit` and `offset` query parameters to `GET /dashboard/queues`. Workers and crons lists capped at 100 entries with `truncated` flag.
+- **ESLint complexity reduction** — Extracted job push/pull/bulk operations into `routeJobOps()` helper to keep `routeQueueRoutes` under the 45-branch complexity limit.
+
 ## [2.6.19] - 2026-03-14
 
 ### Added
