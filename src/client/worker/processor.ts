@@ -45,6 +45,7 @@ export async function processJob<T, R>(
     updateProgress: createProgressHandler(embedded, tcp, emitter, jobHolder),
     log: createLogHandler(embedded, tcp),
     getState: createGetStateHandler(embedded, tcp),
+    getChildrenValues: createGetChildrenValuesHandler(embedded, tcp),
   });
 
   jobHolder.current = job;
@@ -121,6 +122,19 @@ function createGetStateHandler(embedded: boolean, tcp: TcpConnection | null) {
       return ((response as { state?: string }).state ?? 'unknown') as JobStateType;
     }
     return 'unknown' as JobStateType;
+  };
+}
+
+function createGetChildrenValuesHandler(embedded: boolean, tcp: TcpConnection | null) {
+  return async (id: string): Promise<Record<string, unknown>> => {
+    if (embedded) {
+      const manager = getSharedManager();
+      return manager.getChildrenValues(jobId(id));
+    } else if (tcp) {
+      const response = await tcp.send({ cmd: 'GetChildrenValues', id });
+      return (response as { values?: Record<string, unknown> }).values ?? {};
+    }
+    return {};
   };
 }
 
