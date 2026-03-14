@@ -33,7 +33,7 @@
 https://github.com/user-attachments/assets/e8a8d38e-b4a6-4dc8-8360-876c0f24d116
 
 <p align="center">
-  <strong>Want early access?</strong> Reach out at <a href="mailto:egeominotti@gmail.com">egeominotti@gmail.com</a>
+  <b>Want early access?</b> Reach out at <b>egeominotti@gmail.com</b>
 </p>
 
 ---
