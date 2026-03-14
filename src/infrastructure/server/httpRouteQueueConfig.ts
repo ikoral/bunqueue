@@ -5,10 +5,7 @@
 
 import { handleCommand } from './handler';
 import type { HandlerContext } from './types';
-import { jsonResponse } from './httpEndpoints';
-
-type Body = Record<string, unknown>;
-const parseBody = (req: Request): Promise<Body> => req.json().catch(() => ({})) as Promise<Body>;
+import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
 /** Route queue config/admin requests. Returns Response or null if no match. */
 export async function routeQueueConfigRoutes(
@@ -31,7 +28,8 @@ export async function routeQueueConfigRoutes(
   const dlqRetryMatch = path.match(/^\/queues\/([^/]+)\/dlq\/retry$/);
   if (dlqRetryMatch && method === 'POST') {
     const queue = decodeURIComponent(dlqRetryMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'RetryDlq',
@@ -55,7 +53,8 @@ export async function routeQueueConfigRoutes(
   const rateLimitMatch = path.match(/^\/queues\/([^/]+)\/rate-limit$/);
   if (rateLimitMatch && method === 'PUT') {
     const queue = decodeURIComponent(rateLimitMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'RateLimit',
@@ -76,7 +75,8 @@ export async function routeQueueConfigRoutes(
   const concurrencyMatch = path.match(/^\/queues\/([^/]+)\/concurrency$/);
   if (concurrencyMatch && method === 'PUT') {
     const queue = decodeURIComponent(concurrencyMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'SetConcurrency',
@@ -102,7 +102,8 @@ export async function routeQueueConfigRoutes(
   }
   if (stallConfigMatch && method === 'PUT') {
     const queue = decodeURIComponent(stallConfigMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'SetStallConfig',
@@ -123,7 +124,8 @@ export async function routeQueueConfigRoutes(
   }
   if (dlqConfigMatch && method === 'PUT') {
     const queue = decodeURIComponent(dlqConfigMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'SetDlqConfig',

@@ -5,25 +5,18 @@
 
 import { handleCommand } from './handler';
 import type { HandlerContext } from './types';
-import { jsonResponse } from './httpEndpoints';
+import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
 type Body = Record<string, unknown>;
-const parseBody = (req: Request): Promise<Body> => req.json().catch(() => ({})) as Promise<Body>;
 
-/** Route /queues/* requests. Returns Response or null if no match. */
-export async function routeQueueRoutes(
+/** Route push/pull/bulk job operations */
+async function routeJobOps(
   req: Request,
   path: string,
   method: string,
   ctx: HandlerContext,
   cors: Set<string>
 ): Promise<Response | null> {
-  // GET /queues - list all queues
-  if (path === '/queues' && method === 'GET') {
-    const r = await handleCommand({ cmd: 'ListQueues' }, ctx);
-    return jsonResponse(r, 200, cors);
-  }
-
   // POST/GET /queues/:queue/jobs - push/pull
   const queueJobsMatch = path.match(/^\/queues\/([^/]+)\/jobs$/);
   if (queueJobsMatch) {
@@ -93,7 +86,8 @@ export async function routeQueueRoutes(
   const pullBatchMatch = path.match(/^\/queues\/([^/]+)\/jobs\/pull-batch$/);
   if (pullBatchMatch && method === 'POST') {
     const queue = decodeURIComponent(pullBatchMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'PULLB',
@@ -130,6 +124,27 @@ export async function routeQueueRoutes(
     );
     return jsonResponse(r, 200, cors);
   }
+
+  return null;
+}
+
+/** Route /queues/* requests. Returns Response or null if no match. */
+export async function routeQueueRoutes(
+  req: Request,
+  path: string,
+  method: string,
+  ctx: HandlerContext,
+  cors: Set<string>
+): Promise<Response | null> {
+  // GET /queues - list all queues
+  if (path === '/queues' && method === 'GET') {
+    const r = await handleCommand({ cmd: 'ListQueues' }, ctx);
+    return jsonResponse(r, 200, cors);
+  }
+
+  // Delegate push/pull/bulk/list operations
+  const jobOpsResult = await routeJobOps(req, path, method, ctx, cors);
+  if (jobOpsResult) return jobOpsResult;
 
   // GET /queues/:queue/counts
   const countsMatch = path.match(/^\/queues\/([^/]+)\/counts$/);
@@ -199,7 +214,8 @@ export async function routeQueueRoutes(
   const cleanMatch = path.match(/^\/queues\/([^/]+)\/clean$/);
   if (cleanMatch && method === 'POST') {
     const queue = decodeURIComponent(cleanMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'Clean',
@@ -217,7 +233,8 @@ export async function routeQueueRoutes(
   const promoteJobsMatch = path.match(/^\/queues\/([^/]+)\/promote-jobs$/);
   if (promoteJobsMatch && method === 'POST') {
     const queue = decodeURIComponent(promoteJobsMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'PromoteJobs',
@@ -233,7 +250,8 @@ export async function routeQueueRoutes(
   const retryCompMatch = path.match(/^\/queues\/([^/]+)\/retry-completed$/);
   if (retryCompMatch && method === 'POST') {
     const queue = decodeURIComponent(retryCompMatch[1]);
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'RetryCompleted',

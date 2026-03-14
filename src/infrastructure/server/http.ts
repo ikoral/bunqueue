@@ -262,7 +262,13 @@ async function routeRequest(
     return dashboardOverviewEndpoint(ctx.queueManager, corsOrigins);
   }
   if (path === '/dashboard/queues' && method === 'GET') {
-    return dashboardQueuesEndpoint(ctx.queueManager, corsOrigins);
+    const url = new URL(req.url);
+    const limit = Math.min(
+      Math.max(parseInt(url.searchParams.get('limit') ?? '100') || 100, 1),
+      500
+    );
+    const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0') || 0, 0);
+    return dashboardQueuesEndpoint(ctx.queueManager, limit, offset, corsOrigins);
   }
   const dashQueueMatch = path.match(/^\/dashboard\/queues\/([^/]+)$/);
   if (dashQueueMatch && method === 'GET') {

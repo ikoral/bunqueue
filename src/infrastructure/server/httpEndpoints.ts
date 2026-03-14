@@ -22,6 +22,21 @@ export function jsonResponse(data: unknown, status = 200, corsOrigins?: Set<stri
   return new Response(JSON.stringify(data), { status, headers });
 }
 
+/** Parse JSON body from request. Returns parsed object or 400 Response on invalid JSON.
+ *  Empty/missing body returns {} for backward compatibility with optional-body routes. */
+export async function parseJsonBody(
+  req: Request,
+  cors: Set<string>
+): Promise<Record<string, unknown> | Response> {
+  try {
+    const text = await req.text();
+    if (!text || text.trim() === '') return {};
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return jsonResponse({ ok: false, error: 'Invalid JSON body' }, 400, cors);
+  }
+}
+
 /** CORS preflight response */
 export function corsResponse(corsOrigins: Set<string>): Response {
   return new Response(null, {
@@ -216,43 +231,52 @@ export function dashboardOverviewEndpoint(
       workers: {
         total: workerStats.total,
         active: workerStats.active,
-        list: workers.map(
-          (w: {
-            id: string;
-            name: string;
-            queues: string[];
-            lastSeen: number;
-            activeJobs: number;
-            processedJobs: number;
-            failedJobs: number;
-          }) => ({
-            id: w.id,
-            name: w.name,
-            queues: w.queues,
-            lastSeen: w.lastSeen,
-            activeJobs: w.activeJobs,
-            processedJobs: w.processedJobs,
-            failedJobs: w.failedJobs,
-          })
-        ),
+        list: workers
+          .slice(0, 100)
+          .map(
+            (w: {
+              id: string;
+              name: string;
+              queues: string[];
+              lastSeen: number;
+              activeJobs: number;
+              processedJobs: number;
+              failedJobs: number;
+            }) => ({
+              id: w.id,
+              name: w.name,
+              queues: w.queues,
+              lastSeen: w.lastSeen,
+              activeJobs: w.activeJobs,
+              processedJobs: w.processedJobs,
+              failedJobs: w.failedJobs,
+            })
+          ),
+        truncated: workers.length > 100,
       },
-      crons: crons.map(
-        (c: {
-          name: string;
-          queue: string;
-          schedule: string | null;
-          repeatEvery: number | null;
-          nextRun: number;
-          executions: number;
-        }) => ({
-          name: c.name,
-          queue: c.queue,
-          schedule: c.schedule ?? null,
-          repeatEvery: c.repeatEvery ?? null,
-          nextRun: c.nextRun,
-          executions: c.executions,
-        })
-      ),
+      crons: {
+        total: crons.length,
+        list: crons
+          .slice(0, 100)
+          .map(
+            (c: {
+              name: string;
+              queue: string;
+              schedule: string | null;
+              repeatEvery: number | null;
+              nextRun: number;
+              executions: number;
+            }) => ({
+              name: c.name,
+              queue: c.queue,
+              schedule: c.schedule ?? null,
+              repeatEvery: c.repeatEvery ?? null,
+              nextRun: c.nextRun,
+              executions: c.executions,
+            })
+          ),
+        truncated: crons.length > 100,
+      },
       storage,
       timestamp: Date.now(),
     },
@@ -261,12 +285,16 @@ export function dashboardOverviewEndpoint(
   );
 }
 
-/** Dashboard queues endpoint - all queues with per-queue stats */
+/** Dashboard queues endpoint - paginated queues with per-queue stats */
 export function dashboardQueuesEndpoint(
   queueManager: QueueManager,
+  limit: number,
+  offset: number,
   corsOrigins?: Set<string>
 ): Response {
-  const queueNames = queueManager.listQueues();
+  const allQueues = queueManager.listQueues();
+  const total = allQueues.length;
+  const queueNames = allQueues.slice(offset, offset + limit);
   const perQueueStats = queueManager.getPerQueueStats();
 
   const queues = queueNames.map((name: string) => {
@@ -281,7 +309,11 @@ export function dashboardQueuesEndpoint(
     };
   });
 
-  return jsonResponse({ ok: true, queues, timestamp: Date.now() }, 200, corsOrigins);
+  return jsonResponse(
+    { ok: true, queues, total, limit, offset, timestamp: Date.now() },
+    200,
+    corsOrigins
+  );
 }
 
 /** Dashboard single queue detail endpoint */

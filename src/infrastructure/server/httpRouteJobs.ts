@@ -5,11 +5,10 @@
 
 import { handleCommand } from './handler';
 import type { HandlerContext } from './types';
-import { jsonResponse } from './httpEndpoints';
+import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
 type Body = Record<string, unknown>;
 type Cors = Set<string>;
-const parseBody = (req: Request): Promise<Body> => req.json().catch(() => ({})) as Promise<Body>;
 
 /** Job management: promote, update, state, result, progress, priority, discard */
 async function routeJobManagement(
@@ -55,7 +54,8 @@ async function routeJobManagement(
     return jsonResponse(r, r.ok ? 200 : 404, cors);
   }
   if (progressMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'Progress',
@@ -70,7 +70,8 @@ async function routeJobManagement(
 
   const priorityMatch = path.match(/^\/jobs\/([^/]+)\/priority$/);
   if (priorityMatch && method === 'PUT') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'ChangePriority',
@@ -101,7 +102,8 @@ async function routeJobAdvanced(
 ): Promise<Response | null> {
   const moveDelayedMatch = path.match(/^\/jobs\/([^/]+)\/move-to-delayed$/);
   if (moveDelayedMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'MoveToDelayed',
@@ -115,7 +117,8 @@ async function routeJobAdvanced(
 
   const changeDelayMatch = path.match(/^\/jobs\/([^/]+)\/delay$/);
   if (changeDelayMatch && method === 'PUT') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'ChangeDelay',
@@ -139,7 +142,8 @@ async function routeJobAdvanced(
     return jsonResponse(r, 200, cors);
   }
   if (logsMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'AddLog',
@@ -158,7 +162,8 @@ async function routeJobAdvanced(
 
   const heartbeatMatch = path.match(/^\/jobs\/([^/]+)\/heartbeat$/);
   if (heartbeatMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'JobHeartbeat',
@@ -173,7 +178,8 @@ async function routeJobAdvanced(
 
   const waitMatch = path.match(/^\/jobs\/([^/]+)\/wait$/);
   if (waitMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'WaitJob',
@@ -187,7 +193,8 @@ async function routeJobAdvanced(
 
   const extendLockMatch = path.match(/^\/jobs\/([^/]+)\/extend-lock$/);
   if (extendLockMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'ExtendLock',
@@ -219,7 +226,8 @@ export async function routeJobRoutes(
 ): Promise<Response | null> {
   // Batch endpoints FIRST (exact match, before generic /jobs/:id pattern)
   if (path === '/jobs/ack-batch' && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'ACKB',
@@ -232,7 +240,8 @@ export async function routeJobRoutes(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
   if (path === '/jobs/extend-locks' && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'ExtendLocks',
@@ -245,7 +254,8 @@ export async function routeJobRoutes(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
   if (path === '/jobs/heartbeat-batch' && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'JobHeartbeatB',
@@ -282,7 +292,8 @@ export async function routeJobRoutes(
   // POST /jobs/:id/ack
   const ackMatch = path.match(/^\/jobs\/([^/]+)\/ack$/);
   if (ackMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand({ cmd: 'ACK', id: ackMatch[1], result: body['result'] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
@@ -290,7 +301,8 @@ export async function routeJobRoutes(
   // POST /jobs/:id/fail
   const failMatch = path.match(/^\/jobs\/([^/]+)\/fail$/);
   if (failMatch && method === 'POST') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       { cmd: 'FAIL', id: failMatch[1], error: body['error'] as string | undefined },
       ctx

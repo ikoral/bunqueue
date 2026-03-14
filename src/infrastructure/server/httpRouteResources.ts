@@ -5,10 +5,9 @@
 
 import { handleCommand } from './handler';
 import type { HandlerContext } from './types';
-import { jsonResponse } from './httpEndpoints';
+import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
 type Body = Record<string, unknown>;
-const parseBody = (req: Request): Promise<Body> => req.json().catch(() => ({})) as Promise<Body>;
 
 /** Route cron, webhook, worker, and monitoring requests. Returns Response or null. */
 export async function routeResourceRoutes(
@@ -111,7 +110,8 @@ export async function routeResourceRoutes(
   // PUT /webhooks/:id/enabled
   const webhookEnabledMatch = path.match(/^\/webhooks\/([^/]+)\/enabled$/);
   if (webhookEnabledMatch && method === 'PUT') {
-    const body = await parseBody(req);
+    const body = await parseJsonBody(req, cors);
+    if (body instanceof Response) return body;
     const r = await handleCommand(
       {
         cmd: 'SetWebhookEnabled',
