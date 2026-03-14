@@ -97,7 +97,9 @@ export class AddBatcher<T> {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    const flushPromise = this.doFlush().catch(() => {});
+    const flushPromise = this.doFlush().catch((err: unknown) => {
+      console.error('[bunqueue] Flush failed:', err instanceof Error ? err.message : String(err));
+    });
     this.inFlightFlushes.add(flushPromise);
     void flushPromise.finally(() => this.inFlightFlushes.delete(flushPromise));
   }

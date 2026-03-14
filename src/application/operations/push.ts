@@ -269,8 +269,8 @@ export async function pushJobBatch(
       resultIds.push(job.id);
     }
 
-    for (let i = 0; i < jobsToInsert.length; i++) {
-      shard.notify();
+    if (jobsToInsert.length > 0) {
+      shard.notifyBatch(jobsToInsert.length);
     }
   });
 

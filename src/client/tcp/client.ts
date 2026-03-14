@@ -410,6 +410,7 @@ export class TcpClient extends EventEmitter {
 
       // Connect if needed, then process queue
       if (!this.connected && !this.connecting) {
+        // Connection errors during send are handled by command timeout/rejection
         this.connect().catch(() => {});
       } else if (this.connected) {
         this.processQueue();

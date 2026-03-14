@@ -84,6 +84,10 @@ export class Shard {
     this.waiterManager.notify();
   }
 
+  notifyBatch(count: number): void {
+    this.waiterManager.notifyBatch(count);
+  }
+
   waitForJob(timeoutMs: number): Promise<void> {
     return this.waiterManager.waitForJob(timeoutMs);
   }

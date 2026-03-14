@@ -9,6 +9,13 @@ import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
 type Body = Record<string, unknown>;
 
+// Pre-compiled regex patterns for URL matching
+const RE_CRON_BY_NAME = /^\/crons\/([^/]+)$/;
+const RE_WEBHOOK_BY_ID = /^\/webhooks\/([^/]+)$/;
+const RE_WEBHOOK_ENABLED = /^\/webhooks\/([^/]+)\/enabled$/;
+const RE_WORKER_BY_ID = /^\/workers\/([^/]+)$/;
+const RE_WORKER_HEARTBEAT = /^\/workers\/([^/]+)\/heartbeat$/;
+
 /** Route cron, webhook, worker, and monitoring requests. Returns Response or null. */
 export async function routeResourceRoutes(
   req: Request,
@@ -51,7 +58,7 @@ export async function routeResourceRoutes(
   }
 
   // GET /crons/:name
-  const cronGetMatch = path.match(/^\/crons\/([^/]+)$/);
+  const cronGetMatch = path.match(RE_CRON_BY_NAME);
   if (cronGetMatch && method === 'GET') {
     const name = decodeURIComponent(cronGetMatch[1]);
     const r = await handleCommand({ cmd: 'CronGet', name }, ctx);
@@ -95,7 +102,7 @@ export async function routeResourceRoutes(
   }
 
   // DELETE /webhooks/:id
-  const webhookMatch = path.match(/^\/webhooks\/([^/]+)$/);
+  const webhookMatch = path.match(RE_WEBHOOK_BY_ID);
   if (webhookMatch && method === 'DELETE') {
     const r = await handleCommand(
       {
@@ -108,7 +115,7 @@ export async function routeResourceRoutes(
   }
 
   // PUT /webhooks/:id/enabled
-  const webhookEnabledMatch = path.match(/^\/webhooks\/([^/]+)\/enabled$/);
+  const webhookEnabledMatch = path.match(RE_WEBHOOK_ENABLED);
   if (webhookEnabledMatch && method === 'PUT') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -151,7 +158,7 @@ export async function routeResourceRoutes(
   }
 
   // DELETE /workers/:id
-  const workerMatch = path.match(/^\/workers\/([^/]+)$/);
+  const workerMatch = path.match(RE_WORKER_BY_ID);
   if (workerMatch && method === 'DELETE') {
     const r = await handleCommand(
       {
@@ -164,7 +171,7 @@ export async function routeResourceRoutes(
   }
 
   // POST /workers/:id/heartbeat
-  const workerHeartbeatMatch = path.match(/^\/workers\/([^/]+)\/heartbeat$/);
+  const workerHeartbeatMatch = path.match(RE_WORKER_HEARTBEAT);
   if (workerHeartbeatMatch && method === 'POST') {
     const r = await handleCommand(
       {

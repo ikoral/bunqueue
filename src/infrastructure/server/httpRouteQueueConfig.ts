@@ -7,6 +7,15 @@ import { handleCommand } from './handler';
 import type { HandlerContext } from './types';
 import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
+// Pre-compiled regex patterns for URL matching
+const RE_QUEUE_DLQ = /^\/queues\/([^/]+)\/dlq$/;
+const RE_QUEUE_DLQ_RETRY = /^\/queues\/([^/]+)\/dlq\/retry$/;
+const RE_QUEUE_DLQ_PURGE = /^\/queues\/([^/]+)\/dlq\/purge$/;
+const RE_QUEUE_RATE_LIMIT = /^\/queues\/([^/]+)\/rate-limit$/;
+const RE_QUEUE_CONCURRENCY = /^\/queues\/([^/]+)\/concurrency$/;
+const RE_QUEUE_STALL_CONFIG = /^\/queues\/([^/]+)\/stall-config$/;
+const RE_QUEUE_DLQ_CONFIG = /^\/queues\/([^/]+)\/dlq-config$/;
+
 /** Route queue config/admin requests. Returns Response or null if no match. */
 export async function routeQueueConfigRoutes(
   req: Request,
@@ -16,7 +25,7 @@ export async function routeQueueConfigRoutes(
   cors: Set<string>
 ): Promise<Response | null> {
   // DLQ: GET /queues/:queue/dlq
-  const dlqMatch = path.match(/^\/queues\/([^/]+)\/dlq$/);
+  const dlqMatch = path.match(RE_QUEUE_DLQ);
   if (dlqMatch && method === 'GET') {
     const queue = decodeURIComponent(dlqMatch[1]);
     const count = parseInt(new URL(req.url).searchParams.get('count') ?? '100');
@@ -25,7 +34,7 @@ export async function routeQueueConfigRoutes(
   }
 
   // POST /queues/:queue/dlq/retry
-  const dlqRetryMatch = path.match(/^\/queues\/([^/]+)\/dlq\/retry$/);
+  const dlqRetryMatch = path.match(RE_QUEUE_DLQ_RETRY);
   if (dlqRetryMatch && method === 'POST') {
     const queue = decodeURIComponent(dlqRetryMatch[1]);
     const body = await parseJsonBody(req, cors);
@@ -42,7 +51,7 @@ export async function routeQueueConfigRoutes(
   }
 
   // POST /queues/:queue/dlq/purge
-  const dlqPurgeMatch = path.match(/^\/queues\/([^/]+)\/dlq\/purge$/);
+  const dlqPurgeMatch = path.match(RE_QUEUE_DLQ_PURGE);
   if (dlqPurgeMatch && method === 'POST') {
     const queue = decodeURIComponent(dlqPurgeMatch[1]);
     const r = await handleCommand({ cmd: 'PurgeDlq', queue }, ctx);
@@ -50,7 +59,7 @@ export async function routeQueueConfigRoutes(
   }
 
   // Rate limiting: PUT/DELETE /queues/:queue/rate-limit
-  const rateLimitMatch = path.match(/^\/queues\/([^/]+)\/rate-limit$/);
+  const rateLimitMatch = path.match(RE_QUEUE_RATE_LIMIT);
   if (rateLimitMatch && method === 'PUT') {
     const queue = decodeURIComponent(rateLimitMatch[1]);
     const body = await parseJsonBody(req, cors);
@@ -72,7 +81,7 @@ export async function routeQueueConfigRoutes(
   }
 
   // Concurrency: PUT/DELETE /queues/:queue/concurrency
-  const concurrencyMatch = path.match(/^\/queues\/([^/]+)\/concurrency$/);
+  const concurrencyMatch = path.match(RE_QUEUE_CONCURRENCY);
   if (concurrencyMatch && method === 'PUT') {
     const queue = decodeURIComponent(concurrencyMatch[1]);
     const body = await parseJsonBody(req, cors);
@@ -94,7 +103,7 @@ export async function routeQueueConfigRoutes(
   }
 
   // Config: GET/PUT /queues/:queue/stall-config
-  const stallConfigMatch = path.match(/^\/queues\/([^/]+)\/stall-config$/);
+  const stallConfigMatch = path.match(RE_QUEUE_STALL_CONFIG);
   if (stallConfigMatch && method === 'GET') {
     const queue = decodeURIComponent(stallConfigMatch[1]);
     const r = await handleCommand({ cmd: 'GetStallConfig', queue }, ctx);
@@ -116,7 +125,7 @@ export async function routeQueueConfigRoutes(
   }
 
   // Config: GET/PUT /queues/:queue/dlq-config
-  const dlqConfigMatch = path.match(/^\/queues\/([^/]+)\/dlq-config$/);
+  const dlqConfigMatch = path.match(RE_QUEUE_DLQ_CONFIG);
   if (dlqConfigMatch && method === 'GET') {
     const queue = decodeURIComponent(dlqConfigMatch[1]);
     const r = await handleCommand({ cmd: 'GetDlqConfig', queue }, ctx);

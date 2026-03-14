@@ -13,6 +13,13 @@ export class WaiterManager {
   /** Pending notification counter - incremented when notify() is called with no waiters */
   private pendingNotifications = 0;
 
+  /** Notify that multiple jobs are available - wakes up to `count` waiters */
+  notifyBatch(count: number): void {
+    for (let i = 0; i < count; i++) {
+      this.notify();
+    }
+  }
+
   /** Notify that jobs are available - wakes first non-cancelled waiter */
   notify(): void {
     // Clean up leading cancelled waiters first

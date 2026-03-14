@@ -88,6 +88,11 @@ export async function handlePushBatch(
   const queueError = validateQueueName(cmd.queue);
   if (queueError) return resp.error(queueError, reqId);
 
+  for (const job of cmd.jobs) {
+    const dataError = validateJobData(job.data);
+    if (dataError) return resp.error(dataError, reqId);
+  }
+
   const ids = await ctx.queueManager.pushBatch(cmd.queue, cmd.jobs);
   return resp.batch(ids, reqId);
 }

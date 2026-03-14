@@ -93,7 +93,10 @@ export async function handleCommand(cmd: Command, ctx: HandlerContext): Promise<
 
     return resp.error(`Unknown command: ${cmd.cmd}`, reqId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
+    // Sanitize error messages to avoid leaking internal details to clients
+    const raw = err instanceof Error ? err.message : 'Unknown error';
+    const message =
+      raw.includes('SQLITE') || raw.includes('database') ? 'Internal server error' : raw;
     return resp.error(message, reqId);
   }
 }

@@ -9,6 +9,23 @@ import { jsonResponse, parseJsonBody } from './httpEndpoints';
 
 type Body = Record<string, unknown>;
 
+// Pre-compiled regex patterns for URL matching
+const RE_QUEUE_JOBS = /^\/queues\/([^/]+)\/jobs$/;
+const RE_QUEUE_JOBS_BULK = /^\/queues\/([^/]+)\/jobs\/bulk$/;
+const RE_QUEUE_JOBS_PULL_BATCH = /^\/queues\/([^/]+)\/jobs\/pull-batch$/;
+const RE_QUEUE_JOBS_LIST = /^\/queues\/([^/]+)\/jobs\/list$/;
+const RE_QUEUE_COUNTS = /^\/queues\/([^/]+)\/counts$/;
+const RE_QUEUE_COUNT = /^\/queues\/([^/]+)\/count$/;
+const RE_QUEUE_PRIORITY_COUNTS = /^\/queues\/([^/]+)\/priority-counts$/;
+const RE_QUEUE_PAUSED = /^\/queues\/([^/]+)\/paused$/;
+const RE_QUEUE_PAUSE = /^\/queues\/([^/]+)\/pause$/;
+const RE_QUEUE_RESUME = /^\/queues\/([^/]+)\/resume$/;
+const RE_QUEUE_DRAIN = /^\/queues\/([^/]+)\/drain$/;
+const RE_QUEUE_OBLITERATE = /^\/queues\/([^/]+)\/obliterate$/;
+const RE_QUEUE_CLEAN = /^\/queues\/([^/]+)\/clean$/;
+const RE_QUEUE_PROMOTE_JOBS = /^\/queues\/([^/]+)\/promote-jobs$/;
+const RE_QUEUE_RETRY_COMPLETED = /^\/queues\/([^/]+)\/retry-completed$/;
+
 /** Route push/pull/bulk job operations */
 async function routeJobOps(
   req: Request,
@@ -18,7 +35,7 @@ async function routeJobOps(
   cors: Set<string>
 ): Promise<Response | null> {
   // POST/GET /queues/:queue/jobs - push/pull
-  const queueJobsMatch = path.match(/^\/queues\/([^/]+)\/jobs$/);
+  const queueJobsMatch = path.match(RE_QUEUE_JOBS);
   if (queueJobsMatch) {
     const queue = decodeURIComponent(queueJobsMatch[1]);
 
@@ -62,7 +79,7 @@ async function routeJobOps(
   }
 
   // POST /queues/:queue/jobs/bulk - bulk push
-  const bulkMatch = path.match(/^\/queues\/([^/]+)\/jobs\/bulk$/);
+  const bulkMatch = path.match(RE_QUEUE_JOBS_BULK);
   if (bulkMatch && method === 'POST') {
     const queue = decodeURIComponent(bulkMatch[1]);
     let body: Body;
@@ -83,7 +100,7 @@ async function routeJobOps(
   }
 
   // POST /queues/:queue/jobs/pull-batch
-  const pullBatchMatch = path.match(/^\/queues\/([^/]+)\/jobs\/pull-batch$/);
+  const pullBatchMatch = path.match(RE_QUEUE_JOBS_PULL_BATCH);
   if (pullBatchMatch && method === 'POST') {
     const queue = decodeURIComponent(pullBatchMatch[1]);
     const body = await parseJsonBody(req, cors);
@@ -103,7 +120,7 @@ async function routeJobOps(
   }
 
   // GET /queues/:queue/jobs/list?state=&limit=&offset=
-  const listMatch = path.match(/^\/queues\/([^/]+)\/jobs\/list$/);
+  const listMatch = path.match(RE_QUEUE_JOBS_LIST);
   if (listMatch && method === 'GET') {
     const queue = decodeURIComponent(listMatch[1]);
     const url = new URL(req.url);
@@ -147,7 +164,7 @@ export async function routeQueueRoutes(
   if (jobOpsResult) return jobOpsResult;
 
   // GET /queues/:queue/counts
-  const countsMatch = path.match(/^\/queues\/([^/]+)\/counts$/);
+  const countsMatch = path.match(RE_QUEUE_COUNTS);
   if (countsMatch && method === 'GET') {
     const queue = decodeURIComponent(countsMatch[1]);
     const r = await handleCommand({ cmd: 'GetJobCounts', queue }, ctx);
@@ -155,7 +172,7 @@ export async function routeQueueRoutes(
   }
 
   // GET /queues/:queue/count
-  const countMatch = path.match(/^\/queues\/([^/]+)\/count$/);
+  const countMatch = path.match(RE_QUEUE_COUNT);
   if (countMatch && method === 'GET') {
     const queue = decodeURIComponent(countMatch[1]);
     const r = await handleCommand({ cmd: 'Count', queue }, ctx);
@@ -163,7 +180,7 @@ export async function routeQueueRoutes(
   }
 
   // GET /queues/:queue/priority-counts
-  const priCountsMatch = path.match(/^\/queues\/([^/]+)\/priority-counts$/);
+  const priCountsMatch = path.match(RE_QUEUE_PRIORITY_COUNTS);
   if (priCountsMatch && method === 'GET') {
     const queue = decodeURIComponent(priCountsMatch[1]);
     const r = await handleCommand({ cmd: 'GetCountsPerPriority', queue }, ctx);
@@ -171,7 +188,7 @@ export async function routeQueueRoutes(
   }
 
   // GET /queues/:queue/paused
-  const pausedMatch = path.match(/^\/queues\/([^/]+)\/paused$/);
+  const pausedMatch = path.match(RE_QUEUE_PAUSED);
   if (pausedMatch && method === 'GET') {
     const queue = decodeURIComponent(pausedMatch[1]);
     const r = await handleCommand({ cmd: 'IsPaused', queue }, ctx);
@@ -179,7 +196,7 @@ export async function routeQueueRoutes(
   }
 
   // POST /queues/:queue/pause
-  const pauseMatch = path.match(/^\/queues\/([^/]+)\/pause$/);
+  const pauseMatch = path.match(RE_QUEUE_PAUSE);
   if (pauseMatch && method === 'POST') {
     const queue = decodeURIComponent(pauseMatch[1]);
     const r = await handleCommand({ cmd: 'Pause', queue }, ctx);
@@ -187,7 +204,7 @@ export async function routeQueueRoutes(
   }
 
   // POST /queues/:queue/resume
-  const resumeMatch = path.match(/^\/queues\/([^/]+)\/resume$/);
+  const resumeMatch = path.match(RE_QUEUE_RESUME);
   if (resumeMatch && method === 'POST') {
     const queue = decodeURIComponent(resumeMatch[1]);
     const r = await handleCommand({ cmd: 'Resume', queue }, ctx);
@@ -195,7 +212,7 @@ export async function routeQueueRoutes(
   }
 
   // POST /queues/:queue/drain
-  const drainMatch = path.match(/^\/queues\/([^/]+)\/drain$/);
+  const drainMatch = path.match(RE_QUEUE_DRAIN);
   if (drainMatch && method === 'POST') {
     const queue = decodeURIComponent(drainMatch[1]);
     const r = await handleCommand({ cmd: 'Drain', queue }, ctx);
@@ -203,7 +220,7 @@ export async function routeQueueRoutes(
   }
 
   // POST /queues/:queue/obliterate
-  const obliterateMatch = path.match(/^\/queues\/([^/]+)\/obliterate$/);
+  const obliterateMatch = path.match(RE_QUEUE_OBLITERATE);
   if (obliterateMatch && method === 'POST') {
     const queue = decodeURIComponent(obliterateMatch[1]);
     const r = await handleCommand({ cmd: 'Obliterate', queue }, ctx);
@@ -211,7 +228,7 @@ export async function routeQueueRoutes(
   }
 
   // POST /queues/:queue/clean
-  const cleanMatch = path.match(/^\/queues\/([^/]+)\/clean$/);
+  const cleanMatch = path.match(RE_QUEUE_CLEAN);
   if (cleanMatch && method === 'POST') {
     const queue = decodeURIComponent(cleanMatch[1]);
     const body = await parseJsonBody(req, cors);
@@ -230,7 +247,7 @@ export async function routeQueueRoutes(
   }
 
   // POST /queues/:queue/promote-jobs
-  const promoteJobsMatch = path.match(/^\/queues\/([^/]+)\/promote-jobs$/);
+  const promoteJobsMatch = path.match(RE_QUEUE_PROMOTE_JOBS);
   if (promoteJobsMatch && method === 'POST') {
     const queue = decodeURIComponent(promoteJobsMatch[1]);
     const body = await parseJsonBody(req, cors);
@@ -247,7 +264,7 @@ export async function routeQueueRoutes(
   }
 
   // POST /queues/:queue/retry-completed
-  const retryCompMatch = path.match(/^\/queues\/([^/]+)\/retry-completed$/);
+  const retryCompMatch = path.match(RE_QUEUE_RETRY_COMPLETED);
   if (retryCompMatch && method === 'POST') {
     const queue = decodeURIComponent(retryCompMatch[1]);
     const body = await parseJsonBody(req, cors);

@@ -7,6 +7,7 @@ import type { Server, ServerWebSocket } from 'bun';
 import type { QueueManager } from '../../application/queueManager';
 import type { HandlerContext } from './types';
 import { constantTimeEqual, uuid } from '../../shared/hash';
+import { validateQueueName } from './protocol';
 import type { JobEvent } from '../../domain/types/queue';
 import { httpLog } from '../../shared/logger';
 import { getRateLimiter } from './rateLimiter';
@@ -28,6 +29,9 @@ import { routeJobRoutes } from './httpRouteJobs';
 import { routeQueueRoutes } from './httpRouteQueues';
 import { routeQueueConfigRoutes } from './httpRouteQueueConfig';
 import { routeResourceRoutes } from './httpRouteResources';
+
+// Pre-compiled regex patterns for URL matching
+const RE_DASHBOARD_QUEUE_DETAIL = /^\/dashboard\/queues\/([^/]+)$/;
 
 /**
  * Validate auth token against valid tokens set
@@ -270,9 +274,11 @@ async function routeRequest(
     const offset = Math.max(parseInt(url.searchParams.get('offset') ?? '0') || 0, 0);
     return dashboardQueuesEndpoint(ctx.queueManager, limit, offset, corsOrigins);
   }
-  const dashQueueMatch = path.match(/^\/dashboard\/queues\/([^/]+)$/);
+  const dashQueueMatch = path.match(RE_DASHBOARD_QUEUE_DETAIL);
   if (dashQueueMatch && method === 'GET') {
     const queue = decodeURIComponent(dashQueueMatch[1]);
+    const queueError = validateQueueName(queue);
+    if (queueError) return jsonResponse({ ok: false, error: queueError }, 400, corsOrigins);
     const url = new URL(req.url);
     const includeJobs = url.searchParams.get('includeJobs') === 'true';
     return dashboardQueueDetailEndpoint(ctx.queueManager, queue, includeJobs, corsOrigins);

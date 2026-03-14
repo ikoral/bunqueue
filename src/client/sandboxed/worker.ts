@@ -276,7 +276,12 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
       } else {
         this.recycleIdleWorkers();
         if (this.idleTimeout > 0 && Date.now() - this.lastActivityTime >= this.idleTimeout) {
-          this.stop().catch(() => {});
+          this.stop().catch((err: unknown) => {
+            log('error', 'Idle timeout stop failed', {
+              queue: this.queueName,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
           return;
         }
       }
@@ -345,7 +350,12 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
       this.resetWorkerState(wp);
       this.ops
         .fail(job.id, 'Dispatch failed: worker terminated', token ?? undefined)
-        .catch(() => {});
+        .catch((e: unknown) => {
+          log('error', 'Failed to mark dispatched job as failed', {
+            jobId: String(job.id),
+            error: e instanceof Error ? e.message : String(e),
+          });
+        });
     }
   }
 
@@ -365,7 +375,12 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
         break;
       case 'progress':
         if (msg.progress !== undefined) {
-          this.ops.updateProgress(wp.currentJob.id, msg.progress).catch(() => {});
+          this.ops.updateProgress(wp.currentJob.id, msg.progress).catch((e: unknown) => {
+            log('error', 'Failed to update job progress', {
+              jobId: String(wp.currentJob?.id),
+              error: e instanceof Error ? e.message : String(e),
+            });
+          });
           this.emit('progress', this.createEventJob(wp.currentJob), msg.progress);
         }
         break;
@@ -417,7 +432,12 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
     wp.worker.terminate();
     const errorMsg = `Job timed out after ${this.options.timeout}ms`;
     const token = wp.currentToken ?? undefined;
-    this.ops.fail(job.id, errorMsg, token).catch(() => {});
+    this.ops.fail(job.id, errorMsg, token).catch((e: unknown) => {
+      log('error', 'Failed to mark timed-out job as failed', {
+        jobId: String(job.id),
+        error: e instanceof Error ? e.message : String(e),
+      });
+    });
 
     const eventJob = this.createEventJob(job);
     (eventJob as { failedReason?: string }).failedReason = errorMsg;
@@ -432,7 +452,12 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   private handleCrash(wp: WorkerProcess, index: number): void {
     if (wp.currentJob) {
       const token = wp.currentToken ?? undefined;
-      this.ops.fail(wp.currentJob.id, 'Worker crashed', token).catch(() => {});
+      this.ops.fail(wp.currentJob.id, 'Worker crashed', token).catch((e: unknown) => {
+        log('error', 'Failed to mark crashed job as failed', {
+          jobId: String(wp.currentJob?.id),
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
     }
 
     this.safeEmitError(

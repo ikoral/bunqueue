@@ -10,6 +10,27 @@ import { jsonResponse, parseJsonBody } from './httpEndpoints';
 type Body = Record<string, unknown>;
 type Cors = Set<string>;
 
+// Pre-compiled regex patterns for URL matching
+const RE_JOB_PROMOTE = /^\/jobs\/([^/]+)\/promote$/;
+const RE_JOB_DATA = /^\/jobs\/([^/]+)\/data$/;
+const RE_JOB_STATE = /^\/jobs\/([^/]+)\/state$/;
+const RE_JOB_RESULT = /^\/jobs\/([^/]+)\/result$/;
+const RE_JOB_PROGRESS = /^\/jobs\/([^/]+)\/progress$/;
+const RE_JOB_PRIORITY = /^\/jobs\/([^/]+)\/priority$/;
+const RE_JOB_DISCARD = /^\/jobs\/([^/]+)\/discard$/;
+const RE_JOB_MOVE_DELAYED = /^\/jobs\/([^/]+)\/move-to-delayed$/;
+const RE_JOB_DELAY = /^\/jobs\/([^/]+)\/delay$/;
+const RE_JOB_CHILDREN = /^\/jobs\/([^/]+)\/children$/;
+const RE_JOB_LOGS = /^\/jobs\/([^/]+)\/logs$/;
+const RE_JOB_HEARTBEAT = /^\/jobs\/([^/]+)\/heartbeat$/;
+const RE_JOB_WAIT = /^\/jobs\/([^/]+)\/wait$/;
+const RE_JOB_EXTEND_LOCK = /^\/jobs\/([^/]+)\/extend-lock$/;
+const RE_JOB_MOVE_TO_WAIT = /^\/jobs\/([^/]+)\/move-to-wait$/;
+const RE_JOB_CUSTOM_ID = /^\/jobs\/custom\/([^/]+)$/;
+const RE_JOB_BY_ID = /^\/jobs\/([^/]+)$/;
+const RE_JOB_ACK = /^\/jobs\/([^/]+)\/ack$/;
+const RE_JOB_FAIL = /^\/jobs\/([^/]+)\/fail$/;
+
 /** Job management: promote, update, state, result, progress, priority, discard */
 async function routeJobManagement(
   req: Request,
@@ -18,13 +39,13 @@ async function routeJobManagement(
   ctx: HandlerContext,
   cors: Cors
 ): Promise<Response | null> {
-  const promoteMatch = path.match(/^\/jobs\/([^/]+)\/promote$/);
+  const promoteMatch = path.match(RE_JOB_PROMOTE);
   if (promoteMatch && method === 'POST') {
     const r = await handleCommand({ cmd: 'Promote', id: promoteMatch[1] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const dataMatch = path.match(/^\/jobs\/([^/]+)\/data$/);
+  const dataMatch = path.match(RE_JOB_DATA);
   if (dataMatch && method === 'PUT') {
     let body: Body;
     try {
@@ -36,19 +57,19 @@ async function routeJobManagement(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const stateMatch = path.match(/^\/jobs\/([^/]+)\/state$/);
+  const stateMatch = path.match(RE_JOB_STATE);
   if (stateMatch && method === 'GET') {
     const r = await handleCommand({ cmd: 'GetState', id: stateMatch[1] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 404, cors);
   }
 
-  const resultMatch = path.match(/^\/jobs\/([^/]+)\/result$/);
+  const resultMatch = path.match(RE_JOB_RESULT);
   if (resultMatch && method === 'GET') {
     const r = await handleCommand({ cmd: 'GetResult', id: resultMatch[1] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 404, cors);
   }
 
-  const progressMatch = path.match(/^\/jobs\/([^/]+)\/progress$/);
+  const progressMatch = path.match(RE_JOB_PROGRESS);
   if (progressMatch && method === 'GET') {
     const r = await handleCommand({ cmd: 'GetProgress', id: progressMatch[1] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 404, cors);
@@ -68,7 +89,7 @@ async function routeJobManagement(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const priorityMatch = path.match(/^\/jobs\/([^/]+)\/priority$/);
+  const priorityMatch = path.match(RE_JOB_PRIORITY);
   if (priorityMatch && method === 'PUT') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -83,7 +104,7 @@ async function routeJobManagement(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const discardMatch = path.match(/^\/jobs\/([^/]+)\/discard$/);
+  const discardMatch = path.match(RE_JOB_DISCARD);
   if (discardMatch && method === 'POST') {
     const r = await handleCommand({ cmd: 'Discard', id: discardMatch[1] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 400, cors);
@@ -100,7 +121,7 @@ async function routeJobAdvanced(
   ctx: HandlerContext,
   cors: Cors
 ): Promise<Response | null> {
-  const moveDelayedMatch = path.match(/^\/jobs\/([^/]+)\/move-to-delayed$/);
+  const moveDelayedMatch = path.match(RE_JOB_MOVE_DELAYED);
   if (moveDelayedMatch && method === 'POST') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -115,7 +136,7 @@ async function routeJobAdvanced(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const changeDelayMatch = path.match(/^\/jobs\/([^/]+)\/delay$/);
+  const changeDelayMatch = path.match(RE_JOB_DELAY);
   if (changeDelayMatch && method === 'PUT') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -130,13 +151,13 @@ async function routeJobAdvanced(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const childrenMatch = path.match(/^\/jobs\/([^/]+)\/children$/);
+  const childrenMatch = path.match(RE_JOB_CHILDREN);
   if (childrenMatch && method === 'GET') {
     const r = await handleCommand({ cmd: 'GetChildrenValues', id: childrenMatch[1] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 404, cors);
   }
 
-  const logsMatch = path.match(/^\/jobs\/([^/]+)\/logs$/);
+  const logsMatch = path.match(RE_JOB_LOGS);
   if (logsMatch && method === 'GET') {
     const r = await handleCommand({ cmd: 'GetLogs', id: logsMatch[1] }, ctx);
     return jsonResponse(r, 200, cors);
@@ -160,7 +181,7 @@ async function routeJobAdvanced(
     return jsonResponse(r, 200, cors);
   }
 
-  const heartbeatMatch = path.match(/^\/jobs\/([^/]+)\/heartbeat$/);
+  const heartbeatMatch = path.match(RE_JOB_HEARTBEAT);
   if (heartbeatMatch && method === 'POST') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -176,7 +197,7 @@ async function routeJobAdvanced(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const waitMatch = path.match(/^\/jobs\/([^/]+)\/wait$/);
+  const waitMatch = path.match(RE_JOB_WAIT);
   if (waitMatch && method === 'POST') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -191,7 +212,7 @@ async function routeJobAdvanced(
     return jsonResponse(r, 200, cors);
   }
 
-  const extendLockMatch = path.match(/^\/jobs\/([^/]+)\/extend-lock$/);
+  const extendLockMatch = path.match(RE_JOB_EXTEND_LOCK);
   if (extendLockMatch && method === 'POST') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -207,7 +228,7 @@ async function routeJobAdvanced(
     return jsonResponse(r, r.ok ? 200 : 400, cors);
   }
 
-  const moveToWaitMatch = path.match(/^\/jobs\/([^/]+)\/move-to-wait$/);
+  const moveToWaitMatch = path.match(RE_JOB_MOVE_TO_WAIT);
   if (moveToWaitMatch && method === 'POST') {
     const r = await handleCommand({ cmd: 'MoveToWait', id: moveToWaitMatch[1] }, ctx);
     return jsonResponse(r, r.ok ? 200 : 400, cors);
@@ -268,7 +289,7 @@ export async function routeJobRoutes(
   }
 
   // GET /jobs/custom/:customId (before generic /jobs/:id)
-  const customIdMatch = path.match(/^\/jobs\/custom\/([^/]+)$/);
+  const customIdMatch = path.match(RE_JOB_CUSTOM_ID);
   if (customIdMatch && method === 'GET') {
     const customId = decodeURIComponent(customIdMatch[1]);
     const r = await handleCommand({ cmd: 'GetJobByCustomId', customId }, ctx);
@@ -276,7 +297,7 @@ export async function routeJobRoutes(
   }
 
   // GET/DELETE /jobs/:id (generic, after specific paths)
-  const jobMatch = path.match(/^\/jobs\/([^/]+)$/);
+  const jobMatch = path.match(RE_JOB_BY_ID);
   if (jobMatch) {
     const id = jobMatch[1];
     if (method === 'GET') {
@@ -290,7 +311,7 @@ export async function routeJobRoutes(
   }
 
   // POST /jobs/:id/ack
-  const ackMatch = path.match(/^\/jobs\/([^/]+)\/ack$/);
+  const ackMatch = path.match(RE_JOB_ACK);
   if (ackMatch && method === 'POST') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;
@@ -299,7 +320,7 @@ export async function routeJobRoutes(
   }
 
   // POST /jobs/:id/fail
-  const failMatch = path.match(/^\/jobs\/([^/]+)\/fail$/);
+  const failMatch = path.match(RE_JOB_FAIL);
   if (failMatch && method === 'POST') {
     const body = await parseJsonBody(req, cors);
     if (body instanceof Response) return body;

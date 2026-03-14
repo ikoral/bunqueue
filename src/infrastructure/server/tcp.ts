@@ -157,7 +157,9 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
             const response = await handleCommand(cmd, ctx);
             socket.write(serializeResponse(response));
           } catch (err) {
-            const message = err instanceof Error ? err.message : 'Unknown error';
+            const raw = err instanceof Error ? err.message : 'Unknown error';
+            const message =
+              raw.includes('SQLITE') || raw.includes('database') ? 'Internal server error' : raw;
             socket.write(errorResponse(message, cmd.reqId));
           }
         });
