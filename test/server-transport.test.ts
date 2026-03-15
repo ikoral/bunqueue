@@ -135,7 +135,8 @@ describe('SseHandler', () => {
       const text = new TextDecoder().decode(value);
       expect(text).toContain('"connected":true');
       expect(text).toContain('"clientId"');
-      expect(text).toStartWith('data: ');
+      expect(text).toContain('retry:');
+      expect(text).toContain('data: ');
       expect(text).toEndWith('\n\n');
       reader.cancel();
     });
@@ -202,7 +203,7 @@ describe('SseHandler', () => {
       reader.cancel();
     });
 
-    test('should format broadcast as SSE data message', async () => {
+    test('should format broadcast as SSE data message with event ID', async () => {
       const response = sseHandler.createResponse(null, '*');
 
       const event = createJobEvent();
@@ -212,10 +213,12 @@ describe('SseHandler', () => {
       await reader.read(); // connected
       const { value } = await reader.read();
       const text = new TextDecoder().decode(value);
-      expect(text).toStartWith('data: ');
+      expect(text).toContain('id: ');
+      expect(text).toContain('data: ');
       expect(text).toEndWith('\n\n');
-      // Should be valid JSON after 'data: '
-      const jsonStr = text.replace('data: ', '').trim();
+      // Extract JSON from 'data: ' line
+      const dataLine = text.split('\n').find((l: string) => l.startsWith('data: '));
+      const jsonStr = dataLine!.replace('data: ', '');
       const parsed = JSON.parse(jsonStr);
       expect(parsed.queue).toBe('test-queue');
       reader.cancel();

@@ -80,8 +80,9 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     sseHandler.broadcast(event);
   });
 
-  // Start periodic WS broadcasts (stats:snapshot 5s, health:status 10s)
+  // Start periodic broadcasts
   wsHandler.startBroadcasts(queueManager);
+  sseHandler.startHeartbeat();
 
   // Register dashboard event emitter for non-job events (worker, queue, dlq)
   queueManager.setDashboardEmit((event, data) => {
@@ -137,6 +138,9 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     if (path === '/ws' || path.startsWith('/ws/')) {
       const denied = checkAuth(req, authTokens);
       if (denied) return denied;
+      if (!wsHandler.canAccept()) {
+        return jsonResponse({ ok: false, error: 'Too many WebSocket connections' }, 503);
+      }
       const queueFilter = path.startsWith('/ws/queues/') ? path.slice('/ws/queues/'.length) : null;
       const upgraded = server.upgrade(req, {
         data: { id: uuid(), authenticated: true, queueFilter, subscriptions: null },
@@ -151,7 +155,8 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       const queueFilter = path.startsWith('/events/queues/')
         ? path.slice('/events/queues/'.length)
         : null;
-      return sseHandler.createResponse(queueFilter, getCorsOrigin());
+      const lastEventId = req.headers.get('Last-Event-ID') ?? undefined;
+      return sseHandler.createResponse(queueFilter, getCorsOrigin(), lastEventId);
     }
 
     // Prometheus metrics

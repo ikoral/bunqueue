@@ -130,15 +130,41 @@ function matches(event: string, subs: Set<string>): boolean {
   return subs.has(`${prefix}:*`);
 }
 
+/** Max concurrent WebSocket connections */
+const MAX_WS_CLIENTS = 1000;
+/** Backpressure threshold — skip sends when buffered data exceeds 1MB */
+const BACKPRESSURE_BYTES = 1024 * 1024;
+
 export class WsHandler {
   private readonly clients = new Map<string, ServerWebSocket<WsData>>();
   private statsInterval: ReturnType<typeof setInterval> | null = null;
   private healthInterval: ReturnType<typeof setInterval> | null = null;
   private storageInterval: ReturnType<typeof setInterval> | null = null;
   private queueManager: QueueManager | null = null;
+  droppedMessages = 0;
 
   get size(): number {
     return this.clients.size;
+  }
+
+  /** Check if a new connection can be accepted */
+  canAccept(): boolean {
+    return this.clients.size < MAX_WS_CLIENTS;
+  }
+
+  /** Send with backpressure detection — returns false if client is dead */
+  private safeSend(ws: ServerWebSocket<WsData>, data: string): boolean {
+    try {
+      const buffered = typeof ws.getBufferedAmount === 'function' ? ws.getBufferedAmount() : 0;
+      if (buffered > BACKPRESSURE_BYTES) {
+        this.droppedMessages++;
+        return true; // alive but slow — skip this message, don't disconnect
+      }
+      ws.send(data);
+      return true;
+    } catch {
+      return false; // dead connection
+    }
   }
 
   /** Start periodic broadcasts */
@@ -249,13 +275,16 @@ export class WsHandler {
     if (this.clients.size === 0) return;
 
     let msg: string | null = null;
+    const dead: string[] = [];
 
-    for (const [, ws] of this.clients) {
+    for (const [id, ws] of this.clients) {
       if (ws.data.subscriptions && matches(event, ws.data.subscriptions)) {
         msg ??= JSON.stringify({ event, ts: Date.now(), data });
-        ws.send(msg);
+        if (!this.safeSend(ws, msg)) dead.push(id);
       }
     }
+
+    for (const id of dead) this.clients.delete(id);
   }
 
   /** Broadcast job event (from eventsManager) + emit queue:counts */
@@ -276,19 +305,21 @@ export class WsHandler {
 
     let newMsg: string | null = null;
     let legacyMsg: string | null = null;
+    const dead: string[] = [];
 
-    for (const [, ws] of this.clients) {
+    for (const [id, ws] of this.clients) {
       if (ws.data.queueFilter && ws.data.queueFilter !== event.queue) continue;
 
       if (ws.data.subscriptions === null) {
-        // Legacy: old format
         legacyMsg ??= JSON.stringify(event);
-        ws.send(legacyMsg);
+        if (!this.safeSend(ws, legacyMsg)) dead.push(id);
       } else if (matches(dashEvent, ws.data.subscriptions)) {
         newMsg ??= JSON.stringify({ event: dashEvent, ts: event.timestamp, data: eventData });
-        ws.send(newMsg);
+        if (!this.safeSend(ws, newMsg)) dead.push(id);
       }
     }
+
+    for (const id of dead) this.clients.delete(id);
 
     // Emit queue:counts on every job state change
     if (this.queueManager) {
