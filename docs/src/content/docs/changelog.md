@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.28] - 2026-03-15
+
+### Fixed
+- **`getChildrenValues` empty in TCP mode** — Fixed response envelope unwrap in worker processor (`response.data.values` instead of `response.values`). Fixed `childrenIds`/`parentId` not passed through TCP protocol in flow jobs. (#49, PR by @simontong)
+
 ## [2.6.27] - 2026-03-15
 
 ### Fixed
