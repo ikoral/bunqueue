@@ -10,6 +10,7 @@ import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
 import { type RWLock, withReadLock } from '../../shared/lock';
 import type { SetLike, MapLike } from '../../shared/lru';
+import { shardIndex } from '../../shared/hash';
 
 /** Context for query operations */
 export interface QueryContext {
@@ -45,8 +46,16 @@ export async function getJob(jobId: JobId, ctx: QueryContext): Promise<Job | nul
       });
     }
     case 'completed':
-    case 'dlq':
       return ctx.storage?.getJob(jobId) ?? ctx.completedJobsData.get(jobId) ?? null;
+    case 'dlq': {
+      if (ctx.storage) {
+        const job = ctx.storage.getJob(jobId);
+        if (job) return job;
+      }
+      const dlqShardIdx = shardIndex(location.queueName);
+      const dlqJobs = ctx.shards[dlqShardIdx].getDlq(location.queueName);
+      return dlqJobs.find((j) => j.id === jobId) ?? null;
+    }
   }
 }
 
@@ -69,6 +78,18 @@ export function getJobByCustomId(customId: string, ctx: QueryContext): Job | nul
   }
   if (location.type === 'processing') {
     return ctx.processingShards[location.shardIdx].get(jobId) ?? null;
+  }
+  if (location.type === 'completed') {
+    return ctx.storage?.getJob(jobId) ?? ctx.completedJobsData.get(jobId) ?? null;
+  }
+  if (location.type === 'dlq') {
+    if (ctx.storage) {
+      const job = ctx.storage.getJob(jobId);
+      if (job) return job;
+    }
+    const dlqShardIdx = shardIndex(location.queueName);
+    const dlqJobs = ctx.shards[dlqShardIdx].getDlq(location.queueName);
+    return dlqJobs.find((j) => j.id === jobId) ?? null;
   }
   return null;
 }
