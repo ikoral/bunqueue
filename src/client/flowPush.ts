@@ -128,7 +128,7 @@ export async function pushJobWithParent(
     removeOnComplete: opts.removeOnComplete,
     removeOnFail: opts.removeOnFail,
     parentId: parentRef?.id,
-    childIds,
+    childrenIds: childIds.length > 0 ? childIds : undefined,
     dependsOn: childIds.length > 0 ? childIds : undefined,
   });
 

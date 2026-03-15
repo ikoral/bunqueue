@@ -26,6 +26,8 @@ export interface PushCommand extends BaseCommand {
   readonly uniqueKey?: string;
   readonly jobId?: string; // customId
   readonly dependsOn?: string[];
+  readonly childrenIds?: string[];
+  readonly parentId?: string;
   readonly tags?: string[];
   readonly groupId?: string;
   readonly lifo?: boolean;
