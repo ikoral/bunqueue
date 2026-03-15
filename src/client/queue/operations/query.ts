@@ -141,7 +141,8 @@ export async function getChildrenValues(
   }
   const response = await ctx.tcp!.send({ cmd: 'GetChildrenValues', id });
   if (!response.ok) return {};
-  return (response.values ?? {}) as Record<string, unknown>;
+  const data = (response as { data?: { values?: Record<string, unknown> } }).data;
+  return data?.values ?? {};
 }
 
 interface GetJobsOptions {

@@ -132,7 +132,8 @@ function createGetChildrenValuesHandler(embedded: boolean, tcp: TcpConnection | 
       return manager.getChildrenValues(jobId(id));
     } else if (tcp) {
       const response = await tcp.send({ cmd: 'GetChildrenValues', id });
-      return (response as { values?: Record<string, unknown> }).values ?? {};
+      const data = (response as { data?: { values?: Record<string, unknown> } }).data;
+      return data?.values ?? {};
     }
     return {};
   };

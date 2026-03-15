@@ -63,6 +63,8 @@ export async function handlePush(
       uniqueKey: cmd.uniqueKey,
       customId: cmd.jobId,
       dependsOn: cmd.dependsOn?.map((id) => jobId(id)),
+      childrenIds: cmd.childrenIds?.map((id) => jobId(id)),
+      parentId: cmd.parentId ? jobId(cmd.parentId) : undefined,
       tags: cmd.tags,
       groupId: cmd.groupId,
       lifo: cmd.lifo,
