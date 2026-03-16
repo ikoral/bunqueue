@@ -10,7 +10,9 @@ import type { SqliteStorage } from '../infrastructure/persistence/sqlite';
 import type { RWLock } from '../shared/lock';
 import type { LRUMap, BoundedSet, BoundedMap } from '../shared/lru';
 import type { WebhookManager } from './webhookManager';
+import type { WorkerManager } from './workerManager';
 import type { EventsManager } from './eventsManager';
+import type { MonitoringState } from './monitoringChecks';
 import type { LockContext, BackgroundContext, StatsContext } from './types';
 import type { PushContext } from './operations/push';
 import type { PullContext } from './operations/pull';
@@ -43,6 +45,8 @@ export interface ContextDependencies {
   repeatChain: Map<JobId, JobId>;
   eventsManager: EventsManager;
   webhookManager: WebhookManager;
+  workerManager: WorkerManager;
+  monitoringState: MonitoringState;
   metrics: {
     totalPushed: { value: bigint };
     totalPulled: { value: bigint };
@@ -115,6 +119,8 @@ export class ContextFactory {
       registerQueueName: this.callbacks.registerQueueName,
       unregisterQueueName: this.callbacks.unregisterQueueName,
       dashboardEmit: this.callbacks.emitDashboardEvent,
+      workerManager: this.deps.workerManager,
+      monitoringState: this.deps.monitoringState,
     };
   }
 

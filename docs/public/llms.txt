@@ -66,7 +66,7 @@ bunqueue provides:
 - new Worker(queue, processor, opts) - Create job processor
 - concurrency - Process multiple jobs in parallel
 - Events: completed, failed, progress, stalled
-- SandboxedWorker - Isolated worker processes for CPU-intensive tasks
+- SandboxedWorker - Isolated worker processes for CPU-intensive tasks (experimental — depends on Bun Workers)
 
 ### Job Options
 - priority - Higher priority = processed first

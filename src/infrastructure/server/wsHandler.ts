@@ -40,7 +40,7 @@ const EVENT_MAP: Record<string, string> = {
 /** All valid subscription patterns (events + wildcards) */
 const VALID_PATTERNS = new Set([
   '*',
-  // Job lifecycle (21)
+  // Job lifecycle (22)
   'job:pushed',
   'job:active',
   'job:completed',
@@ -61,8 +61,9 @@ const VALID_PATTERNS = new Set([
   'job:waiting-children',
   'job:dependencies-resolved',
   'job:moved-to-delayed',
+  'job:expired',
   'job:*',
-  // Queue (7)
+  // Queue (9)
   'queue:created',
   'queue:removed',
   'queue:paused',
@@ -71,6 +72,8 @@ const VALID_PATTERNS = new Set([
   'queue:cleaned',
   'queue:obliterated',
   'queue:counts',
+  'queue:idle',
+  'queue:threshold',
   'queue:*',
   // DLQ (6)
   'dlq:added',
@@ -80,19 +83,26 @@ const VALID_PATTERNS = new Set([
   'dlq:auto-retried',
   'dlq:expired',
   'dlq:*',
-  // Cron (5)
+  // Flow (2)
+  'flow:completed',
+  'flow:failed',
+  'flow:*',
+  // Cron (6)
   'cron:created',
   'cron:updated',
   'cron:deleted',
   'cron:fired',
   'cron:missed',
+  'cron:skipped',
   'cron:*',
-  // Worker (5)
+  // Worker (7)
   'worker:connected',
   'worker:disconnected',
   'worker:heartbeat',
   'worker:idle',
   'worker:removed-stale',
+  'worker:overloaded',
+  'worker:error',
   'worker:*',
   // Rate limit & concurrency (7)
   'ratelimit:set',
@@ -127,7 +137,7 @@ const VALID_PATTERNS = new Set([
   'cleanup:orphans-removed',
   'cleanup:stale-deps-removed',
   'cleanup:*',
-  // System (8)
+  // System (10)
   'health:status',
   'health:*',
   'stats:snapshot',
@@ -136,10 +146,12 @@ const VALID_PATTERNS = new Set([
   'storage:backup-started',
   'storage:backup-completed',
   'storage:backup-failed',
+  'storage:size-warning',
   'storage:*',
   'server:started',
   'server:shutdown',
   'server:recovered',
+  'server:memory-warning',
   'server:*',
   // Memory (1)
   'memory:compacted',

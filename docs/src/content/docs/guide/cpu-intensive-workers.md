@@ -86,7 +86,11 @@ async function findNthPrime(n: number): Promise<number> {
 
 ## Alternative: SandboxedWorker
 
-For truly CPU-bound work, consider using [`SandboxedWorker`](/guide/worker/#sandboxedworker) instead. It runs each job in an isolated Bun Worker thread, so the main event loop is never blocked. SandboxedWorker supports both embedded and TCP modes, so you can use it with a remote bunqueue server without any connection tuning:
+:::caution[Experimental — Bun Workers are not yet stable]
+`SandboxedWorker` relies on [Bun Workers](https://bun.sh/docs/runtime/workers), which are **experimental**. Known issues include memory growth and thread duplication across Bun versions. For production, prefer the yield-based approach above or use the standard `Worker`. See [Worker vs SandboxedWorker](/guide/worker/#worker-vs-sandboxedworker) for details.
+:::
+
+For truly CPU-bound work where yielding is not practical, [`SandboxedWorker`](/guide/worker/#sandboxedworker) runs each job in an isolated Bun Worker thread, so the main event loop is never blocked:
 
 ```typescript
 const worker = new SandboxedWorker('heavy-queue', {

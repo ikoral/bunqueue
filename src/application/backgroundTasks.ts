@@ -13,6 +13,7 @@ import { cleanup } from './cleanupTasks';
 import { checkStalledJobs } from './stallDetection';
 import { processPendingDependencies } from './dependencyProcessor';
 import { handleTaskError, handleTaskSuccess, getTaskErrorStats } from './taskErrorTracking';
+import { runMonitoringChecks } from './monitoringChecks';
 import type { BackgroundContext, LockContext } from './types';
 import type { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
 
@@ -41,6 +42,16 @@ export function startBackgroundTasks(
     cleanup(ctx)
       .then(() => {
         handleTaskSuccess('cleanup');
+        // Run monitoring checks after cleanup (same interval)
+        runMonitoringChecks({
+          queueNamesCache: ctx.queueNamesCache,
+          shards: ctx.shards,
+          processingShards: ctx.processingShards,
+          workerManager: ctx.workerManager,
+          storage: ctx.storage,
+          dashboardEmit: ctx.dashboardEmit,
+          state: ctx.monitoringState,
+        });
       })
       .catch((err: unknown) => {
         handleTaskError('cleanup', err);

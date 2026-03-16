@@ -57,6 +57,12 @@ function tryDequeueNextJob(
     q.pop();
     shard.decrementQueued(job.id);
     ctx.jobIndex.delete(job.id);
+    ctx.dashboardEmit?.('job:expired', {
+      queue,
+      jobId: String(job.id),
+      ttl: job.ttl,
+      age: now - job.createdAt,
+    });
     return { status: 'skip' };
   }
 

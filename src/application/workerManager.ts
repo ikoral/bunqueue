@@ -109,6 +109,24 @@ export class WorkerManager {
         worker.currentJob = null;
         this.dashboardEmit?.('worker:idle', { workerId: id, processedJobs: worker.processedJobs });
       }
+      // Emit worker:error at failure thresholds (5, 10, 25, 50, 100)
+      const total = worker.processedJobs + worker.failedJobs;
+      if (
+        total >= 5 &&
+        (worker.failedJobs === 5 ||
+          worker.failedJobs === 10 ||
+          worker.failedJobs === 25 ||
+          worker.failedJobs === 50 ||
+          worker.failedJobs === 100)
+      ) {
+        this.dashboardEmit?.('worker:error', {
+          workerId: id,
+          name: worker.name,
+          failedJobs: worker.failedJobs,
+          processedJobs: worker.processedJobs,
+          failureRate: +(worker.failedJobs / total).toFixed(3),
+        });
+      }
     }
   }
 

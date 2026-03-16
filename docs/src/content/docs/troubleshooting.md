@@ -346,37 +346,45 @@ bunqueue backup restore <key> --force
 
 ## Sandboxed Worker Issues
 
+:::danger[SandboxedWorker is experimental]
+`SandboxedWorker` depends on [Bun Workers](https://bun.sh/docs/runtime/workers), which are **experimental**. Known issues include memory growth, thread duplication, and segfaults across Bun versions.
+
+**For production, use the standard `Worker` instead** — it provides the same API (events, concurrency, heartbeats, retries) without any experimental dependencies. See [Worker vs SandboxedWorker](/guide/worker/#worker-vs-sandboxedworker).
+:::
+
 ### Segmentation fault when terminating workers
 
 If you experience crashes (segfaults) when using `SandboxedWorker`, especially during worker timeout or error handling, this is a **known Bun bug**.
-
-:::caution[Bun Worker API is experimental]
-From [Bun's documentation](https://bun.sh/docs/api/workers):
-> The `Worker` API is still experimental (particularly for terminating workers). We are actively working on improving this.
-:::
 
 **Symptoms:**
 - `Segmentation fault at address 0xE8`
 - `Worker has been terminated` errors
 - Crashes during `worker.terminate()` calls
+- Unexpected memory growth or thread duplication ([#52](https://github.com/egeominotti/bunqueue/issues/52))
 
-**Workaround:**
-- Avoid forcefully terminating workers when possible
-- Use graceful shutdown instead of `worker.terminate()`
-- Consider using the standard `Worker` class instead of `SandboxedWorker` for production workloads
+**Solution:** Switch to the standard `Worker` for production workloads:
 
 ```typescript
-// Instead of force termination
-await worker.stop();  // Graceful shutdown
-
-// Avoid tight timeout values that cause frequent terminations
+// ❌ SandboxedWorker — experimental, may crash
 const worker = new SandboxedWorker('queue', {
   processor: './processor.ts',
-  timeout: 30000,  // Use longer timeout to avoid frequent terminations
+  concurrency: 4,
 });
+
+// ✅ Worker — stable, production-ready, same functionality
+const worker = new Worker('queue', async (job) => {
+  // same logic from your processor.ts
+  return result;
+}, { embedded: true, concurrency: 4 });
 ```
 
-This issue will be resolved in a future Bun release.
+**If you must use SandboxedWorker:**
+- Pin your Bun version — behavior varies across releases
+- Use graceful shutdown (`await worker.stop()`) instead of force termination
+- Use longer timeout values to avoid frequent terminations
+- Monitor memory usage closely
+
+These issues will be resolved when Bun stabilizes their Worker API.
 
 ## Common Error Messages
 

@@ -208,6 +208,15 @@ export async function failJob(
         jobId: String(jobId),
         reason: FailureReason.MaxAttemptsExceeded,
       });
+      // Emit flow:failed if this job is part of a flow
+      if (job.parentId) {
+        ctx.emitDashboardEvent?.('flow:failed', {
+          parentJobId: String(job.parentId),
+          failedChildId: String(jobId),
+          queue: job.queue,
+          error: error ?? 'Max attempts exceeded',
+        });
+      }
     }
   });
 

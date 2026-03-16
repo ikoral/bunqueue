@@ -127,6 +127,10 @@ const stalledJobs = queue.getDlq({ reason: 'stalled' });
 
 ## SandboxedWorker
 
+:::caution[Experimental]
+`SandboxedWorker` depends on experimental Bun Workers. For production, use the standard `Worker`. See [Worker vs SandboxedWorker](/guide/worker/#worker-vs-sandboxedworker).
+:::
+
 SandboxedWorker automatically sends heartbeats in both embedded and TCP mode. In embedded mode, `heartbeatInterval` defaults to `5000ms`, keeping `lastHeartbeat` fresh so long-running jobs are not falsely detected as stalled.
 
 ```typescript

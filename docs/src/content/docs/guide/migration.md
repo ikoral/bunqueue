@@ -217,7 +217,15 @@ Rate limiting in bunqueue is a server-side feature, configured via CLI or TCP pr
 // BullMQ sandboxed processors
 new Worker('queue', './processor.js', { connection });
 
-// bunqueue SandboxedWorker (isolated Bun Worker processes)
+// bunqueue — recommended: inline Worker (production-ready)
+import { Worker } from 'bunqueue/client';
+
+const worker = new Worker('queue', async (job) => {
+  // same logic from your processor.js
+  return result;
+}, { embedded: true, concurrency: 4 });
+
+// bunqueue — alternative: SandboxedWorker (experimental, Bun Workers)
 import { SandboxedWorker } from 'bunqueue/client';
 
 const worker = new SandboxedWorker('queue', {
@@ -227,6 +235,10 @@ const worker = new SandboxedWorker('queue', {
 });
 worker.start();
 ```
+
+:::caution
+`SandboxedWorker` depends on experimental Bun Workers. For production, use the standard `Worker` with an inline processor. See [Worker vs SandboxedWorker](/guide/worker/#worker-vs-sandboxedworker).
+:::
 
 ### Repeatable Jobs
 
@@ -250,7 +262,7 @@ await queue.add('task', data, {
 
 | Feature | BullMQ | bunqueue | Notes |
 |---------|--------|----------|-------|
-| Sandboxed processors | ✅ | ✅ | Use `SandboxedWorker` |
+| Sandboxed processors | ✅ | ✅ | Use `SandboxedWorker` (experimental — Bun Workers) |
 | Redis Cluster | ✅ | ❌ | Single instance |
 | Redis Streams | ✅ | ❌ | SQLite storage |
 | Rate limit per worker | ✅ | ❌ | Queue-level rate limit |

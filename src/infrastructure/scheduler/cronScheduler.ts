@@ -60,6 +60,8 @@ export class CronScheduler {
   private pushJob: PushJobCallback | null = null;
   private persistCron: PersistCronCallback | null = null;
   private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
+  /** Track last fire time per cron for overlap detection */
+  private readonly lastFiredAt = new Map<string, number>();
 
   // Accept config for backward compatibility (no longer used internally)
   constructor(_config?: CronSchedulerConfig) {
@@ -321,12 +323,7 @@ export class CronScheduler {
         cron.nextRun = newNextRun;
 
         // NOW push the job (state already persisted, safe from duplicates)
-        await this.pushJob(cron.queue, {
-          data: cron.data,
-          priority: cron.priority,
-        });
-
-        this.dashboardEmit?.('cron:fired', { name: cron.name, queue: cron.queue });
+        await this.fireCronJob(cron, now);
 
         // Re-insert with same generation (not stale)
         toReinsert.push(entry);
@@ -359,6 +356,25 @@ export class CronScheduler {
 
     // Schedule next precise wake-up
     this.scheduleNext();
+  }
+
+  /** Fire a cron job with overlap detection */
+  private async fireCronJob(cron: CronJob, now: number): Promise<void> {
+    // Overlap detection: skip if last fire was within repeatEvery window
+    const lastFire = this.lastFiredAt.get(cron.name);
+    const interval = cron.repeatEvery ?? 60000;
+    if (lastFire && now - lastFire < interval * 0.8) {
+      this.dashboardEmit?.('cron:skipped', {
+        name: cron.name,
+        queue: cron.queue,
+        reason: 'overlap',
+      });
+      return;
+    }
+
+    await this.pushJob!(cron.queue, { data: cron.data, priority: cron.priority });
+    this.lastFiredAt.set(cron.name, now);
+    this.dashboardEmit?.('cron:fired', { name: cron.name, queue: cron.queue });
   }
 
   /**

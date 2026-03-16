@@ -283,11 +283,15 @@ worker.on('failed', (job, error) => {
 
 ## SandboxedWorker
 
-:::caution[Experimental: Bun Workers]
-`SandboxedWorker` relies on [Bun Workers](https://bun.sh/docs/runtime/workers), which are currently **experimental** in Bun. You may encounter edge-case bugs or breaking changes across Bun versions. Use in production at your own risk and pin your Bun version.
+:::danger[Experimental — Not recommended for production]
+`SandboxedWorker` relies on [Bun Workers](https://bun.sh/docs/runtime/workers), which are currently **experimental** in Bun. Known issues include unexpected memory growth, thread duplication, and inconsistent behavior across Bun versions.
+
+**For production workloads, use the standard `Worker` instead** — it provides the same API (events, concurrency, heartbeats, retries) and runs entirely in the main thread with zero dependency on experimental Bun APIs.
+
+`SandboxedWorker` will become the recommended choice for CPU-intensive work once Bun stabilizes Worker threads.
 :::
 
-For CPU-intensive tasks or jobs that might crash, use `SandboxedWorker` to run processors in **isolated Bun Worker processes**.
+`SandboxedWorker` runs processors in **isolated Bun Worker threads** for crash isolation and memory protection. It is designed for CPU-intensive tasks or untrusted code that could crash the process.
 
 :::note[Crash Isolation]
 Each job runs in a separate Bun Worker thread. If a job crashes (OOM, infinite loop, uncaught exception), only that worker is affected. The main process and other workers continue running. Crashed workers are automatically restarted up to `maxRestarts` times.
@@ -378,15 +382,24 @@ export default async (job: {
 };
 ```
 
-### When to Use SandboxedWorker
+### Worker vs SandboxedWorker
 
-| Use Case | Worker | SandboxedWorker |
-|----------|--------|-----------------|
-| Fast I/O tasks | ✅ Best choice | ⚠️ Works, but overkill |
-| CPU-intensive | ⚠️ Blocks event loop | ✅ Best choice |
-| Untrusted code | ❌ | ✅ |
-| Memory leak protection | ❌ | ✅ |
-| Crash isolation | ❌ | ✅ |
+| | Worker | SandboxedWorker |
+|---|--------|-----------------|
+| **Production ready** | ✅ Stable, no experimental APIs | ⚠️ Depends on experimental Bun Workers |
+| **I/O-bound tasks** (HTTP, DB, APIs) | ✅ Best choice | Overkill |
+| **CPU-intensive tasks** | ⚠️ Blocks event loop | ✅ Runs in separate thread |
+| **Untrusted code** | ❌ Runs in main thread | ✅ Isolated |
+| **Memory leak protection** | ❌ | ✅ Per-worker memory limit |
+| **Crash isolation** | ❌ | ✅ Only the worker thread dies |
+| **Events** | 10 events | 8 events (no `stalled`, `drained`, `cancelled`) |
+| **Concurrency, retries, heartbeats** | ✅ | ✅ Same behavior |
+
+:::tip[Production recommendation]
+Most workloads are I/O-bound (API calls, database queries, file operations). For these, **`Worker` is the right choice** — same concurrency, same events, same retries, zero risk from experimental APIs.
+
+Only consider `SandboxedWorker` if you need crash isolation for truly CPU-bound or untrusted code, and you accept the experimental status.
+:::
 
 ### SandboxedWorker Events
 

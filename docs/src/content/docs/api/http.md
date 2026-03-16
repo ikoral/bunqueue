@@ -1788,9 +1788,9 @@ function pauseQueue(queue) {
 }
 ```
 
-### All Events (50 total)
+### All Events (63 total)
 
-#### Job Lifecycle (14 events)
+#### Job Lifecycle (15 events)
 
 | Event | Payload | Description |
 |---|---|---|
@@ -1808,8 +1808,9 @@ function pauseQueue(queue) {
 | `job:priority-changed` | `jobId, newPriority` | Priority updated |
 | `job:data-updated` | `jobId` | Job payload modified |
 | `job:delay-changed` | `jobId, newDelay` | Delay modified |
+| `job:expired` | `queue, jobId, ttl, age` | Job TTL expired (distinguished from fail) |
 
-#### Queue (8 events)
+#### Queue (10 events)
 
 | Event | Payload | Description |
 |---|---|---|
@@ -1821,6 +1822,15 @@ function pauseQueue(queue) {
 | `queue:obliterated` | `queue` | Queue destroyed |
 | `queue:created` | `queue` | First job pushed to new queue |
 | `queue:removed` | `queue` | Queue removed |
+| `queue:idle` | `queue, idleSeconds` | Queue empty with no active jobs for N seconds. Configure via `QUEUE_IDLE_THRESHOLD_MS` (default: 30000). |
+| `queue:threshold` | `queue, size, threshold` | Queue size exceeds threshold. Configure via `QUEUE_SIZE_THRESHOLD` (default: 0 = disabled). |
+
+#### Flow (2 events)
+
+| Event | Payload | Description |
+|---|---|---|
+| `flow:completed` | `parentJobId, queue, childrenCount` | All children of a flow completed successfully |
+| `flow:failed` | `parentJobId, failedChildId, queue, error` | A child in a flow failed permanently (moved to DLQ) |
 
 #### DLQ (4 events)
 
@@ -1831,23 +1841,26 @@ function pauseQueue(queue) {
 | `dlq:retry-all` | `queue, count` | All DLQ entries retried |
 | `dlq:purged` | `queue, count` | DLQ emptied |
 
-#### Cron (5 events)
+#### Cron (6 events)
 
 | Event | Payload | Description |
 |---|---|---|
 | `cron:created` | `name, queue, pattern?, every?, nextRun` | Cron added |
 | `cron:deleted` | `name` | Cron removed |
-| `cron:fired` | `name, queue, jobId, nextRun` | Cron triggered, job pushed |
+| `cron:fired` | `name, queue` | Cron triggered, job pushed |
 | `cron:updated` | `name, queue, nextRun` | Cron modified |
-| `cron:missed` | `name, queue, reason` | Cron missed execution window |
+| `cron:missed` | `name, queue, error` | Cron missed execution window |
+| `cron:skipped` | `name, queue, reason` | Cron skipped due to overlap (previous instance still within interval) |
 
-#### Worker (3 events)
+#### Worker (5 events)
 
 | Event | Payload | Description |
 |---|---|---|
 | `worker:connected` | `workerId, name, queues` | Worker registered |
 | `worker:disconnected` | `workerId` | Worker gone |
 | `worker:heartbeat` | `workerId` | Worker alive signal |
+| `worker:overloaded` | `workerId, name, activeJobs, concurrency, overloadedSeconds` | Worker at max concurrency for N seconds. Configure via `WORKER_OVERLOAD_THRESHOLD_MS` (default: 30000). |
+| `worker:error` | `workerId, name, failedJobs, processedJobs, failureRate` | Worker failure rate is high (emitted at thresholds: 5, 10, 25, 50, 100 failures) |
 
 #### Rate Limiting & Concurrency (5 events)
 
@@ -1868,15 +1881,17 @@ function pauseQueue(queue) {
 | `webhook:fired` | `id, event, statusCode` | Webhook delivered |
 | `webhook:failed` | `id, event, error` | Webhook delivery failed |
 
-#### System (periodic)
+#### System (7 events)
 
-| Event | Payload | Interval |
+| Event | Payload | Description |
 |---|---|---|
 | `stats:snapshot` | `waiting, active, completed, dlq, totalPushed, totalCompleted, totalFailed, pushPerSec, pullPerSec, uptime, queues, workers, cronJobs` | Every 5s |
 | `health:status` | `ok, uptime, memory: { rss, heapUsed }, connections` | Every 10s |
 | `storage:status` | `collections, diskFull` | Every 30s |
 | `server:started` | `version, startedAt` | Server boot |
 | `server:shutdown` | `reason` | Graceful shutdown |
+| `server:memory-warning` | `heapUsedMB, thresholdMB, rssMB` | Heap exceeds threshold. Configure via `MEMORY_WARNING_MB` (default: 0 = disabled). |
+| `storage:size-warning` | `sizeMB, thresholdMB` | SQLite DB exceeds threshold. Configure via `STORAGE_WARNING_MB` (default: 0 = disabled). |
 
 #### Config (2 events)
 

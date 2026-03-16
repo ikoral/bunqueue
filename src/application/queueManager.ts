@@ -16,6 +16,7 @@ import { CronScheduler } from '../infrastructure/scheduler/cronScheduler';
 import { WebhookManager } from './webhookManager';
 import { WorkerManager } from './workerManager';
 import { EventsManager } from './eventsManager';
+import { createMonitoringState, type MonitoringState } from './monitoringChecks';
 import { RWLock, withWriteLock } from '../shared/lock';
 import { shardIndex, SHARD_COUNT } from '../shared/hash';
 import { pushJob, pushJobBatch } from './operations/push';
@@ -111,6 +112,8 @@ export class QueueManager {
 
   // Queue names cache
   private readonly queueNamesCache = new Set<string>();
+  // Monitoring state
+  private readonly monitoringState: MonitoringState = createMonitoringState();
 
   // Context factory
   private readonly contextFactory: ContextFactory;
@@ -197,6 +200,8 @@ export class QueueManager {
       repeatChain: this.repeatChain,
       eventsManager: this.eventsManager,
       webhookManager: this.webhookManager,
+      workerManager: this.workerManager,
+      monitoringState: this.monitoringState,
       metrics: this.metrics,
       startTime: this.startTime,
       maxLogsPerJob: this.maxLogsPerJob,
@@ -948,6 +953,25 @@ export class QueueManager {
   private onJobCompleted(completedId: JobId): void {
     this.pendingDepChecks.add(completedId);
     this.scheduleDependencyFlush();
+    void this.checkFlowCompleted(completedId);
+  }
+
+  /** Check if completing this job completes an entire flow */
+  private async checkFlowCompleted(completedId: JobId): Promise<void> {
+    const job = await this.getJob(completedId);
+    if (!job?.parentId) return;
+
+    const parent = await this.getJob(job.parentId);
+    if (!parent?.childrenIds || parent.childrenIds.length === 0) return;
+
+    const allDone = parent.childrenIds.every((childId) => this.completedJobs.has(childId));
+    if (allDone) {
+      this.dashboardEmit?.('flow:completed', {
+        parentJobId: String(parent.id),
+        queue: parent.queue,
+        childrenCount: parent.childrenIds.length,
+      });
+    }
   }
 
   private onJobsCompleted(completedIds: JobId[]): void {

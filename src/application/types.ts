@@ -11,6 +11,8 @@ import type { RWLock } from '../shared/lock';
 import type { LRUMap, BoundedSet, SetLike } from '../shared/lru';
 import type { EventsManager } from './eventsManager';
 import type { WebhookManager } from './webhookManager';
+import type { WorkerManager } from './workerManager';
+import type { MonitoringState } from './monitoringChecks';
 
 /** Queue Manager configuration */
 export interface QueueManagerConfig {
@@ -108,6 +110,9 @@ export interface BackgroundContext extends QueueManagerState {
   registerQueueName: (queue: string) => void;
   unregisterQueueName: (queue: string) => void;
   dashboardEmit?: (event: string, data: Record<string, unknown>) => void;
+  // Monitoring
+  workerManager: WorkerManager;
+  monitoringState: MonitoringState;
 }
 
 /** Context for stats operations */
