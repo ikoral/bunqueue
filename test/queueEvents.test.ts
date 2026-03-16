@@ -65,15 +65,12 @@ describe('QueueEvents - Core Events', () => {
   });
 
   test('should emit failed event when job fails', async () => {
-    const failedEvents: Array<{ jobId: string; failedReason: unknown }> = [];
+    const failedEvents: Array<{ jobId: string; failedReason: unknown; data: unknown }> = [];
 
-    // Add error handler to prevent unhandled error warnings
-    queueEvents.on('error', () => {
-      // Ignore errors - they're expected in this test
-    });
+    queueEvents.on('error', () => {});
 
-    queueEvents.on('failed', ({ jobId, failedReason }) => {
-      failedEvents.push({ jobId, failedReason });
+    queueEvents.on('failed', ({ jobId, failedReason, data }) => {
+      failedEvents.push({ jobId, failedReason, data });
     });
 
     const worker = new Worker(
@@ -89,10 +86,12 @@ describe('QueueEvents - Core Events', () => {
     // Wait for processing and event
     await Bun.sleep(500);
 
-    // Check that failed event was emitted
     expect(failedEvents.length).toBeGreaterThanOrEqual(1);
     const failedEvent = failedEvents.find((e) => e.jobId === job.id);
     expect(failedEvent).toBeDefined();
+    expect(typeof failedEvent!.failedReason).toBe('string');
+    expect(failedEvent!.failedReason).toContain('Test failure');
+    expect(failedEvent!.data).toMatchObject({ value: 42 });
 
     await worker.close();
   });

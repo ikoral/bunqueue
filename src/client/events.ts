@@ -26,6 +26,7 @@ export interface CompletedEvent<R = unknown> {
 export interface FailedEvent {
   jobId: string;
   failedReason: string;
+  data?: unknown;
 }
 
 /** Event payload for 'progress' event */
@@ -120,7 +121,7 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
   on(event: 'retried', listener: (data: RetriedEvent) => void): this;
   on(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
   on(event: 'drained', listener: (data: DrainedEvent) => void): this;
-  on(event: 'error', listener: (error: Error) => void): this;
+  on(event: 'error', listener: (error: Error, event?: JobEvent) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: string, listener: (...args: any[]) => void): this {
     return super.on(event, listener);
@@ -138,7 +139,7 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
   once(event: 'retried', listener: (data: RetriedEvent) => void): this;
   once(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
   once(event: 'drained', listener: (data: DrainedEvent) => void): this;
-  once(event: 'error', listener: (error: Error) => void): this;
+  once(event: 'error', listener: (error: Error, event?: JobEvent) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   once(event: string, listener: (...args: any[]) => void): this {
     return super.once(event, listener);
@@ -166,10 +167,14 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
             this.emit('completed', { jobId: event.jobId, returnvalue: event.data });
             break;
           case EventType.Failed:
-            this.emit('failed', { jobId: event.jobId, failedReason: event.data });
+            this.emit('failed', {
+              jobId: event.jobId,
+              failedReason: event.error,
+              data: event.data,
+            });
             // Also emit error event for failed jobs (BullMQ compatibility)
             if (event.error) {
-              this.emit('error', new Error(event.error));
+              this.emit('error', new Error(event.error), event);
             }
             break;
           case EventType.Progress:

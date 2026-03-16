@@ -226,6 +226,7 @@ export async function failJob(
     jobId,
     timestamp: Date.now(),
     error,
+    data: job.data,
   });
 
   // Emit retried event if job was requeued for retry (BullMQ v5)
