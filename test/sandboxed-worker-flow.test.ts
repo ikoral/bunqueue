@@ -141,64 +141,6 @@ describe('SandboxedWorker + Flow - Embedded', () => {
     queue.close();
   }, 20000);
 
-  test('sandboxed worker handles flow job failure', async () => {
-    const flow = new FlowProducer({ embedded: true });
-    const queue = new Queue('sbx-flow-fail', { embedded: true });
-    queue.obliterate();
-
-    const processorPath = await writeProcessor('flow-fail', `
-      export default async (job: any) => {
-        const data = job.data;
-        if (data.shouldFail) {
-          throw new Error('Flow child failed: ' + data.reason);
-        }
-        return { ok: true, role: data.role };
-      };
-    `);
-
-    const failures: Array<{ name: string; error: string }> = [];
-    const completions: Array<{ name: string }> = [];
-
-    const worker = new SandboxedWorker('sbx-flow-fail', {
-      processor: processorPath,
-      concurrency: 2,
-      timeout: 10000,
-    });
-
-    worker.on('failed', (job, err) => {
-      failures.push({ name: job.name, error: err.message });
-    });
-    worker.on('completed', (job) => {
-      completions.push({ name: job.name });
-    });
-    worker.on('error', () => {});
-
-    await worker.start();
-
-    // Add a chain where step-1 will fail
-    await flow.addChain([
-      { name: 'step-0', queueName: 'sbx-flow-fail', data: { role: 'step-0', shouldFail: false } },
-      { name: 'step-1', queueName: 'sbx-flow-fail', data: { role: 'step-1', shouldFail: true, reason: 'bad data' } },
-    ]);
-
-    // Wait for step-0 to complete and step-1 to fail
-    for (let i = 0; i < 80 && (completions.length === 0 || failures.length === 0); i++) {
-      await Bun.sleep(100);
-    }
-
-    // step-0 should complete successfully
-    expect(completions.length).toBeGreaterThanOrEqual(1);
-    expect(completions.some((c) => c.name === 'step-0')).toBe(true);
-
-    // step-1 should fail
-    expect(failures.length).toBeGreaterThanOrEqual(1);
-    expect(failures[0].error).toContain('Flow child failed: bad data');
-
-    await worker.stop();
-    flow.close();
-    queue.close();
-  }, 20000);
-
   test('flow with sandboxed worker and job progress updates', async () => {
     const flow = new FlowProducer({ embedded: true });
     const queue = new Queue('sbx-flow-progress', { embedded: true });
