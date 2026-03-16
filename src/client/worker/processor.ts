@@ -43,7 +43,7 @@ export async function processJob<T, R>(
     job: internalJob,
     name: jobName,
     updateProgress: createProgressHandler(embedded, tcp, emitter, jobHolder),
-    log: createLogHandler(embedded, tcp),
+    log: createLogHandler(embedded, tcp, emitter, jobHolder),
     getState: createGetStateHandler(embedded, tcp),
     getChildrenValues: createGetChildrenValuesHandler(embedded, tcp),
   });
@@ -100,7 +100,12 @@ function createProgressHandler<T extends FlowJobData>(
   };
 }
 
-function createLogHandler(embedded: boolean, tcp: TcpConnection | null) {
+function createLogHandler<T extends FlowJobData>(
+  embedded: boolean,
+  tcp: TcpConnection | null,
+  emitter: EventEmitter,
+  jobHolder: { current: Job<T> | null }
+) {
   return async (id: string, message: string) => {
     if (embedded) {
       const manager = getSharedManager();
@@ -109,6 +114,7 @@ function createLogHandler(embedded: boolean, tcp: TcpConnection | null) {
     } else if (tcp) {
       await tcp.send({ cmd: 'AddLog', id, message });
     }
+    emitter.emit('log', jobHolder.current, message);
   };
 }
 
