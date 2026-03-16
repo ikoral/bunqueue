@@ -114,6 +114,7 @@ export class ContextFactory {
       fail: this.callbacks.fail,
       registerQueueName: this.callbacks.registerQueueName,
       unregisterQueueName: this.callbacks.unregisterQueueName,
+      dashboardEmit: this.callbacks.emitDashboardEvent,
     };
   }
 
@@ -146,6 +147,7 @@ export class ContextFactory {
       jobIndex: this.deps.jobIndex,
       totalPushed: this.deps.metrics.totalPushed,
       broadcast: this.deps.eventsManager.broadcast.bind(this.deps.eventsManager),
+      dashboardEmit: this.callbacks.emitDashboardEvent,
     };
   }
 
@@ -159,6 +161,7 @@ export class ContextFactory {
       jobIndex: this.deps.jobIndex,
       totalPulled: this.deps.metrics.totalPulled,
       broadcast: this.deps.eventsManager.broadcast.bind(this.deps.eventsManager),
+      dashboardEmit: this.callbacks.emitDashboardEvent,
     };
   }
 

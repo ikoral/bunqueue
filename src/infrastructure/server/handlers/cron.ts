@@ -15,6 +15,7 @@ export function handleCron(
   reqId?: string
 ): Response {
   try {
+    const existing = ctx.queueManager.getCron(cmd.name);
     const cron = ctx.queueManager.addCron({
       name: cmd.name,
       queue: cmd.queue,
@@ -25,7 +26,7 @@ export function handleCron(
       maxLimit: cmd.maxLimit,
       timezone: cmd.timezone,
     });
-    ctx.queueManager.emitDashboardEvent('cron:created', {
+    ctx.queueManager.emitDashboardEvent(existing ? 'cron:updated' : 'cron:created', {
       name: cron.name,
       queue: cron.queue,
       pattern: cron.schedule ?? undefined,

@@ -59,6 +59,7 @@ export function handleHeartbeat(
 ): Response {
   const success = ctx.queueManager.workerManager.heartbeat(cmd.id);
   if (success) {
+    ctx.queueManager.emitDashboardEvent('worker:heartbeat', { workerId: cmd.id });
     return resp.data({ ok: true }, reqId);
   }
   return resp.error('Worker not found', reqId);

@@ -128,6 +128,12 @@ function processExpiredLockInner(
 
   // Remove the expired lock
   ctx.jobLocks.delete(jobId);
+
+  ctx.dashboardEmit?.('job:lock-expired', {
+    jobId: String(jobId),
+    queue: job.queue,
+    renewalCount: lock.renewalCount,
+  });
 }
 
 /** Options for handling max stalls exceeded */

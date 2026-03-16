@@ -32,9 +32,15 @@ export class WebhookManager {
   private readonly webhooks = new Map<WebhookId, Webhook>();
   private readonly maxRetries = WEBHOOK_MAX_RETRIES;
   private readonly retryDelay = WEBHOOK_RETRY_DELAY_MS;
+  private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
 
   /** Running counter for enabled webhooks - avoids O(n) filter in getStats */
   private enabledCount = 0;
+
+  /** Set the dashboard event emitter callback */
+  setDashboardEmit(callback: (event: string, data: Record<string, unknown>) => void): void {
+    this.dashboardEmit = callback;
+  }
 
   /** Add a webhook */
   add(url: string, events: string[], queue?: string, secret?: string): Webhook {
@@ -68,6 +74,7 @@ export class WebhookManager {
     if (webhook.enabled !== enabled) {
       webhook.enabled = enabled;
       this.enabledCount += enabled ? 1 : -1;
+      this.dashboardEmit?.(enabled ? 'webhook:enabled' : 'webhook:disabled', { webhookId: id });
     }
     return true;
   }
@@ -131,6 +138,11 @@ export class WebhookManager {
         if (response.ok) {
           webhook.lastTriggered = Date.now();
           webhook.successCount++;
+          this.dashboardEmit?.('webhook:fired', {
+            webhookId: webhook.id,
+            url: webhook.url,
+            event: payload.event,
+          });
           return;
         }
 
@@ -146,6 +158,12 @@ export class WebhookManager {
     }
 
     webhook.failureCount++;
+    this.dashboardEmit?.('webhook:failed', {
+      webhookId: webhook.id,
+      url: webhook.url,
+      event: payload.event,
+      error: lastError?.message ?? 'Webhook delivery failed after max retries',
+    });
     throw lastError ?? new Error('Webhook delivery failed after max retries');
   }
 

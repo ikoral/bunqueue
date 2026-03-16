@@ -88,6 +88,7 @@ export class QueueManager {
 
   // Dashboard event callback (set by HTTP server for WS broadcast)
   private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
+  private recoveryStats: { queues: number; jobs: number } | null = null;
 
   // Job logs config
   private readonly maxLogsPerJob = 100;
@@ -162,6 +163,7 @@ export class QueueManager {
 
     // Load and start
     bgTasks.recover(this.contextFactory.getBackgroundContext());
+    this.recoveryStats = { queues: this.queueNamesCache.size, jobs: this.jobIndex.size };
     if (this.storage) {
       this.cronScheduler.load(this.storage.loadCronJobs());
     }
@@ -659,6 +661,7 @@ export class QueueManager {
     queueControl.obliterateQueue(queue, this.contextFactory.getQueueControlContext());
     this.unregisterQueueName(queue);
     this.dashboardEmit?.('queue:obliterated', { queue });
+    this.dashboardEmit?.('queue:removed', { queue });
   }
 
   listQueues(): string[] {
@@ -666,7 +669,9 @@ export class QueueManager {
   }
 
   private registerQueueName(queue: string): void {
+    const isNew = !this.queueNamesCache.has(queue);
     this.queueNamesCache.add(queue);
+    if (isNew) this.dashboardEmit?.('queue:created', { queue });
   }
 
   private unregisterQueueName(queue: string): void {
@@ -884,6 +889,13 @@ export class QueueManager {
   /** Register dashboard event emitter (for WS pub/sub) */
   setDashboardEmit(fn: (event: string, data: Record<string, unknown>) => void): void {
     this.dashboardEmit = fn;
+    this.cronScheduler.setDashboardEmit(fn);
+    this.webhookManager.setDashboardEmit(fn);
+    this.workerManager.setDashboardEmit(fn);
+    if (this.recoveryStats) {
+      fn('server:recovered', this.recoveryStats);
+      this.recoveryStats = null;
+    }
   }
 
   /** Emit a dashboard event (callable from handlers) */
@@ -1008,6 +1020,7 @@ export class QueueManager {
 
   compactMemory(): void {
     statsMgr.compactMemory(this.contextFactory.getStatsContext());
+    this.dashboardEmit?.('memory:compacted', {});
   }
 
   // ============ Lifecycle ============

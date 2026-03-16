@@ -28,6 +28,7 @@ export interface PullContext {
     jobId: JobId;
     timestamp: number;
   }) => void;
+  dashboardEmit?: (event: string, data: Record<string, unknown>) => void;
 }
 
 /** Result of trying to dequeue a job */
@@ -194,10 +195,12 @@ async function tryPullFromShard(queue: string, idx: number, ctx: PullContext): P
     }
 
     if (!shard.tryAcquireRateLimit(queue)) {
+      ctx.dashboardEmit?.('ratelimit:rejected', { queue });
       return null;
     }
 
     if (!shard.tryAcquireConcurrency(queue)) {
+      ctx.dashboardEmit?.('concurrency:rejected', { queue });
       return null;
     }
 
@@ -234,6 +237,9 @@ export async function pullJobBatch(
 
     if (jobs.length > 0) {
       await moveToProcessingBatch(jobs, queue, ctx);
+      if (jobs.length > 1) {
+        ctx.dashboardEmit?.('batch:pulled', { queue, count: jobs.length });
+      }
       latencyTracker.pull.observe((Bun.nanoseconds() - startNs) / 1e6);
       return jobs;
     }

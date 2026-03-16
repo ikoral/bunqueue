@@ -132,6 +132,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
       req.headers.get('x-real-ip') ??
       'unknown';
     if (!getRateLimiter().isAllowed(clientIp)) {
+      queueManager.emitDashboardEvent('ratelimit:hit', { clientId: clientIp });
       return jsonResponse({ ok: false, error: 'Rate limit exceeded' }, 429);
     }
 
@@ -174,7 +175,10 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     // Check authentication for other endpoints
     {
       const denied = checkAuth(req, authTokens);
-      if (denied) return denied;
+      if (denied) {
+        queueManager.emitDashboardEvent('auth:failed', { transport: 'http' });
+        return denied;
+      }
     }
 
     // HTTP is stateless — no clientId. Job ownership tracking is only for persistent

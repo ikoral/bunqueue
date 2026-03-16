@@ -58,6 +58,12 @@ export async function handleMoveToDelayed(
   reqId?: string
 ): Promise<Response> {
   const success = await ctx.queueManager.moveToDelayed(jobId(cmd.id), cmd.delay);
+  if (success) {
+    ctx.queueManager.emitDashboardEvent('job:moved-to-delayed', {
+      jobId: cmd.id,
+      delay: cmd.delay,
+    });
+  }
   return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not active', reqId);
 }
 

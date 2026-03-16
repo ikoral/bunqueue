@@ -107,6 +107,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
       };
 
       connections.set(clientId, socket);
+      queueManager.emitDashboardEvent('client:connected', { clientId, transport: 'tcp' });
     },
 
     async data(socket: Socket<ConnectionData>, data: Buffer) {
@@ -115,6 +116,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
 
       // Check rate limit
       if (!rateLimiter.isAllowed(state.clientId)) {
+        ctx.queueManager.emitDashboardEvent('ratelimit:hit', { clientId: state.clientId });
         socket.write(errorResponse('Rate limit exceeded'));
         return;
       }
@@ -173,6 +175,7 @@ export function createTcpServer(queueManager: QueueManager, config: TcpServerCon
       const clientId = socket.data.state.clientId;
       connections.delete(clientId);
       getRateLimiter().removeClient(clientId);
+      queueManager.emitDashboardEvent('client:disconnected', { clientId, transport: 'tcp' });
 
       // Release all jobs owned by this client back to queue with retry logic
       releaseClientJobsWithRetry(queueManager, clientId)

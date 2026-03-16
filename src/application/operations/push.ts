@@ -36,6 +36,7 @@ export interface PushContext {
     jobId: JobId;
     timestamp: number;
   }) => void;
+  dashboardEmit?: (event: string, data: Record<string, unknown>) => void;
 }
 
 /** Result of checking custom ID */
@@ -121,6 +122,11 @@ function handleDeduplication(
     if (input.customId) ctx.customIdMap.delete(input.customId);
     const existingJob = q.find(existingEntry.jobId);
     if (existingJob) {
+      ctx.dashboardEmit?.('job:deduplicated', {
+        queue,
+        jobId: String(existingEntry.jobId),
+        strategy: 'extend',
+      });
       return { skip: true, existingId: existingEntry.jobId };
     }
     throw new Error('Duplicate unique_key (extended TTL)');
@@ -135,6 +141,11 @@ function handleDeduplication(
       queue,
       jobId: existingEntry.jobId,
       timestamp: Date.now(),
+    });
+    ctx.dashboardEmit?.('job:deduplicated', {
+      queue,
+      jobId: String(existingEntry.jobId),
+      strategy: 'default',
     });
     return { skip: true, existingId: existingEntry.jobId };
   }
@@ -160,6 +171,11 @@ function insertJobToShard(
   if (needsWaiting) {
     shard.waitingDeps.set(job.id, job);
     shard.registerDependencies(job.id, job.dependsOn);
+    ctx.dashboardEmit?.('job:waiting-children', {
+      jobId: String(job.id),
+      queue,
+      dependsOn: job.dependsOn.map(String),
+    });
   } else {
     shard.getQueue(queue).push(job);
     const isDelayed = job.runAt > Date.now();
@@ -287,6 +303,15 @@ export async function pushJobBatch(
         timestamp: now,
       });
     }
+  }
+
+  if (jobsToInsert.length > 0 && inputs.length > 1) {
+    ctx.dashboardEmit?.('batch:pushed', {
+      queue,
+      total: inputs.length,
+      inserted: jobsToInsert.length,
+      duplicates: inputs.length - jobsToInsert.length,
+    });
   }
 
   latencyTracker.push.observe((Bun.nanoseconds() - startNs) / 1e6);

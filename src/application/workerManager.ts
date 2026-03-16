@@ -17,6 +17,7 @@ const WORKER_CLEANUP_INTERVAL_MS = parseInt(Bun.env.WORKER_CLEANUP_INTERVAL_MS ?
 export class WorkerManager {
   private readonly workers = new Map<WorkerId, Worker>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+  private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
 
   /** Running counters for O(1) stats - avoids O(n) reduce operations */
   private totalProcessedCounter = 0;
@@ -25,6 +26,11 @@ export class WorkerManager {
 
   constructor() {
     this.startCleanup();
+  }
+
+  /** Set the dashboard event emitter callback */
+  setDashboardEmit(callback: (event: string, data: Record<string, unknown>) => void): void {
+    this.dashboardEmit = callback;
   }
 
   /** Register a new worker */
@@ -83,6 +89,7 @@ export class WorkerManager {
       worker.lastSeen = Date.now();
       if (worker.activeJobs === 0) {
         worker.currentJob = null;
+        this.dashboardEmit?.('worker:idle', { workerId: id, processedJobs: worker.processedJobs });
       }
     }
   }
@@ -100,6 +107,7 @@ export class WorkerManager {
       worker.lastSeen = Date.now();
       if (worker.activeJobs === 0) {
         worker.currentJob = null;
+        this.dashboardEmit?.('worker:idle', { workerId: id, processedJobs: worker.processedJobs });
       }
     }
   }
@@ -137,6 +145,7 @@ export class WorkerManager {
         // Adjust running counters before removal
         this.totalActiveJobsCounter -= worker.activeJobs;
         this.workers.delete(id);
+        this.dashboardEmit?.('worker:removed-stale', { workerId: id, name: worker.name });
       }
     }
   }

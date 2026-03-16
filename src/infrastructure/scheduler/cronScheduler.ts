@@ -59,6 +59,7 @@ export class CronScheduler {
   private started = false;
   private pushJob: PushJobCallback | null = null;
   private persistCron: PersistCronCallback | null = null;
+  private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
 
   // Accept config for backward compatibility (no longer used internally)
   constructor(_config?: CronSchedulerConfig) {
@@ -78,6 +79,13 @@ export class CronScheduler {
    */
   setPersistCallback(callback: PersistCronCallback): void {
     this.persistCron = callback;
+  }
+
+  /**
+   * Set the dashboard event emitter callback
+   */
+  setDashboardEmit(callback: (event: string, data: Record<string, unknown>) => void): void {
+    this.dashboardEmit = callback;
   }
 
   /**
@@ -298,6 +306,11 @@ export class CronScheduler {
               name: cron.name,
               error: String(persistErr),
             });
+            this.dashboardEmit?.('cron:missed', {
+              name: cron.name,
+              queue: cron.queue,
+              error: String(persistErr),
+            });
             toReinsert.push(entry);
             continue;
           }
@@ -313,6 +326,8 @@ export class CronScheduler {
           priority: cron.priority,
         });
 
+        this.dashboardEmit?.('cron:fired', { name: cron.name, queue: cron.queue });
+
         // Re-insert with same generation (not stale)
         toReinsert.push(entry);
       } catch (err) {
@@ -320,6 +335,11 @@ export class CronScheduler {
         // Job is lost but cron state is consistent - no duplicates on retry
         cronLog.error('Failed to push cron job (state already persisted)', {
           name: cron.name,
+          error: String(err),
+        });
+        this.dashboardEmit?.('cron:missed', {
+          name: cron.name,
+          queue: cron.queue,
           error: String(err),
         });
         // Re-insert to continue scheduling (next execution will work)

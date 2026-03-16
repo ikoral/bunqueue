@@ -161,8 +161,15 @@ function startServer(): void {
   if (config.dataPath) {
     const backupConfig = S3BackupManager.fromEnv(config.dataPath);
     backupManager = new S3BackupManager(backupConfig);
+    backupManager.setDashboardEmit(queueManager.emitDashboardEvent.bind(queueManager));
     backupManager.start();
   }
+
+  queueManager.emitDashboardEvent('server:started', {
+    tcpPort: config.tcpPort,
+    httpPort: config.httpPort,
+    shards: SHARD_COUNT,
+  });
 
   // Graceful shutdown
   let shuttingDown = false;
@@ -191,6 +198,7 @@ function startServer(): void {
       backupManager.stop();
     }
 
+    queueManager.emitDashboardEvent('server:shutdown', { signal });
     queueManager.shutdown();
     stopRateLimiter();
     serverLog.info('Shutdown complete');

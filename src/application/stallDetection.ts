@@ -109,6 +109,12 @@ async function handleStalledJob(
 
   // Broadcast events AFTER confirming job is actually stalled and handled
   if (handled) {
+    ctx.dashboardEmit?.('job:stalled', {
+      jobId: String(job.id),
+      queue: job.queue,
+      stallCount: job.stallCount + 1,
+      action,
+    });
     ctx.eventsManager.broadcast({
       eventType: EventType.Stalled,
       queue: job.queue,

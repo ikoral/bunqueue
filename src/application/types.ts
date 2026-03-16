@@ -98,6 +98,7 @@ export interface LockContext {
   shards: Shard[];
   shardLocks: RWLock[];
   eventsManager: EventsManager;
+  dashboardEmit?: (event: string, data: Record<string, unknown>) => void;
 }
 
 /** Context for background tasks */
@@ -106,6 +107,7 @@ export interface BackgroundContext extends QueueManagerState {
   fail: (jobId: JobId, error?: string) => Promise<void>;
   registerQueueName: (queue: string) => void;
   unregisterQueueName: (queue: string) => void;
+  dashboardEmit?: (event: string, data: Record<string, unknown>) => void;
 }
 
 /** Context for stats operations */

@@ -84,5 +84,8 @@ function promoteJobsToQueue(
 
   if (jobsToPromote.length > 0) {
     shard.notify();
+    for (const job of jobsToPromote) {
+      ctx.dashboardEmit?.('job:dependencies-resolved', { jobId: String(job.id), queue: job.queue });
+    }
   }
 }

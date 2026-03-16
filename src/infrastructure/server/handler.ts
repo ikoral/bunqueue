@@ -38,6 +38,7 @@ function handleAuth(
       return resp.ok(undefined, reqId);
     }
   }
+  ctx.queueManager.emitDashboardEvent('auth:failed', { clientId: ctx.clientId });
   return resp.error('Invalid token', reqId);
 }
 

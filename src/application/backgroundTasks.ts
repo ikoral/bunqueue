@@ -119,6 +119,7 @@ function getLockContext(ctx: BackgroundContext): LockContext {
     shards: ctx.shards,
     shardLocks: ctx.shardLocks,
     eventsManager: ctx.eventsManager,
+    dashboardEmit: ctx.dashboardEmit,
   };
 }
 
@@ -129,6 +130,11 @@ function checkJobTimeouts(ctx: BackgroundContext): void {
   for (const procShard of ctx.processingShards) {
     for (const [jobId, job] of procShard) {
       if (job.timeout && job.startedAt && now - job.startedAt > job.timeout) {
+        ctx.dashboardEmit?.('job:timeout', {
+          jobId: String(jobId),
+          queue: job.queue,
+          timeout: job.timeout,
+        });
         ctx.fail(jobId, 'Job timeout exceeded').catch((err: unknown) => {
           queueLog.error('Failed to mark timed out job as failed', {
             jobId: String(jobId),
@@ -151,8 +157,12 @@ function performDlqMaintenance(ctx: BackgroundContext): void {
 
   for (const queueName of ctx.queueNamesCache) {
     try {
-      dlqOps.processAutoRetry(queueName, dlqCtx);
-      dlqOps.purgeExpiredDlq(queueName, dlqCtx);
+      const retried = dlqOps.processAutoRetry(queueName, dlqCtx);
+      if (retried > 0) {
+        ctx.dashboardEmit?.('dlq:auto-retried', { queue: queueName, count: retried });
+      }
+      const expired = dlqOps.purgeExpiredDlq(queueName, dlqCtx);
+      if (expired > 0) ctx.dashboardEmit?.('dlq:expired', { queue: queueName, count: expired });
     } catch (err) {
       queueLog.error('DLQ maintenance failed', { queue: queueName, error: String(err) });
     }

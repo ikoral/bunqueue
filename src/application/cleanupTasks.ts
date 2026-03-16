@@ -57,13 +57,16 @@ async function cleanOrphanedProcessingEntries(
 
     // Phase 2: Delete with lock to prevent race conditions
     await withWriteLock(ctx.processingLocks[i], () => {
+      let removed = 0;
       for (const jobId of orphaned) {
         const job = ctx.processingShards[i].get(jobId);
         if (job) {
           ctx.processingShards[i].delete(jobId);
           ctx.jobIndex.delete(jobId);
+          removed++;
         }
       }
+      if (removed > 0) ctx.dashboardEmit?.('cleanup:orphans-removed', { count: removed });
     });
   }
 }
@@ -83,6 +86,9 @@ function cleanStaleWaitingDependencies(ctx: BackgroundContext, now: number): voi
       shard.waitingDeps.delete(job.id);
       shard.unregisterDependencies(job.id, job.dependsOn);
       ctx.jobIndex.delete(job.id);
+    }
+    if (stale.length > 0) {
+      ctx.dashboardEmit?.('cleanup:stale-deps-removed', { count: stale.length });
     }
   }
 }
@@ -216,6 +222,7 @@ function cleanEmptyQueues(ctx: BackgroundContext): void {
       shard.clearQueueLimiters(queueName);
       shard.stallConfig.delete(queueName);
       shard.dlqConfig.delete(queueName);
+      ctx.dashboardEmit?.('queue:removed', { queue: queueName });
       ctx.unregisterQueueName(queueName);
     }
 

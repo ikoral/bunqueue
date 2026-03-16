@@ -37,10 +37,10 @@ const EVENT_MAP: Record<string, string> = {
   drained: 'queue:drained',
 };
 
-/** All valid subscription patterns (50 events + wildcards) */
+/** All valid subscription patterns (events + wildcards) */
 const VALID_PATTERNS = new Set([
   '*',
-  // Job lifecycle (14)
+  // Job lifecycle (21)
   'job:pushed',
   'job:active',
   'job:completed',
@@ -55,6 +55,12 @@ const VALID_PATTERNS = new Set([
   'job:priority-changed',
   'job:data-updated',
   'job:delay-changed',
+  'job:timeout',
+  'job:lock-expired',
+  'job:deduplicated',
+  'job:waiting-children',
+  'job:dependencies-resolved',
+  'job:moved-to-delayed',
   'job:*',
   // Queue (7)
   'queue:created',
@@ -66,11 +72,13 @@ const VALID_PATTERNS = new Set([
   'queue:obliterated',
   'queue:counts',
   'queue:*',
-  // DLQ (4)
+  // DLQ (6)
   'dlq:added',
   'dlq:retried',
   'dlq:retry-all',
   'dlq:purged',
+  'dlq:auto-retried',
+  'dlq:expired',
   'dlq:*',
   // Cron (5)
   'cron:created',
@@ -79,35 +87,63 @@ const VALID_PATTERNS = new Set([
   'cron:fired',
   'cron:missed',
   'cron:*',
-  // Worker (3)
+  // Worker (5)
   'worker:connected',
   'worker:disconnected',
   'worker:heartbeat',
+  'worker:idle',
+  'worker:removed-stale',
   'worker:*',
-  // Rate limit & concurrency (5)
+  // Rate limit & concurrency (7)
   'ratelimit:set',
   'ratelimit:cleared',
   'ratelimit:hit',
+  'ratelimit:rejected',
   'concurrency:set',
   'concurrency:cleared',
+  'concurrency:rejected',
   'ratelimit:*',
   'concurrency:*',
-  // Webhook (4)
+  // Webhook (6)
   'webhook:added',
   'webhook:removed',
   'webhook:fired',
   'webhook:failed',
+  'webhook:enabled',
+  'webhook:disabled',
   'webhook:*',
-  // System (6)
+  // Batch (2)
+  'batch:pushed',
+  'batch:pulled',
+  'batch:*',
+  // Client (2)
+  'client:connected',
+  'client:disconnected',
+  'client:*',
+  // Auth (1)
+  'auth:failed',
+  'auth:*',
+  // Cleanup (2)
+  'cleanup:orphans-removed',
+  'cleanup:stale-deps-removed',
+  'cleanup:*',
+  // System (8)
   'health:status',
   'health:*',
   'stats:snapshot',
   'stats:*',
   'storage:status',
+  'storage:backup-started',
+  'storage:backup-completed',
+  'storage:backup-failed',
   'storage:*',
   'server:started',
   'server:shutdown',
+  'server:recovered',
   'server:*',
+  // Memory (1)
+  'memory:compacted',
+  'memory:*',
   // Config (2)
   'config:stall-changed',
   'config:dlq-changed',

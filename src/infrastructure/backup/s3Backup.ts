@@ -31,6 +31,12 @@ export class S3BackupManager {
   private backupInterval: ReturnType<typeof setInterval> | null = null;
   private initialBackupTimeout: ReturnType<typeof setTimeout> | null = null;
   private isBackupInProgress = false;
+  private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
+
+  /** Set the dashboard event emitter callback */
+  setDashboardEmit(callback: (event: string, data: Record<string, unknown>) => void): void {
+    this.dashboardEmit = callback;
+  }
 
   constructor(
     config: Partial<S3BackupConfig> & {
@@ -130,6 +136,7 @@ export class S3BackupManager {
     }
 
     this.isBackupInProgress = true;
+    this.dashboardEmit?.('storage:backup-started', { bucket: this.config.bucket });
 
     try {
       if (this.flushBeforeBackup) {
@@ -140,9 +147,24 @@ export class S3BackupManager {
 
       if (result.success) {
         await cleanupOldBackups(this.config, this.client);
+        this.dashboardEmit?.('storage:backup-completed', {
+          bucket: this.config.bucket,
+          key: result.key,
+        });
+      } else {
+        this.dashboardEmit?.('storage:backup-failed', {
+          bucket: this.config.bucket,
+          error: result.error,
+        });
       }
 
       return result;
+    } catch (err) {
+      this.dashboardEmit?.('storage:backup-failed', {
+        bucket: this.config.bucket,
+        error: String(err),
+      });
+      throw err;
     } finally {
       this.isBackupInProgress = false;
     }
