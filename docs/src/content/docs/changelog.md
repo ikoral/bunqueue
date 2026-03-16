@@ -10,6 +10,15 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.34] - 2026-03-16
+
+### Fixed
+- **QueueEvents failed events** — `failedReason` now correctly reads from `event.error` instead of `event.data`, job `data` is included in failed broadcasts, and error emission includes event context. ([#54](https://github.com/egeominotti/bunqueue/pull/54)) — thanks @simontong
+
+### Changed
+- **CI** — Disabled TCP and Embedded integration tests in GitHub Actions pipeline
+- Removed flaky SandboxedWorker tests
+
 ## [2.6.33] - 2026-03-16
 
 ### Fixed
