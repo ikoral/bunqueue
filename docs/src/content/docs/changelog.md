@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.35] - 2026-03-16
+
+### Changed
+- Removed flaky SandboxedWorker flow failure test
+
 ## [2.6.34] - 2026-03-16
 
 ### Fixed
