@@ -25,6 +25,7 @@ export { SandboxedWorker } from './sandboxedWorker';
 export { QueueEvents } from './events';
 export { QueueGroup } from './queueGroup';
 export { FlowProducer } from './flow';
+export { UnrecoverableError, DelayedError } from './errors';
 export { shutdownManager } from './manager';
 export { closeSharedTcpClient } from './tcpClient';
 export type { ConnectionHealth } from './tcpClient';

@@ -190,6 +190,8 @@ export class EventsManager {
       case EventType.Retried:
       case EventType.WaitingChildren:
       case EventType.Drained:
+      case EventType.Paused:
+      case EventType.Resumed:
         // These events don't have webhook mappings yet
         return null;
     }

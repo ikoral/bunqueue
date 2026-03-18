@@ -122,6 +122,8 @@ export const enum EventType {
   Retried = 'retried',
   WaitingChildren = 'waiting-children',
   Drained = 'drained',
+  Paused = 'paused',
+  Resumed = 'resumed',
 }
 
 /** Job event for subscribers */

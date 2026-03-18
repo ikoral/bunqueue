@@ -10,6 +10,16 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.39] - 2026-03-18
+
+### Fixed
+- **`EventType.Paused` / `EventType.Resumed` missing from enum** — Added `Paused` and `Resumed` variants to `EventType` const enum, fixing TypeScript compilation errors in `queueManager.ts` and `client/events.ts`.
+- **`UnrecoverableError` / `DelayedError` not exported** — Added `src/client/errors.ts` with BullMQ-compatible error classes (`UnrecoverableError` to skip retries, `DelayedError` to re-delay jobs) and exported them from `bunqueue/client`.
+- **Webhook mapping for pause/resume events** — `eventsManager.ts` now handles `Paused` and `Resumed` event types in the webhook switch.
+
+### Added
+- **Issue #53 test** — Regression test for worker `log` event firing.
+
 ## [2.6.38] - 2026-03-18
 
 ### Added
