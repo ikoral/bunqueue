@@ -104,7 +104,7 @@ export interface GetResultCommand extends BaseCommand {
 export interface GetJobsCommand extends BaseCommand {
   readonly cmd: 'GetJobs';
   readonly queue: string;
-  readonly state?: JobState;
+  readonly state?: JobState | JobState[];
   readonly limit?: number;
   readonly offset?: number;
 }

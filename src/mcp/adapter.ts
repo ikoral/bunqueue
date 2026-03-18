@@ -16,6 +16,7 @@ export interface JobCounts {
   active: number;
   completed: number;
   failed: number;
+  paused: number;
 }
 
 /** Serialized job for MCP responses */
@@ -398,7 +399,16 @@ export class EmbeddedBackend implements McpBackend {
   }
 
   getJobCounts(queue: string): Promise<JobCounts> {
-    return Promise.resolve(this.manager.getQueueJobCounts(queue));
+    const counts = this.manager.getQueueJobCounts(queue);
+    const isPaused = this.manager.isPaused(queue);
+    return Promise.resolve({
+      waiting: counts.waiting,
+      delayed: counts.delayed,
+      active: counts.active,
+      completed: counts.completed,
+      failed: counts.failed,
+      paused: isPaused ? counts.waiting : 0,
+    });
   }
 
   pauseQueue(queue: string) {
@@ -861,6 +871,7 @@ export class TcpBackend implements McpBackend {
       active: (res.active as number) ?? 0,
       completed: (res.completed as number) ?? 0,
       failed: (res.failed as number) ?? 0,
+      paused: (res.paused as number) ?? 0,
     };
   }
 

@@ -146,7 +146,7 @@ export async function getChildrenValues(
 }
 
 interface GetJobsOptions {
-  state?: 'waiting' | 'delayed' | 'active' | 'completed' | 'failed';
+  state?: string | string[];
   start?: number;
   end?: number;
   asc?: boolean;

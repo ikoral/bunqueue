@@ -80,7 +80,6 @@ async function main() {
     const lines = result.output.split('\n');
     const summaryStart = lines.findIndex(l => l.includes('=== Summary ==='));
     if (summaryStart > 0) {
-      // Print just the summary
       console.log(lines.slice(summaryStart).join('\n'));
     }
 

@@ -165,12 +165,55 @@ function collectCompletedJobs(queue: string, ctx: GetJobsContext): Job[] {
   return jobs;
 }
 
+/** Collect jobs from in-memory structures by state filter */
+function collectJobsByState(
+  queue: string,
+  shardIdx: number,
+  states: string[] | null,
+  ctx: GetJobsContext
+): Job[] {
+  const shard = ctx.shards[shardIdx];
+  const now = Date.now();
+  const jobs: Job[] = [];
+
+  if (!states || states.includes('waiting')) {
+    jobs.push(
+      ...shard
+        .getQueue(queue)
+        .values()
+        .filter((j) => j.runAt <= now)
+    );
+  }
+  if (!states || states.includes('delayed')) {
+    jobs.push(
+      ...shard
+        .getQueue(queue)
+        .values()
+        .filter((j) => j.runAt > now)
+    );
+  }
+  if (!states || states.includes('active')) {
+    for (let i = 0; i < ctx.shardCount; i++) {
+      for (const job of ctx.processingShards[i].values()) {
+        if (job.queue === queue) jobs.push(job);
+      }
+    }
+  }
+  if (!states || states.includes('failed')) {
+    jobs.push(...shard.getDlq(queue));
+  }
+  if (!states || states.includes('completed')) {
+    jobs.push(...collectCompletedJobs(queue, ctx));
+  }
+  return jobs;
+}
+
 /** Get jobs from queue with filters */
 export function getJobs(
   queue: string,
   shardIdx: number,
   options: {
-    state?: 'waiting' | 'delayed' | 'active' | 'completed' | 'failed';
+    state?: string | string[];
     start?: number;
     end?: number;
     asc?: boolean;
@@ -179,11 +222,19 @@ export function getJobs(
 ): Job[] {
   const { state, start = 0, end = 100, asc = true } = options;
 
+  // Normalize state to an array or null (no filter)
+  const states = !state
+    ? null
+    : Array.isArray(state)
+      ? state.length === 0
+        ? null
+        : state
+      : [state];
+
   // Fast path: use SQLite pagination (idx_jobs_queue_state index)
   // Avoids O(N) jobIndex scan + O(N) individual lookups
   if (ctx.storage) {
-    // Completed: direct SQLite query with LIMIT/OFFSET
-    if (state === 'completed') {
+    if (states?.length === 1 && states[0] === 'completed') {
       return ctx.storage.queryJobs(queue, {
         state: 'completed',
         limit: end - start,
@@ -191,57 +242,13 @@ export function getJobs(
         asc,
       });
     }
-
-    // No state filter: SQLite has all jobs (DLQ jobs still appear with
-    // their pre-DLQ state; handler resolves real state via getJobState)
-    if (!state) {
-      return ctx.storage.queryJobs(queue, {
-        limit: end - start,
-        offset: start,
-        asc,
-      });
+    if (!states) {
+      return ctx.storage.queryJobs(queue, { limit: end - start, offset: start, asc });
     }
-
-    // failed: not tracked in jobs table state — fall through to in-memory DLQ
-    // waiting/delayed: SQLite state can be stale — fall through to in-memory PQ
-    // active: fall through to in-memory processingShards
   }
 
   // In-memory path (embedded mode or waiting/delayed/active/failed filters)
-  const shard = ctx.shards[shardIdx];
-  const now = Date.now();
-  const jobs: Job[] = [];
-
-  if (!state || state === 'waiting') {
-    jobs.push(
-      ...shard
-        .getQueue(queue)
-        .values()
-        .filter((j) => j.runAt <= now)
-    );
-  }
-  if (!state || state === 'delayed') {
-    jobs.push(
-      ...shard
-        .getQueue(queue)
-        .values()
-        .filter((j) => j.runAt > now)
-    );
-  }
-  if (!state || state === 'active') {
-    for (let i = 0; i < ctx.shardCount; i++) {
-      for (const job of ctx.processingShards[i].values()) {
-        if (job.queue === queue) jobs.push(job);
-      }
-    }
-  }
-  if (!state || state === 'failed') {
-    jobs.push(...shard.getDlq(queue));
-  }
-  if (!state || state === 'completed') {
-    jobs.push(...collectCompletedJobs(queue, ctx));
-  }
-
+  const jobs = collectJobsByState(queue, shardIdx, states, ctx);
   jobs.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
   return jobs.slice(start, end);
 }

@@ -125,7 +125,13 @@ async function routeJobOps(
   if (listMatch && method === 'GET') {
     const queue = decodeURIComponent(listMatch[1]);
     const url = new URL(req.url);
-    const state = url.searchParams.get('state') ?? undefined;
+    const stateValues = url.searchParams.getAll('state');
+    const state =
+      stateValues.length === 0
+        ? undefined
+        : stateValues.length === 1
+          ? stateValues[0]
+          : stateValues;
     const limitParam = url.searchParams.get('limit');
     const offsetParam = url.searchParams.get('offset');
     const limit = limitParam ? parseInt(limitParam) : undefined;
@@ -158,6 +164,12 @@ export async function routeQueueRoutes(
   if (path === '/queues' && method === 'GET') {
     const r = await handleCommand({ cmd: 'ListQueues' }, ctx);
     return jsonResponse(r, 200, cors);
+  }
+
+  // GET /queues/summary - all queues with paused + counts in one call
+  if (path === '/queues/summary' && method === 'GET') {
+    const summary = ctx.queueManager.getQueuesSummary();
+    return jsonResponse(summary, 200, cors);
   }
 
   // Delegate push/pull/bulk/list operations

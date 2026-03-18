@@ -702,7 +702,7 @@ export class QueueManager {
   getJobs(
     queue: string,
     options: {
-      state?: 'waiting' | 'delayed' | 'active' | 'completed' | 'failed';
+      state?: string | string[];
       start?: number;
       end?: number;
       asc?: boolean;
@@ -1025,6 +1025,42 @@ export class QueueManager {
 
   getStats() {
     return statsMgr.getStats(this.contextFactory.getStatsContext(), this.cronScheduler);
+  }
+
+  /** Get summary of all queues: name, paused, counts */
+  getQueuesSummary(): Array<{
+    name: string;
+    paused: boolean;
+    counts: { waiting: number; active: number; completed: number; failed: number; delayed: number };
+  }> {
+    const ctx = this.contextFactory.getStatsContext();
+    const queues = this.listQueues();
+    const result: Array<{
+      name: string;
+      paused: boolean;
+      counts: {
+        waiting: number;
+        active: number;
+        completed: number;
+        failed: number;
+        delayed: number;
+      };
+    }> = [];
+    for (const name of queues) {
+      const c = statsMgr.getQueueJobCounts(name, ctx);
+      result.push({
+        name,
+        paused: this.isPaused(name),
+        counts: {
+          waiting: c.waiting,
+          active: c.active,
+          completed: c.completed,
+          failed: c.failed,
+          delayed: c.delayed,
+        },
+      });
+    }
+    return result;
   }
 
   /** Get job counts for a specific queue */

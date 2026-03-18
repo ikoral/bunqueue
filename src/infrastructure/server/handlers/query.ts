@@ -50,7 +50,18 @@ export function handleGetJobCounts(
 ): Response {
   // Get queue-specific counts
   const counts = ctx.queueManager.getQueueJobCounts(cmd.queue);
-  return resp.counts(counts, reqId);
+  const isPaused = ctx.queueManager.isPaused(cmd.queue);
+  return resp.counts(
+    {
+      waiting: counts.waiting,
+      delayed: counts.delayed,
+      active: counts.active,
+      completed: counts.completed,
+      failed: counts.failed,
+      paused: isPaused ? counts.waiting : 0,
+    },
+    reqId
+  );
 }
 
 /** Handle GetCountsPerPriority command */
@@ -79,13 +90,7 @@ export async function handleGetJobs(
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const stateFilter = cmd.state as
-    | 'waiting'
-    | 'delayed'
-    | 'active'
-    | 'completed'
-    | 'failed'
-    | undefined;
+  const stateFilter = cmd.state;
   const jobs = ctx.queueManager.getJobs(cmd.queue, {
     state: stateFilter,
     start: cmd.offset ?? 0,
@@ -94,9 +99,11 @@ export async function handleGetJobs(
   });
 
   // Inject state into each job for display
+  // When state is a single string, use it directly; otherwise resolve per-job
+  const singleState = typeof stateFilter === 'string' ? stateFilter : undefined;
   const jobsWithState = await Promise.all(
     jobs.map(async (job) => {
-      const state = stateFilter ?? (await ctx.queueManager.getJobState(job.id));
+      const state = singleState ?? (await ctx.queueManager.getJobState(job.id));
       return { ...job, state };
     })
   );

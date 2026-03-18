@@ -18,20 +18,27 @@ export interface JobCounts {
   active: number;
   completed: number;
   failed: number;
+  delayed: number;
+  paused: number;
 }
 
 /** Get job counts (sync, embedded only) */
 export function getJobCounts(ctx: CountsContext): JobCounts {
-  if (!ctx.embedded) return { waiting: 0, active: 0, completed: 0, failed: 0 };
+  if (!ctx.embedded) {
+    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
+  }
 
   const manager = getSharedManager();
   // Use queue-specific counts
   const counts = manager.getQueueJobCounts(ctx.name);
+  const isPaused = manager.isPaused(ctx.name);
   return {
     waiting: counts.waiting,
     active: counts.active,
     completed: counts.completed,
     failed: counts.failed,
+    delayed: counts.delayed,
+    paused: isPaused ? counts.waiting : 0,
   };
 }
 
@@ -41,7 +48,9 @@ export async function getJobCountsAsync(ctx: CountsContext): Promise<JobCounts> 
 
   // Use GetJobCounts for queue-specific counts
   const response = await ctx.tcp!.send({ cmd: 'GetJobCounts', queue: ctx.name });
-  if (!response.ok) return { waiting: 0, active: 0, completed: 0, failed: 0 };
+  if (!response.ok) {
+    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 };
+  }
 
   const counts = response.counts as
     | {
@@ -49,6 +58,8 @@ export async function getJobCountsAsync(ctx: CountsContext): Promise<JobCounts> 
         active?: number;
         completed?: number;
         failed?: number;
+        delayed?: number;
+        paused?: number;
       }
     | undefined;
 
@@ -57,6 +68,8 @@ export async function getJobCountsAsync(ctx: CountsContext): Promise<JobCounts> 
     active: counts?.active ?? 0,
     completed: counts?.completed ?? 0,
     failed: counts?.failed ?? 0,
+    delayed: counts?.delayed ?? 0,
+    paused: counts?.paused ?? 0,
   };
 }
 

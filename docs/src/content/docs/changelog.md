@@ -10,6 +10,16 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.37] - 2026-03-17
+
+### Added
+- **`getJobCounts` now returns `delayed` and `paused` counts** — Matches BullMQ's `getJobCounts()` return type. Both embedded and TCP modes include `delayed` (jobs with future `runAt`) and `paused` (waiting jobs count when queue is paused). ([#56](https://github.com/egeominotti/bunqueue/issues/56))
+- **`getJobs` supports multiple statuses** — Accepts `string | string[]` for the `state` parameter, matching BullMQ's `getJobs(types?: JobType | JobType[])` interface. Works in embedded, TCP, and HTTP (`?state=waiting&state=delayed`). ([#55](https://github.com/egeominotti/bunqueue/issues/55))
+- **`GET /queues/summary` endpoint** — Returns all queues with name, paused status, and job counts in a single HTTP call, replacing N+1 round-trips.
+
+### Removed
+- Flaky TCP integration tests (sandboxed-worker, monitoring)
+
 ## [2.6.36] - 2026-03-17
 
 ### Fixed

@@ -193,10 +193,15 @@ export class Queue<T = unknown> {
   getChildrenValues(id: string): Promise<Record<string, unknown>> {
     return queryOps.getChildrenValues(this.queryCtx, id);
   }
-  getJobs(opts?: { state?: string; start?: number; end?: number; asc?: boolean }): Job<T>[] {
+  getJobs(opts?: {
+    state?: string | string[];
+    start?: number;
+    end?: number;
+    asc?: boolean;
+  }): Job<T>[] {
     return queryOps.getJobs(this.queryCtx, opts as Parameters<typeof queryOps.getJobs>[1]);
   }
-  getJobsAsync(opts?: { state?: string; start?: number; end?: number; asc?: boolean }) {
+  getJobsAsync(opts?: { state?: string | string[]; start?: number; end?: number; asc?: boolean }) {
     return queryOps.getJobsAsync(
       this.queryCtx,
       opts as Parameters<typeof queryOps.getJobsAsync>[1]
