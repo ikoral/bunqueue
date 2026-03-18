@@ -10,6 +10,8 @@ import { createPublicJob } from '../types';
 import type { Job as InternalJob } from '../../domain/types/job';
 import { jobId } from '../../domain/types/job';
 import { getSharedManager } from '../manager';
+import { UnrecoverableError } from '../errors';
+import { DelayedError } from '../errors';
 import type { AckBatcher } from './ackBatcher';
 
 /** Processor configuration */
@@ -21,6 +23,7 @@ export interface ProcessorConfig<T, R> {
   ackBatcher: AckBatcher;
   emitter: EventEmitter;
   token?: string | null; // Lock token for ownership verification
+  onOutcome?: (succeeded: boolean) => void;
 }
 
 /**
@@ -77,6 +80,7 @@ export async function processJob<T, R>(
     }
 
     (job as { returnvalue?: unknown }).returnvalue = result;
+    config.onOutcome?.(true);
     emitter.emit('completed', job, result);
   } catch (error) {
     await handleJobFailure(internalJob, error, config, { job, jobIdStr, token });
@@ -156,6 +160,36 @@ function isJobNotFoundError(err: Error): boolean {
   return err.message.includes('not found') || err.message.includes('not in processing');
 }
 
+/** Handle DelayedError: move job back to delayed state without counting as failure */
+async function handleDelayedError<T, R>(
+  internalJob: InternalJob,
+  config: ProcessorConfig<T, R>,
+  context: { jobIdStr: string; token?: string | null }
+): Promise<void> {
+  const { embedded, tcp, emitter } = config;
+  try {
+    if (embedded) {
+      const manager = getSharedManager();
+      await manager.moveToDelayed(internalJob.id, internalJob.backoff || 1000);
+    } else if (tcp) {
+      await tcp.send({
+        cmd: 'MoveToDelayed',
+        id: internalJob.id,
+        delay: internalJob.backoff || 1000,
+        ...(context.token ? { token: context.token } : {}),
+      });
+    }
+  } catch (delayError) {
+    const wrappedError = delayError instanceof Error ? delayError : new Error(String(delayError));
+    if (!isJobNotFoundError(wrappedError)) {
+      emitter.emit(
+        'error',
+        Object.assign(wrappedError, { context: 'delay', jobId: context.jobIdStr })
+      );
+    }
+  }
+}
+
 async function handleJobFailure<T, R>(
   internalJob: InternalJob,
   error: unknown,
@@ -166,24 +200,32 @@ async function handleJobFailure<T, R>(
   const { job, jobIdStr, token } = context;
   const err = error instanceof Error ? error : new Error(String(error));
 
+  if (err instanceof DelayedError) {
+    await handleDelayedError(internalJob, config, { jobIdStr, token });
+    return;
+  }
+
+  // UnrecoverableError: force skip all retries
+  if (err instanceof UnrecoverableError) {
+    (internalJob as { maxAttempts: number }).maxAttempts = 1;
+    (internalJob as { attempts: number }).attempts = 0;
+  }
+
   try {
     if (embedded) {
       const manager = getSharedManager();
-      // Pass token for lock verification
       await manager.fail(internalJob.id, err.message, token ?? undefined);
     } else if (tcp) {
-      // Include token for lock verification (only if defined)
       await tcp.send({
         cmd: 'FAIL',
         id: internalJob.id,
         error: err.message,
         ...(token ? { token } : {}),
+        ...(err instanceof UnrecoverableError ? { unrecoverable: true } : {}),
       });
     }
   } catch (failError) {
     const wrappedError = failError instanceof Error ? failError : new Error(String(failError));
-    // If stall detection already removed the job, the FAIL will throw
-    // "Job not found". This is expected (Issue #33) - don't emit as error.
     if (isJobNotFoundError(wrappedError)) {
       return;
     }
@@ -191,5 +233,6 @@ async function handleJobFailure<T, R>(
   }
 
   (job as { failedReason?: string }).failedReason = err.message;
+  config.onOutcome?.(false);
   emitter.emit('failed', job, err);
 }

@@ -5,9 +5,10 @@
 
 import type { Job, JobId, JobInput, JobLock, LockToken } from '../domain/types/job';
 import { DEFAULT_LOCK_TTL } from '../domain/types/job';
-import type { JobLocation, JobEvent, EventType } from '../domain/types/queue';
+import type { JobLocation, JobEvent } from '../domain/types/queue';
+import { EventType } from '../domain/types/queue';
 import type { CronJob, CronJobInput } from '../domain/types/cron';
-import type { JobLogEntry } from '../domain/types/worker';
+import type { JobLogEntry, CreateWorkerOptions } from '../domain/types/worker';
 import type { StallConfig } from '../domain/types/stall';
 import type { DlqConfig, DlqEntry, DlqStats } from '../domain/types/dlq';
 import { Shard } from '../domain/queue/shard';
@@ -645,11 +646,23 @@ export class QueueManager {
   pause(queue: string): void {
     queueControl.pauseQueue(queue, this.contextFactory.getQueueControlContext());
     this.dashboardEmit?.('queue:paused', { queue });
+    this.eventsManager.broadcast({
+      eventType: EventType.Paused,
+      queue,
+      jobId: '' as JobId,
+      timestamp: Date.now(),
+    });
   }
 
   resume(queue: string): void {
     queueControl.resumeQueue(queue, this.contextFactory.getQueueControlContext());
     this.dashboardEmit?.('queue:resumed', { queue });
+    this.eventsManager.broadcast({
+      eventType: EventType.Resumed,
+      queue,
+      jobId: '' as JobId,
+      timestamp: Date.now(),
+    });
   }
 
   isPaused(queue: string): boolean {
@@ -917,12 +930,14 @@ export class QueueManager {
   }
 
   /** Register worker with dashboard event */
-  registerWorker(name: string, queues: string[], concurrency?: number) {
-    const worker = this.workerManager.register(name, queues, concurrency);
+  registerWorker(name: string, queues: string[], concurrency?: number, opts?: CreateWorkerOptions) {
+    const worker = this.workerManager.register(name, queues, concurrency, opts);
     this.dashboardEmit?.('worker:connected', {
       workerId: worker.id,
       name: worker.name,
       queues: worker.queues,
+      hostname: worker.hostname,
+      pid: worker.pid,
     });
     return worker;
   }

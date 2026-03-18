@@ -4,6 +4,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { hostname } from 'os';
 import { getSharedManager } from '../manager';
 import { TcpConnectionPool } from '../tcpPool';
 import { EventType } from '../../domain/types/queue';
@@ -49,6 +50,13 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   private readonly jobTokens: Map<string, string> = new Map(); // jobId -> lockToken
   private readonly cancelledJobs: Set<string> = new Set(); // Jobs marked for cancellation
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Worker registration tracking
+  private workerHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private processedCount = 0;
+  private failedCount = 0;
+  private readonly startedAt: number;
+  private registered = false;
 
   // Unique worker ID for lock ownership
   private readonly workerId: string;
@@ -99,6 +107,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.name = name;
     this.processor = processor;
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
+    this.startedAt = Date.now();
 
     // Generate unique worker ID for lock ownership
     this.workerId = `worker-${name}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -166,6 +175,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.subscribeToStalledEvents();
     }
 
+    // Register worker with server (TCP only)
+    if (!this.embedded && this.tcp && !this.registered) {
+      this.registerWithServer();
+    }
+
     if (this.opts.heartbeatInterval > 0) {
       if (this.embedded) {
         this.heartbeatTimer = setInterval(() => {
@@ -177,6 +191,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       } else {
         const deps = this.getHeartbeatDeps();
         this.heartbeatTimer = startHeartbeat(deps, this.opts.heartbeatInterval);
+
+        // Worker-level heartbeat (separate from job heartbeat)
+        this.startWorkerHeartbeat();
       }
     }
     this.poll();
@@ -423,6 +440,10 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    if (this.workerHeartbeatTimer) {
+      clearInterval(this.workerHeartbeatTimer);
+      this.workerHeartbeatTimer = null;
+    }
 
     if (!force) {
       const bufferSize = () => this.pendingJobs.length - this.pendingJobsHead;
@@ -434,6 +455,16 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     await this.ackBatcher.flush();
     await this.ackBatcher.waitForInFlight();
     this.ackBatcher.stop();
+
+    // Unregister from server before closing connection
+    if (!this.embedded && this.tcp && this.registered) {
+      try {
+        await this.tcp.send({ cmd: 'UnregisterWorker', workerId: this.workerId });
+      } catch {
+        // Best-effort unregister — server will cleanup via stale timeout
+      }
+      this.registered = false;
+    }
 
     await Bun.sleep(100);
 
@@ -636,6 +667,10 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       ackBatcher: this.ackBatcher,
       emitter: this,
       token: tokenForProcess,
+      onOutcome: (ok) => {
+        if (ok) this.processedCount++;
+        else this.failedCount++;
+      },
     }).finally(() => {
       this.activeJobs--;
       this.activeJobIds.delete(jobIdStr);
@@ -683,6 +718,49 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   }
 
   // ============ Private Helpers ============
+
+  /** Register this worker with the server (TCP only, fire-and-forget) */
+  private registerWithServer(): void {
+    if (!this.tcp || this.registered) return;
+    void this.tcp
+      .send({
+        cmd: 'RegisterWorker',
+        name: this.name,
+        queues: [this.name],
+        concurrency: this.opts.concurrency,
+        workerId: this.workerId,
+        hostname: hostname(),
+        pid: process.pid,
+        startedAt: this.startedAt,
+      })
+      .then(() => {
+        this.registered = true;
+      })
+      .catch((err: unknown) => {
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.emit('error', Object.assign(error, { context: 'worker-register' }));
+      });
+  }
+
+  /** Start periodic worker-level heartbeat (separate from job heartbeat) */
+  private startWorkerHeartbeat(): void {
+    if (this.workerHeartbeatTimer || !this.tcp) return;
+    this.workerHeartbeatTimer = setInterval(() => {
+      if (!this.tcp || !this.registered) return;
+      void this.tcp
+        .send({
+          cmd: 'Heartbeat',
+          id: this.workerId,
+          activeJobs: this.activeJobs,
+          processed: this.processedCount,
+          failed: this.failedCount,
+        })
+        .catch((err: unknown) => {
+          const error = err instanceof Error ? err : new Error(String(err));
+          this.emit('error', Object.assign(error, { context: 'worker-heartbeat' }));
+        });
+    }, this.opts.heartbeatInterval);
+  }
 
   private getHeartbeatDeps(): HeartbeatDeps {
     return {

@@ -121,6 +121,7 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
   on(event: 'retried', listener: (data: RetriedEvent) => void): this;
   on(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
   on(event: 'drained', listener: (data: DrainedEvent) => void): this;
+  on(event: 'paused' | 'resumed', listener: (data: Record<string, never>) => void): this;
   on(event: 'error', listener: (error: Error, event?: JobEvent) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on(event: string, listener: (...args: any[]) => void): this {
@@ -139,6 +140,7 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
   once(event: 'retried', listener: (data: RetriedEvent) => void): this;
   once(event: 'waiting-children', listener: (data: WaitingChildrenEvent) => void): this;
   once(event: 'drained', listener: (data: DrainedEvent) => void): this;
+  once(event: 'paused' | 'resumed', listener: (data: Record<string, never>) => void): this;
   once(event: 'error', listener: (error: Error, event?: JobEvent) => void): this;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   once(event: string, listener: (...args: any[]) => void): this {
@@ -189,6 +191,12 @@ export class QueueEvents<R = unknown, P = unknown> extends EventEmitter {
         break;
       case EventType.Drained:
         this.emit('drained', { id: event.jobId });
+        break;
+      case EventType.Paused:
+        this.emit('paused', {});
+        break;
+      case EventType.Resumed:
+        this.emit('resumed', {});
         break;
     }
   }

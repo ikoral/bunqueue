@@ -3,7 +3,12 @@
  * Tracks connected workers and their status
  */
 
-import { type Worker, type WorkerId, createWorker } from '../domain/types/worker';
+import {
+  type Worker,
+  type WorkerId,
+  type CreateWorkerOptions,
+  createWorker,
+} from '../domain/types/worker';
 
 /** Worker timeout - consider dead after this many ms without heartbeat */
 const WORKER_TIMEOUT_MS = parseInt(Bun.env.WORKER_TIMEOUT_MS ?? '30000', 10);
@@ -34,8 +39,25 @@ export class WorkerManager {
   }
 
   /** Register a new worker */
-  register(name: string, queues: string[], concurrency: number = 1): Worker {
-    const worker = createWorker(name, queues, concurrency);
+  register(
+    name: string,
+    queues: string[],
+    concurrency: number = 1,
+    opts?: CreateWorkerOptions
+  ): Worker {
+    // If client provides a workerId and it's already registered, update it
+    if (opts?.workerId) {
+      const existing = this.workers.get(opts.workerId);
+      if (existing) {
+        existing.queues = queues;
+        existing.concurrency = concurrency;
+        existing.lastSeen = Date.now();
+        if (opts.hostname) existing.hostname = opts.hostname;
+        if (opts.pid) existing.pid = opts.pid;
+        return existing;
+      }
+    }
+    const worker = createWorker(name, queues, concurrency, opts);
     this.workers.set(worker.id, worker);
     return worker;
   }
@@ -55,11 +77,31 @@ export class WorkerManager {
     return this.workers.get(id);
   }
 
-  /** Update worker last seen time */
-  heartbeat(id: WorkerId): boolean {
+  /** Update worker last seen time and optionally client-reported stats */
+  heartbeat(
+    id: WorkerId,
+    stats?: { activeJobs?: number; processed?: number; failed?: number }
+  ): boolean {
     const worker = this.workers.get(id);
     if (!worker) return false;
     worker.lastSeen = Date.now();
+    if (stats) {
+      if (stats.activeJobs !== undefined) {
+        this.totalActiveJobsCounter -= worker.activeJobs;
+        worker.activeJobs = stats.activeJobs;
+        this.totalActiveJobsCounter += stats.activeJobs;
+      }
+      if (stats.processed !== undefined) {
+        this.totalProcessedCounter -= worker.processedJobs;
+        worker.processedJobs = stats.processed;
+        this.totalProcessedCounter += stats.processed;
+      }
+      if (stats.failed !== undefined) {
+        this.totalFailedCounter -= worker.failedJobs;
+        worker.failedJobs = stats.failed;
+        this.totalFailedCounter += stats.failed;
+      }
+    }
     return true;
   }
 

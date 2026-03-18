@@ -13,6 +13,8 @@ export interface Worker {
   name: string;
   queues: string[];
   concurrency: number;
+  hostname: string;
+  pid: number;
   registeredAt: number;
   lastSeen: number;
   activeJobs: number;
@@ -21,15 +23,30 @@ export interface Worker {
   currentJob: string | null;
 }
 
+/** Options for creating a worker */
+export interface CreateWorkerOptions {
+  workerId?: string;
+  hostname?: string;
+  pid?: number;
+  startedAt?: number;
+}
+
 /** Create a new worker */
-export function createWorker(name: string, queues?: string[], concurrency: number = 1): Worker {
+export function createWorker(
+  name: string,
+  queues?: string[],
+  concurrency: number = 1,
+  opts?: CreateWorkerOptions
+): Worker {
   const now = Date.now();
   return {
-    id: uuid(),
+    id: opts?.workerId ?? uuid(),
     name,
     queues: queues ?? [],
     concurrency,
-    registeredAt: now,
+    hostname: opts?.hostname ?? 'unknown',
+    pid: opts?.pid ?? 0,
+    registeredAt: opts?.startedAt ?? now,
     lastSeen: now,
     activeJobs: 0,
     processedJobs: 0,

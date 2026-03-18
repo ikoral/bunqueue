@@ -151,6 +151,11 @@ export async function routeResourceRoutes(
         cmd: 'RegisterWorker',
         name: body['name'] as string,
         queues: body['queues'] as string[],
+        concurrency: body['concurrency'] as number | undefined,
+        workerId: body['workerId'] as string | undefined,
+        hostname: body['hostname'] as string | undefined,
+        pid: body['pid'] as number | undefined,
+        startedAt: body['startedAt'] as number | undefined,
       } as Parameters<typeof handleCommand>[0],
       ctx
     );
@@ -173,10 +178,19 @@ export async function routeResourceRoutes(
   // POST /workers/:id/heartbeat
   const workerHeartbeatMatch = path.match(RE_WORKER_HEARTBEAT);
   if (workerHeartbeatMatch && method === 'POST') {
+    let body: Body = {};
+    try {
+      body = (await req.json()) as Body;
+    } catch {
+      // Body is optional for heartbeat
+    }
     const r = await handleCommand(
       {
         cmd: 'Heartbeat',
         id: workerHeartbeatMatch[1],
+        activeJobs: body['activeJobs'] as number | undefined,
+        processed: body['processed'] as number | undefined,
+        failed: body['failed'] as number | undefined,
       } as Parameters<typeof handleCommand>[0],
       ctx
     );

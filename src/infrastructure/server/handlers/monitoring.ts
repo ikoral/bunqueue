@@ -57,7 +57,11 @@ export function handleHeartbeat(
   ctx: HandlerContext,
   reqId?: string
 ): Response {
-  const success = ctx.queueManager.workerManager.heartbeat(cmd.id);
+  const stats =
+    cmd.activeJobs !== undefined || cmd.processed !== undefined || cmd.failed !== undefined
+      ? { activeJobs: cmd.activeJobs, processed: cmd.processed, failed: cmd.failed }
+      : undefined;
+  const success = ctx.queueManager.workerManager.heartbeat(cmd.id, stats);
   if (success) {
     ctx.queueManager.emitDashboardEvent('worker:heartbeat', { workerId: cmd.id });
     return resp.data({ ok: true }, reqId);
@@ -125,13 +129,20 @@ export function handleRegisterWorker(
   ctx: HandlerContext,
   reqId?: string
 ): Response {
-  const worker = ctx.queueManager.registerWorker(cmd.name, cmd.queues, cmd.concurrency);
+  const worker = ctx.queueManager.registerWorker(cmd.name, cmd.queues, cmd.concurrency, {
+    workerId: cmd.workerId,
+    hostname: cmd.hostname,
+    pid: cmd.pid,
+    startedAt: cmd.startedAt,
+  });
   return resp.data(
     {
       workerId: worker.id,
       name: worker.name,
       queues: worker.queues,
       concurrency: worker.concurrency,
+      hostname: worker.hostname,
+      pid: worker.pid,
       status: 'active' as const,
       registeredAt: worker.registeredAt,
       lastSeen: worker.lastSeen,
@@ -178,6 +189,8 @@ export function handleListWorkers(
         name: w.name,
         queues: w.queues,
         concurrency: w.concurrency,
+        hostname: w.hostname,
+        pid: w.pid,
         status: computeWorkerStatus(w.lastSeen, now),
         registeredAt: w.registeredAt,
         lastSeen: w.lastSeen,
@@ -185,6 +198,7 @@ export function handleListWorkers(
         processedJobs: w.processedJobs,
         failedJobs: w.failedJobs,
         currentJob: w.currentJob,
+        uptime: now - w.registeredAt,
       })),
       stats: ctx.queueManager.workerManager.getStats(),
     },

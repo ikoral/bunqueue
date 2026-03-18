@@ -337,6 +337,9 @@ export interface GetLogsCommand extends BaseCommand {
 export interface HeartbeatCommand extends BaseCommand {
   readonly cmd: 'Heartbeat';
   readonly id: string; // Worker ID
+  readonly activeJobs?: number;
+  readonly processed?: number;
+  readonly failed?: number;
 }
 
 /** Job-level heartbeat for stall detection */
@@ -364,6 +367,10 @@ export interface RegisterWorkerCommand extends BaseCommand {
   readonly name: string;
   readonly queues: string[];
   readonly concurrency?: number;
+  readonly workerId?: string;
+  readonly hostname?: string;
+  readonly pid?: number;
+  readonly startedAt?: number;
 }
 
 export interface UnregisterWorkerCommand extends BaseCommand {

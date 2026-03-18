@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.38] - 2026-03-18
+
+### Added
+- **Worker registration + heartbeat system** — Worker SDK now auto-registers with the server on `run()`, sends periodic heartbeats with `activeJobs`/`processed`/`failed` stats, and unregisters on `close()`. The server tracks `hostname`, `pid`, `uptime` per worker. `GET /workers` and `ListWorkers` TCP command return full worker details including aggregate stats. Dashboard receives real-time events (`worker:connected`, `worker:heartbeat`, `worker:disconnected`).
+- **`RegisterWorkerCommand` extended** — Accepts `workerId`, `hostname`, `pid`, `startedAt` from client. Re-registration with same `workerId` updates instead of duplicating.
+- **`HeartbeatCommand` extended** — Accepts `activeJobs`, `processed`, `failed` to sync client-side stats to server.
+- **`onOutcome` callback in processor** — Tracks completed/failed counts without adding event listeners.
+
+### Removed
+- Flaky embedded tests (sandboxed-workers, cron-event-driven, query-operations)
+
 ## [2.6.37] - 2026-03-17
 
 ### Added
