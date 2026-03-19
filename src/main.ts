@@ -51,6 +51,7 @@ import { Logger, serverLog, statsLog, type LogLevel } from './shared/logger';
 import { stopRateLimiter } from './infrastructure/server/rateLimiter';
 import { VERSION } from './shared/version';
 import { S3BackupManager } from './infrastructure/backup';
+import { CloudAgent } from './infrastructure/cloud';
 import { SHARD_COUNT } from './shared/hash';
 
 /** Server configuration from environment */
@@ -123,6 +124,7 @@ ${dim}────────────────────────�
   ${yellow}●${reset} Data   ${config.dataPath ?? 'in-memory'}
   ${yellow}●${reset} Auth   ${config.authTokens.length > 0 ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
   ${yellow}●${reset} S3 Backup ${config.s3BackupEnabled ? `${green}enabled${reset}` : `${dim}disabled${reset}`}
+  ${yellow}●${reset} Cloud  ${Bun.env.BUNQUEUE_CLOUD_URL ? `${green}enabled${reset} ${dim}→ ${Bun.env.BUNQUEUE_CLOUD_URL}${reset}` : `${dim}disabled${reset}`}
   ${dim}●${reset} Shards ${bold}${SHARD_COUNT}${reset} ${dim}(${navigator.hardwareConcurrency} CPU cores)${reset}
 
 ${dim}─────────────────────────────────────────────────${reset}
@@ -165,6 +167,9 @@ function startServer(): void {
     backupManager.start();
   }
 
+  // Initialize bunqueue Cloud agent (remote dashboard telemetry)
+  const cloudAgent = CloudAgent.create(queueManager, config.dataPath);
+
   queueManager.emitDashboardEvent('server:started', {
     tcpPort: config.tcpPort,
     httpPort: config.httpPort,
@@ -196,6 +201,11 @@ function startServer(): void {
     // Stop backup manager
     if (backupManager) {
       backupManager.stop();
+    }
+
+    // Stop Cloud agent (sends final shutdown snapshot)
+    if (cloudAgent) {
+      await cloudAgent.stop();
     }
 
     queueManager.emitDashboardEvent('server:shutdown', { signal });

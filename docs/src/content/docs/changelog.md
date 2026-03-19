@@ -10,6 +10,18 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.40] - 2026-03-19
+
+### Added (Beta)
+- **bunqueue Cloud** — Remote dashboard telemetry agent. Connect any bunqueue instance to [bunqueue.io](https://bunqueue.io) with just 2 env vars (`BUNQUEUE_CLOUD_URL` + `BUNQUEUE_CLOUD_API_KEY`). Zero overhead when disabled.
+  - **Snapshot channel** — HTTP POST every 5s with full server state: stats, throughput, latency percentiles, memory, per-queue counts, worker details, cron jobs, storage status, DLQ entries, recent jobs.
+  - **Event channel** — Outbound WebSocket for real-time job event forwarding (Failed, Stalled, etc.) with configurable filtering.
+  - **Remote commands (opt-in)** — Dashboard can execute commands on the instance via the same WebSocket: `queue:pause`, `queue:resume`, `queue:drain`, `dlq:retry`, `dlq:purge`, `job:cancel`, `job:promote`, `cron:upsert`, `cron:delete`. Requires `BUNQUEUE_CLOUD_REMOTE_COMMANDS=true`.
+  - **Multi-instance** — Multiple bunqueue instances can connect to the same dashboard with separate instance IDs and names.
+  - **Resilience** — Offline snapshot buffer (720 snapshots), circuit breaker, WebSocket auto-reconnect with exponential backoff + jitter, graceful shutdown with final snapshot.
+  - **Security** — API key auth, optional HMAC-SHA256 signing, job data redaction, remote commands disabled by default.
+  - **New env vars**: `BUNQUEUE_CLOUD_URL`, `BUNQUEUE_CLOUD_API_KEY`, `BUNQUEUE_CLOUD_INSTANCE_NAME`, `BUNQUEUE_CLOUD_INTERVAL_MS`, `BUNQUEUE_CLOUD_REMOTE_COMMANDS`, `BUNQUEUE_CLOUD_SIGNING_SECRET`, `BUNQUEUE_CLOUD_INCLUDE_JOB_DATA`, `BUNQUEUE_CLOUD_REDACT_FIELDS`, `BUNQUEUE_CLOUD_EVENTS`.
+
 ## [2.6.39] - 2026-03-18
 
 ### Fixed
