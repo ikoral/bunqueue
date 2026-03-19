@@ -1,6 +1,10 @@
 /**
  * Snapshot Collector
- * Gathers telemetry data from all bunqueue managers into a single snapshot
+ * Two-tier collection: light (every 5s) + heavy (every 30s)
+ *
+ * Light: stats, throughput, latency, memory, connections — O(SHARD_COUNT)
+ * Heavy: recentJobs, dlqEntries, topErrors, workerDetails, queueConfigs, webhooks — O(queues × shards)
+ * Queues are always collected but use a single pass with cached counts.
  */
 
 import { hostname } from 'os';
@@ -37,11 +41,35 @@ export interface CollectSnapshotParams {
   startedAt: number;
   sequenceId: number;
   serverHandles?: ServerHandles;
+  /** Include heavy data (recentJobs, dlqEntries, topErrors, workerDetails, queueConfigs, webhooks) */
+  includeHeavy: boolean;
 }
 
-/** Collect a full snapshot from all managers. O(SHARD_COUNT) total. */
+/** Cached heavy data — reused between snapshots until refreshed */
+let cachedHeavy: Pick<
+  CloudSnapshot,
+  | 'recentJobs'
+  | 'dlqEntries'
+  | 'topErrors'
+  | 'workerDetails'
+  | 'queueConfigs'
+  | 'webhooks'
+  | 's3Backup'
+> = {
+  recentJobs: [],
+  dlqEntries: [],
+  topErrors: [],
+  workerDetails: [],
+  queueConfigs: {},
+  webhooks: [],
+  s3Backup: null,
+};
+
+/** Collect a snapshot. Light data always fresh, heavy data cached between refreshes. */
 export function collectSnapshot(params: CollectSnapshotParams): CloudSnapshot {
   const { queueManager, instanceId, instanceName, startedAt, sequenceId, serverHandles } = params;
+
+  // ─── Light data (O(SHARD_COUNT), every snapshot) ───
   const stats = queueManager.getStats();
   const memStats = queueManager.getMemoryStats();
   const workerStats = queueManager.workerManager.getStats();
@@ -49,27 +77,72 @@ export function collectSnapshot(params: CollectSnapshotParams): CloudSnapshot {
   const percentiles = latencyTracker.getPercentiles();
   const averages = latencyTracker.getAverages();
   const storage = queueManager.getStorageStatus();
-  const crons = queueManager.listCrons();
   const mem = process.memoryUsage();
 
-  // Per-queue stats (includes DLQ counts)
+  // Queues: single pass — listQueues + getQueueJobCounts + perQueueStats for DLQ
+  // Avoids getQueuesSummary() which internally calls getQueueJobCounts but drops totalCompleted/totalFailed
+  const queueNames = queueManager.listQueues();
   const perQueue = queueManager.getPerQueueStats();
-  const queuesSummary = queueManager.getQueuesSummary();
-  const queueNames = queuesSummary.map((q) => q.name);
-  const queues = queuesSummary.map((q) => {
-    const pq = perQueue.get(q.name);
-    const counts = queueManager.getQueueJobCounts(q.name);
+  const queues = queueNames.map((name) => {
+    const counts = queueManager.getQueueJobCounts(name);
     return {
-      name: q.name,
-      waiting: pq?.waiting ?? q.counts.waiting,
-      delayed: pq?.delayed ?? q.counts.delayed,
-      active: pq?.active ?? q.counts.active,
-      dlq: pq?.dlq ?? 0,
-      paused: q.paused,
+      name,
+      waiting: counts.waiting,
+      delayed: counts.delayed,
+      active: counts.active,
+      dlq: perQueue.get(name)?.dlq ?? 0,
+      paused: queueManager.isPaused(name),
       totalCompleted: counts.totalCompleted,
       totalFailed: counts.totalFailed,
     };
   });
+
+  // Crons (cheap, in-memory list)
+  const crons = queueManager.listCrons().map((c) => ({
+    name: c.name,
+    queue: c.queue,
+    schedule: c.schedule ?? null,
+    nextRun: c.nextRun,
+    executions: c.executions,
+    maxLimit: c.maxLimit,
+  }));
+
+  // ─── Heavy data (only when requested) ───
+  if (params.includeHeavy) {
+    const activeQueues = queues.filter((q) => q.waiting > 0 || q.active > 0 || q.delayed > 0);
+    const dlqQueues = queues.filter((q) => q.dlq > 0);
+
+    cachedHeavy = {
+      recentJobs: collectRecentJobs(
+        queueManager,
+        activeQueues.map((q) => q.name)
+      ),
+      dlqEntries: collectDlqEntries(
+        queueManager,
+        dlqQueues.map((q) => q.name)
+      ),
+      topErrors: collectTopErrors(
+        queueManager,
+        dlqQueues.map((q) => q.name)
+      ),
+      workerDetails: queueManager.workerManager.list().map((w) => ({
+        id: w.id,
+        name: w.name,
+        queues: w.queues,
+        concurrency: w.concurrency,
+        hostname: w.hostname,
+        pid: w.pid,
+        lastSeen: w.lastSeen,
+        activeJobs: w.activeJobs,
+        processedJobs: w.processedJobs,
+        failedJobs: w.failedJobs,
+        currentJob: w.currentJob,
+      })),
+      queueConfigs: collectQueueConfigs(queueManager, queueNames),
+      webhooks: collectWebhooks(queueManager),
+      s3Backup: serverHandles?.getBackupStatus?.() ?? null,
+    };
+  }
 
   return {
     instanceId,
@@ -88,7 +161,7 @@ export function collectSnapshot(params: CollectSnapshotParams): CloudSnapshot {
       dlq: stats.dlq,
       completed: stats.completed,
       stalled: memStats.stalledCandidates,
-      paused: queuesSummary.filter((q) => q.paused).length,
+      paused: queues.filter((q) => q.paused).length,
       totalPushed: String(stats.totalPushed),
       totalPulled: String(stats.totalPulled),
       totalCompleted: String(stats.totalCompleted),
@@ -99,11 +172,7 @@ export function collectSnapshot(params: CollectSnapshotParams): CloudSnapshot {
     },
 
     throughput: rates,
-
-    latency: {
-      averages,
-      percentiles,
-    },
+    latency: { averages, percentiles },
 
     memory: {
       heapUsed: Math.round((mem.heapUsed / 1024 / 1024) * 100) / 100,
@@ -126,76 +195,36 @@ export function collectSnapshot(params: CollectSnapshotParams): CloudSnapshot {
     },
 
     queues,
-
     workers: workerStats,
+    crons,
 
-    crons: crons.map((c) => ({
-      name: c.name,
-      queue: c.queue,
-      schedule: c.schedule ?? null,
-      nextRun: c.nextRun,
-      executions: c.executions,
-      maxLimit: c.maxLimit,
-    })),
-
-    storage: {
-      diskFull: storage.diskFull,
-      error: storage.error,
-    },
-
+    storage: { diskFull: storage.diskFull, error: storage.error },
     taskErrors: getTaskErrorStats(),
 
-    // Recent jobs (last 50 across all queues, lightweight — no job data)
-    recentJobs: collectRecentJobs(queueManager, queueNames),
-
-    // DLQ entries (last 50 across all queues)
-    dlqEntries: collectDlqEntries(queueManager, queueNames),
-
-    // Worker details
-    workerDetails: queueManager.workerManager.list().map((w) => ({
-      id: w.id,
-      name: w.name,
-      queues: w.queues,
-      concurrency: w.concurrency,
-      hostname: w.hostname,
-      pid: w.pid,
-      lastSeen: w.lastSeen,
-      activeJobs: w.activeJobs,
-      processedJobs: w.processedJobs,
-      failedJobs: w.failedJobs,
-      currentJob: w.currentJob,
-    })),
-
-    // Per-queue config (includes rate limit + concurrency)
-    queueConfigs: collectQueueConfigs(queueManager, queueNames),
-
-    // Connection stats
     connections: {
       tcp: serverHandles?.getConnectionCount() ?? 0,
       ws: serverHandles?.getWsClientCount() ?? 0,
       sse: serverHandles?.getSseClientCount() ?? 0,
     },
 
-    // Webhooks with delivery stats
-    webhooks: collectWebhooks(queueManager),
-
-    // Top errors from DLQ entries
-    topErrors: collectTopErrors(queueManager, queueNames),
-
-    // S3 backup status
-    s3Backup: serverHandles?.getBackupStatus?.() ?? null,
+    // Heavy data (fresh or cached)
+    ...cachedHeavy,
   };
 }
 
-/** Collect recent jobs across queues (max 50, newest first) */
+// ─── Heavy data collectors (only called every ~30s) ───
+
+/** Collect recent jobs — only from active queues */
 function collectRecentJobs(
   queueManager: QueueManager,
-  queueNames: string[]
+  activeQueueNames: string[]
 ): CloudSnapshot['recentJobs'] {
-  const jobs: CloudSnapshot['recentJobs'] = [];
-  const perQueue = Math.max(1, Math.floor(50 / (queueNames.length || 1)));
+  if (activeQueueNames.length === 0) return [];
 
-  for (const name of queueNames) {
+  const jobs: CloudSnapshot['recentJobs'] = [];
+  const perQueue = Math.max(1, Math.floor(50 / activeQueueNames.length));
+
+  for (const name of activeQueueNames) {
     try {
       const queueJobs = queueManager.getJobs(name, {
         state: ['waiting', 'active', 'delayed'],
@@ -204,7 +233,6 @@ function collectRecentJobs(
       });
       for (const j of queueJobs) {
         const data = j.data as Record<string, unknown> | undefined;
-        const jobName = (data?.name as string | undefined) ?? 'default';
         const state = j.completedAt
           ? 'completed'
           : j.startedAt
@@ -212,11 +240,10 @@ function collectRecentJobs(
             : j.runAt > Date.now()
               ? 'delayed'
               : 'waiting';
-        const duration = j.completedAt && j.startedAt ? j.completedAt - j.startedAt : undefined;
 
         jobs.push({
           id: String(j.id),
-          name: jobName,
+          name: (data?.name as string | undefined) ?? 'default',
           queue: j.queue,
           state,
           data,
@@ -230,7 +257,7 @@ function collectRecentJobs(
               : undefined,
           attempts: j.attempts,
           maxAttempts: j.maxAttempts,
-          duration,
+          duration: j.completedAt && j.startedAt ? j.completedAt - j.startedAt : undefined,
           progress: j.progress > 0 ? j.progress : undefined,
         });
       }
@@ -239,18 +266,19 @@ function collectRecentJobs(
     }
   }
 
-  // Sort by createdAt desc, limit 50
   return jobs.sort((a, b) => b.createdAt - a.createdAt).slice(0, 50);
 }
 
-/** Collect DLQ entries across queues (max 50) */
+/** Collect DLQ entries — only from queues with DLQ > 0 */
 function collectDlqEntries(
   queueManager: QueueManager,
-  queueNames: string[]
+  dlqQueueNames: string[]
 ): CloudSnapshot['dlqEntries'] {
+  if (dlqQueueNames.length === 0) return [];
+
   const entries: CloudSnapshot['dlqEntries'] = [];
 
-  for (const name of queueNames) {
+  for (const name of dlqQueueNames) {
     try {
       const dlq = queueManager.getDlqEntries(name);
       for (const e of dlq.slice(0, 20)) {
@@ -265,7 +293,7 @@ function collectDlqEntries(
         });
       }
     } catch {
-      // Skip queue on error
+      // Skip
     }
   }
 
@@ -287,14 +315,14 @@ function collectQueueConfigs(
       const pq = perQueue.get(name);
       configs[name] = {
         paused: queueManager.isPaused(name),
-        rateLimit: null, // TODO: expose from QueueManager
-        concurrencyLimit: null, // TODO: expose from QueueManager
+        rateLimit: null,
+        concurrencyLimit: null,
         concurrencyActive: pq?.active ?? 0,
         stallConfig: { stallInterval: stall.stallInterval, maxStalls: stall.maxStalls },
         dlqConfig: { maxRetries: dlq.maxAutoRetries, maxAge: dlq.maxAge ?? 0 },
       };
     } catch {
-      // Skip on error
+      // Skip
     }
   }
 
@@ -304,8 +332,7 @@ function collectQueueConfigs(
 /** Collect webhook delivery stats */
 function collectWebhooks(queueManager: QueueManager): CloudSnapshot['webhooks'] {
   try {
-    const webhooks = queueManager.webhookManager.list();
-    return webhooks.map((w) => ({
+    return queueManager.webhookManager.list().map((w) => ({
       id: w.id,
       url: w.url,
       events: w.events,
@@ -320,14 +347,16 @@ function collectWebhooks(queueManager: QueueManager): CloudSnapshot['webhooks'] 
   }
 }
 
-/** Collect top errors from DLQ entries, grouped by message */
+/** Collect top errors — only from queues with DLQ entries */
 function collectTopErrors(
   queueManager: QueueManager,
-  queueNames: string[]
+  dlqQueueNames: string[]
 ): CloudSnapshot['topErrors'] {
+  if (dlqQueueNames.length === 0) return [];
+
   const errorMap = new Map<string, { count: number; queue: string; lastSeen: number }>();
 
-  const allEntries = queueNames.flatMap((name) => {
+  const allEntries = dlqQueueNames.flatMap((name) => {
     try {
       return queueManager.getDlqEntries(name);
     } catch {

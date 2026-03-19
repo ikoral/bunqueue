@@ -29,8 +29,11 @@ export class CloudAgent {
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private unsubscribeEvents: (() => void) | null = null;
   private sequenceId = 0;
+  private snapshotCount = 0;
   private stopped = false;
   private serverHandles?: ServerHandles;
+  /** Heavy data collected every N snapshots (default: every 6th = every 30s at 5s interval) */
+  private readonly heavyEveryN = 6;
 
   constructor(
     private readonly queueManager: QueueManager,
@@ -119,6 +122,7 @@ export class CloudAgent {
         startedAt: this.startedAt,
         sequenceId: ++this.sequenceId,
         serverHandles: this.serverHandles,
+        includeHeavy: true,
       });
       snapshot.shutdown = true;
 
@@ -131,9 +135,12 @@ export class CloudAgent {
     cloudLog.info('Disconnected from dashboard');
   }
 
-  /** Collect and send a snapshot */
+  /** Collect and send a snapshot. Heavy data included every Nth snapshot. */
   private async sendSnapshot(): Promise<void> {
     try {
+      this.snapshotCount++;
+      const includeHeavy = this.snapshotCount % this.heavyEveryN === 1 || this.snapshotCount === 1;
+
       const snapshot = collectSnapshot({
         queueManager: this.queueManager,
         instanceId: this.instanceId,
@@ -141,6 +148,7 @@ export class CloudAgent {
         startedAt: this.startedAt,
         sequenceId: ++this.sequenceId,
         serverHandles: this.serverHandles,
+        includeHeavy,
       });
       await this.httpSender.send(snapshot);
     } catch (err) {

@@ -10,6 +10,14 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.42] - 2026-03-19
+
+### Performance
+- **Cloud: two-tier snapshot collection** — Light data (stats, throughput, latency, memory) collected every 5s at O(SHARD_COUNT). Heavy data (recentJobs, dlqEntries, topErrors, workerDetails, queueConfigs, webhooks) collected every 30s and cached between refreshes. Heavy collectors skip empty queues (only iterate queues with waiting/active/dlq > 0). Eliminated double `getQueueJobCounts()` pass.
+
+### Fixed
+- **Cloud: totalCompleted/totalFailed per queue** — Was sending in-memory BoundedSet count (resets when full). Now sends cumulative counters from `perQueueMetrics` (never resets).
+
 ## [2.6.41] - 2026-03-19
 
 ### Enhanced
