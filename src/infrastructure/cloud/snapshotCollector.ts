@@ -109,13 +109,17 @@ export function collectSnapshot(params: CollectSnapshotParams): CloudSnapshot {
 
   // ─── Heavy data (only when requested) ───
   if (params.includeHeavy) {
+    // recentJobs: only queues with current activity (not historical)
+    // completed/failed jobs are fetched from ALL queues since they're in-memory bounded sets
     const activeQueues = queues.filter((q) => q.waiting > 0 || q.active > 0 || q.delayed > 0);
+    // Include all queues for completed/failed snapshot since getJobs handles the state filter
+    const allQueuesForJobs = queues.length <= 20 ? queues : activeQueues;
     const dlqQueues = queues.filter((q) => q.dlq > 0);
 
     cachedHeavy = {
       recentJobs: collectRecentJobs(
         queueManager,
-        activeQueues.map((q) => q.name)
+        allQueuesForJobs.map((q) => q.name)
       ),
       dlqEntries: collectDlqEntries(
         queueManager,
@@ -227,7 +231,7 @@ function collectRecentJobs(
   for (const name of activeQueueNames) {
     try {
       const queueJobs = queueManager.getJobs(name, {
-        state: ['waiting', 'active', 'delayed'],
+        state: ['waiting', 'active', 'delayed', 'completed', 'failed'],
         start: 0,
         end: perQueue - 1,
       });

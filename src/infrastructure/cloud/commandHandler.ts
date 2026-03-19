@@ -24,6 +24,7 @@ export interface CloudCommand {
   graceMs?: number;
   state?: string;
   limit?: number;
+  offset?: number;
 }
 
 /** Result sent back to dashboard */
@@ -116,6 +117,128 @@ const COMMANDS: Partial<Record<string, Handler>> = {
   'job:result': (qm, cmd) => {
     const result = qm.getResult(jobId(cmd.jobId ?? ''));
     return { result: result ?? null };
+  },
+
+  'job:list': (qm, cmd) => {
+    const limit = cmd.limit ?? 50;
+    const offset = cmd.offset ?? 0;
+    const states = cmd.state
+      ? cmd.state.split(',')
+      : ['waiting', 'active', 'delayed', 'completed', 'failed'];
+    const jobs = qm.getJobs(cmd.queue ?? '', {
+      state: states,
+      start: offset,
+      end: offset + limit - 1,
+    });
+    return {
+      jobs: jobs.map((j) => {
+        const data = j.data as Record<string, unknown> | undefined;
+        return {
+          id: String(j.id),
+          name: (data?.name as string | undefined) ?? 'default',
+          queue: j.queue,
+          state: j.completedAt
+            ? 'completed'
+            : j.startedAt
+              ? 'active'
+              : j.runAt > Date.now()
+                ? 'delayed'
+                : 'waiting',
+          data,
+          priority: j.priority,
+          createdAt: j.createdAt,
+          startedAt: j.startedAt ?? null,
+          completedAt: j.completedAt ?? null,
+          attempts: j.attempts,
+          maxAttempts: j.maxAttempts,
+          progress: j.progress,
+          duration: j.completedAt && j.startedAt ? j.completedAt - j.startedAt : null,
+        };
+      }),
+      total: qm.count(cmd.queue ?? ''),
+      offset,
+      limit,
+    };
+  },
+
+  'job:get': async (qm, cmd) => {
+    const job = await qm.getJob(jobId(cmd.jobId ?? ''));
+    if (!job) return { job: null };
+    const data = job.data as Record<string, unknown> | undefined;
+    const logs = qm.getLogs(jobId(cmd.jobId ?? ''));
+    const result = qm.getResult(jobId(cmd.jobId ?? ''));
+    return {
+      job: {
+        id: String(job.id),
+        name: (data?.name as string | undefined) ?? 'default',
+        queue: job.queue,
+        state: job.completedAt
+          ? 'completed'
+          : job.startedAt
+            ? 'active'
+            : job.runAt > Date.now()
+              ? 'delayed'
+              : 'waiting',
+        data,
+        priority: job.priority,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt ?? null,
+        completedAt: job.completedAt ?? null,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
+        progress: job.progress,
+        duration: job.completedAt && job.startedAt ? job.completedAt - job.startedAt : null,
+        logs,
+        result: result ?? null,
+      },
+    };
+  },
+
+  'queue:detail': (qm, cmd) => {
+    const queue = cmd.queue ?? '';
+    const counts = qm.getQueueJobCounts(queue);
+    const paused = qm.isPaused(queue);
+    const stallConfig = qm.getStallConfig(queue);
+    const dlqConfig = qm.getDlqConfig(queue);
+    const dlqEntries = qm.getDlqEntries(queue).slice(0, 50);
+    const jobs = qm.getJobs(queue, {
+      state: ['waiting', 'active', 'delayed', 'completed', 'failed'],
+      start: 0,
+      end: 49,
+    });
+
+    return {
+      queue,
+      paused,
+      counts,
+      stallConfig: { stallInterval: stallConfig.stallInterval, maxStalls: stallConfig.maxStalls },
+      dlqConfig: { maxRetries: dlqConfig.maxAutoRetries, maxAge: dlqConfig.maxAge ?? 0 },
+      dlqEntries: dlqEntries.map((e) => ({
+        jobId: String(e.job.id),
+        reason: e.reason,
+        error: e.error,
+        enteredAt: e.enteredAt,
+        retryCount: e.retryCount,
+      })),
+      jobs: jobs.map((j) => {
+        const data = j.data as Record<string, unknown> | undefined;
+        return {
+          id: String(j.id),
+          name: (data?.name as string | undefined) ?? 'default',
+          state: j.completedAt
+            ? 'completed'
+            : j.startedAt
+              ? 'active'
+              : j.runAt > Date.now()
+                ? 'delayed'
+                : 'waiting',
+          priority: j.priority,
+          createdAt: j.createdAt,
+          attempts: j.attempts,
+          maxAttempts: j.maxAttempts,
+        };
+      }),
+    };
   },
 };
 

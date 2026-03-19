@@ -10,6 +10,18 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.43] - 2026-03-19
+
+### Added
+- **Cloud: `job:list` command** — Paginated job listing per queue with state filtering (`queue`, `state`, `limit`, `offset`).
+- **Cloud: `job:get` command** — Full job detail with logs and result included.
+- **Cloud: `queue:detail` command** — Queue detail with counts, config, DLQ entries, and job list.
+
+### Fixed
+- **Cloud: recentJobs now includes completed/failed jobs** — Was only querying waiting/active/delayed states.
+- **Cloud: `job:list` total count** — Now returns actual queue count instead of page length.
+- **Cloud: activeQueues filter** — Restored skip-empty-queues optimization that was broken by over-broad filter.
+
 ## [2.6.42] - 2026-03-19
 
 ### Performance
