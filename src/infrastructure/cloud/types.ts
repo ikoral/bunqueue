@@ -109,6 +109,8 @@ export interface CloudSnapshot {
     active: number;
     dlq: number;
     paused: boolean;
+    totalCompleted: number;
+    totalFailed: number;
   }>;
 
   workers: {
@@ -124,6 +126,8 @@ export interface CloudSnapshot {
     queue: string;
     schedule: string | null;
     nextRun: number;
+    executions: number;
+    maxLimit: number | null;
   }>;
 
   storage: {
@@ -184,15 +188,55 @@ export interface CloudSnapshot {
     currentJob: string | null;
   }>;
 
-  /** Per-queue configuration */
+  /** Per-queue configuration (includes rate limit + concurrency) */
   queueConfigs: Record<
     string,
     {
       paused: boolean;
+      rateLimit: number | null;
+      concurrencyLimit: number | null;
+      concurrencyActive: number;
       stallConfig?: { stallInterval: number; maxStalls: number };
       dlqConfig?: { maxRetries: number; maxAge: number };
     }
   >;
+
+  /** Connection stats — TCP, WebSocket, SSE clients */
+  connections: {
+    tcp: number;
+    ws: number;
+    sse: number;
+  };
+
+  /** Registered webhooks with delivery stats */
+  webhooks: Array<{
+    id: string;
+    url: string;
+    events: string[];
+    queue: string | null;
+    enabled: boolean;
+    successCount: number;
+    failureCount: number;
+    lastTriggered: number | null;
+  }>;
+
+  /** Top recent errors (last ~20, grouped by message) */
+  topErrors: Array<{
+    message: string;
+    count: number;
+    queue: string;
+    lastSeen: number;
+  }>;
+
+  /** S3 backup status (null if not configured) */
+  s3Backup: {
+    enabled: boolean;
+    bucket: string;
+    endpoint: string;
+    intervalMs: number;
+    retention: number;
+    isRunning: boolean;
+  } | null;
 }
 
 /** Event payload forwarded via WebSocket */

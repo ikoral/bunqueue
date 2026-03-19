@@ -107,6 +107,16 @@ const COMMANDS: Partial<Record<string, Handler>> = {
   'stats:refresh': (qm) => {
     return qm.getStats();
   },
+
+  'job:logs': (qm, cmd) => {
+    const logs = qm.getLogs(jobId(cmd.jobId ?? ''));
+    return { logs };
+  },
+
+  'job:result': (qm, cmd) => {
+    const result = qm.getResult(jobId(cmd.jobId ?? ''));
+    return { result: result ?? null };
+  },
 };
 
 /** Process a command and return the result */

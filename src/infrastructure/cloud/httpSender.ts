@@ -104,7 +104,17 @@ export class HttpSender {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+      const msg = `HTTP ${res.status}: ${text.slice(0, 200)}`;
+
+      // Auth/plan errors should be visible to the user, not silently buffered
+      if (res.status === 401 || res.status === 403) {
+        cloudLog.error('Cloud rejected connection', {
+          status: res.status,
+          response: text.slice(0, 200),
+        });
+      }
+
+      throw new Error(msg);
     }
   }
 

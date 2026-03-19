@@ -169,6 +169,14 @@ function startServer(): void {
 
   // Initialize bunqueue Cloud agent (remote dashboard telemetry)
   const cloudAgent = CloudAgent.create(queueManager, config.dataPath);
+  if (cloudAgent) {
+    cloudAgent.setServerHandles({
+      getConnectionCount: () => tcpServer.getConnectionCount(),
+      getWsClientCount: () => httpServer.getWsClientCount(),
+      getSseClientCount: () => httpServer.getSseClientCount(),
+      getBackupStatus: () => backupManager?.getStatus() ?? null,
+    });
+  }
 
   queueManager.emitDashboardEvent('server:started', {
     tcpPort: config.tcpPort,

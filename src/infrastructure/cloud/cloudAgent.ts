@@ -14,7 +14,7 @@ import type { JobEvent } from '../../domain/types/queue';
 import type { CloudConfig, CloudEvent } from './types';
 import { loadCloudConfig } from './config';
 import { getInstanceId } from './instanceId';
-import { collectSnapshot } from './snapshotCollector';
+import { collectSnapshot, type ServerHandles } from './snapshotCollector';
 import { HttpSender } from './httpSender';
 import { WsSender } from './wsSender';
 import { handleCommand } from './commandHandler';
@@ -30,6 +30,7 @@ export class CloudAgent {
   private unsubscribeEvents: (() => void) | null = null;
   private sequenceId = 0;
   private stopped = false;
+  private serverHandles?: ServerHandles;
 
   constructor(
     private readonly queueManager: QueueManager,
@@ -39,6 +40,11 @@ export class CloudAgent {
     this.instanceId = getInstanceId(config.dataPath);
     this.httpSender = new HttpSender(config);
     this.wsSender = config.useWebSocket ? new WsSender(config, this.instanceId) : null;
+  }
+
+  /** Set server handles for connection stats */
+  setServerHandles(handles: ServerHandles): void {
+    this.serverHandles = handles;
   }
 
   /** Create and start a Cloud agent if configured. Returns null if disabled. */
@@ -106,13 +112,14 @@ export class CloudAgent {
 
     // Send final shutdown snapshot (best-effort, 2s timeout)
     try {
-      const snapshot = collectSnapshot(
-        this.queueManager,
-        this.instanceId,
-        this.config.instanceName,
-        this.startedAt,
-        ++this.sequenceId
-      );
+      const snapshot = collectSnapshot({
+        queueManager: this.queueManager,
+        instanceId: this.instanceId,
+        instanceName: this.config.instanceName,
+        startedAt: this.startedAt,
+        sequenceId: ++this.sequenceId,
+        serverHandles: this.serverHandles,
+      });
       snapshot.shutdown = true;
 
       await Promise.race([this.httpSender.send(snapshot), Bun.sleep(2000)]);
@@ -127,13 +134,14 @@ export class CloudAgent {
   /** Collect and send a snapshot */
   private async sendSnapshot(): Promise<void> {
     try {
-      const snapshot = collectSnapshot(
-        this.queueManager,
-        this.instanceId,
-        this.config.instanceName,
-        this.startedAt,
-        ++this.sequenceId
-      );
+      const snapshot = collectSnapshot({
+        queueManager: this.queueManager,
+        instanceId: this.instanceId,
+        instanceName: this.config.instanceName,
+        startedAt: this.startedAt,
+        sequenceId: ++this.sequenceId,
+        serverHandles: this.serverHandles,
+      });
       await this.httpSender.send(snapshot);
     } catch (err) {
       cloudLog.debug('Snapshot send failed', { error: String(err) });

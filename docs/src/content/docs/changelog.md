@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.41] - 2026-03-19
+
+### Enhanced
+- **bunqueue Cloud: enterprise-grade telemetry** — Snapshot now includes per-queue totals (`totalCompleted`/`totalFailed`), connection stats (TCP/WS/SSE clients), webhook delivery stats, top errors grouped by message, cron execution counts, S3 backup status, rate limit and concurrency config per queue. Added `job:logs` and `job:result` remote commands for on-demand data. Auth errors (401/403) now logged at error level instead of silently buffered.
+
 ## [2.6.40] - 2026-03-19
 
 ### Added (Beta)

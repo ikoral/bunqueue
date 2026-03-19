@@ -14,14 +14,34 @@ import type { CloudSnapshot } from './types';
 /** Cached hostname — computed once */
 const HOST = hostname();
 
+/** Optional server handles for connection stats + backup */
+export interface ServerHandles {
+  getConnectionCount: () => number;
+  getWsClientCount: () => number;
+  getSseClientCount: () => number;
+  getBackupStatus?: () => {
+    enabled: boolean;
+    bucket: string;
+    endpoint: string;
+    intervalMs: number;
+    retention: number;
+    isRunning: boolean;
+  } | null;
+}
+
+/** Parameters for snapshot collection */
+export interface CollectSnapshotParams {
+  queueManager: QueueManager;
+  instanceId: string;
+  instanceName: string;
+  startedAt: number;
+  sequenceId: number;
+  serverHandles?: ServerHandles;
+}
+
 /** Collect a full snapshot from all managers. O(SHARD_COUNT) total. */
-export function collectSnapshot(
-  queueManager: QueueManager,
-  instanceId: string,
-  instanceName: string,
-  startedAt: number,
-  sequenceId: number
-): CloudSnapshot {
+export function collectSnapshot(params: CollectSnapshotParams): CloudSnapshot {
+  const { queueManager, instanceId, instanceName, startedAt, sequenceId, serverHandles } = params;
   const stats = queueManager.getStats();
   const memStats = queueManager.getMemoryStats();
   const workerStats = queueManager.workerManager.getStats();
@@ -38,6 +58,7 @@ export function collectSnapshot(
   const queueNames = queuesSummary.map((q) => q.name);
   const queues = queuesSummary.map((q) => {
     const pq = perQueue.get(q.name);
+    const counts = queueManager.getQueueJobCounts(q.name);
     return {
       name: q.name,
       waiting: pq?.waiting ?? q.counts.waiting,
@@ -45,6 +66,8 @@ export function collectSnapshot(
       active: pq?.active ?? q.counts.active,
       dlq: pq?.dlq ?? 0,
       paused: q.paused,
+      totalCompleted: counts.totalCompleted,
+      totalFailed: counts.totalFailed,
     };
   });
 
@@ -111,6 +134,8 @@ export function collectSnapshot(
       queue: c.queue,
       schedule: c.schedule ?? null,
       nextRun: c.nextRun,
+      executions: c.executions,
+      maxLimit: c.maxLimit,
     })),
 
     storage: {
@@ -141,8 +166,24 @@ export function collectSnapshot(
       currentJob: w.currentJob,
     })),
 
-    // Per-queue config
+    // Per-queue config (includes rate limit + concurrency)
     queueConfigs: collectQueueConfigs(queueManager, queueNames),
+
+    // Connection stats
+    connections: {
+      tcp: serverHandles?.getConnectionCount() ?? 0,
+      ws: serverHandles?.getWsClientCount() ?? 0,
+      sse: serverHandles?.getSseClientCount() ?? 0,
+    },
+
+    // Webhooks with delivery stats
+    webhooks: collectWebhooks(queueManager),
+
+    // Top errors from DLQ entries
+    topErrors: collectTopErrors(queueManager, queueNames),
+
+    // S3 backup status
+    s3Backup: serverHandles?.getBackupStatus?.() ?? null,
   };
 }
 
@@ -237,13 +278,18 @@ function collectQueueConfigs(
   queueNames: string[]
 ): CloudSnapshot['queueConfigs'] {
   const configs: CloudSnapshot['queueConfigs'] = {};
+  const perQueue = queueManager.getPerQueueStats();
 
   for (const name of queueNames) {
     try {
       const stall = queueManager.getStallConfig(name);
       const dlq = queueManager.getDlqConfig(name);
+      const pq = perQueue.get(name);
       configs[name] = {
         paused: queueManager.isPaused(name),
+        rateLimit: null, // TODO: expose from QueueManager
+        concurrencyLimit: null, // TODO: expose from QueueManager
+        concurrencyActive: pq?.active ?? 0,
         stallConfig: { stallInterval: stall.stallInterval, maxStalls: stall.maxStalls },
         dlqConfig: { maxRetries: dlq.maxAutoRetries, maxAge: dlq.maxAge ?? 0 },
       };
@@ -253,4 +299,58 @@ function collectQueueConfigs(
   }
 
   return configs;
+}
+
+/** Collect webhook delivery stats */
+function collectWebhooks(queueManager: QueueManager): CloudSnapshot['webhooks'] {
+  try {
+    const webhooks = queueManager.webhookManager.list();
+    return webhooks.map((w) => ({
+      id: w.id,
+      url: w.url,
+      events: w.events,
+      queue: w.queue,
+      enabled: w.enabled,
+      successCount: w.successCount,
+      failureCount: w.failureCount,
+      lastTriggered: w.lastTriggered,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Collect top errors from DLQ entries, grouped by message */
+function collectTopErrors(
+  queueManager: QueueManager,
+  queueNames: string[]
+): CloudSnapshot['topErrors'] {
+  const errorMap = new Map<string, { count: number; queue: string; lastSeen: number }>();
+
+  const allEntries = queueNames.flatMap((name) => {
+    try {
+      return queueManager.getDlqEntries(name);
+    } catch {
+      return [];
+    }
+  });
+
+  for (const e of allEntries) {
+    const msg = e.error ?? e.reason;
+    const existing = errorMap.get(msg);
+    if (existing) {
+      existing.count++;
+      if (e.enteredAt > existing.lastSeen) {
+        existing.lastSeen = e.enteredAt;
+        existing.queue = e.job.queue;
+      }
+    } else {
+      errorMap.set(msg, { count: 1, queue: e.job.queue, lastSeen: e.enteredAt });
+    }
+  }
+
+  return [...errorMap.entries()]
+    .map(([message, data]) => ({ message, ...data }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
 }
