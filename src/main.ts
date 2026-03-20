@@ -79,7 +79,11 @@ function loadConfig(): ServerConfig {
     tcpSocketPath: Bun.env.TCP_SOCKET_PATH,
     httpSocketPath: Bun.env.HTTP_SOCKET_PATH,
     authTokens: Bun.env.AUTH_TOKENS?.split(',').filter(Boolean) ?? [],
-    dataPath: Bun.env.DATA_PATH ?? Bun.env.SQLITE_PATH,
+    dataPath:
+      Bun.env.BUNQUEUE_DATA_PATH ??
+      Bun.env.BQ_DATA_PATH ??
+      Bun.env.DATA_PATH ??
+      Bun.env.SQLITE_PATH,
     corsOrigins: Bun.env.CORS_ALLOW_ORIGIN?.split(',').filter(Boolean) ?? [],
     requireAuthForMetrics: Bun.env.METRICS_AUTH === 'true',
     s3BackupEnabled: Bun.env.S3_BACKUP_ENABLED === '1' || Bun.env.S3_BACKUP_ENABLED === 'true',

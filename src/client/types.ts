@@ -419,6 +419,8 @@ export interface QueueOptions {
   connection?: ConnectionOptions;
   /** Use embedded mode (in-process SQLite) instead of TCP */
   embedded?: boolean;
+  /** SQLite database path for embedded mode (overrides DATA_PATH env var) */
+  dataPath?: string;
   /**
    * Auto-batching for queue.add() calls in TCP mode.
    * Buffers individual add() calls and sends them as a single PUSHB command.
@@ -448,6 +450,8 @@ export interface WorkerOptions {
   connection?: ConnectionOptions;
   /** Use embedded mode (in-process SQLite) instead of TCP */
   embedded?: boolean;
+  /** SQLite database path for embedded mode (overrides DATA_PATH env var) */
+  dataPath?: string;
   /** Batch size for pulling jobs (default: 10, max: 1000). Higher = fewer round-trips */
   batchSize?: number;
   /** Long poll timeout in ms when queue is empty (default: 0 = no wait, max: 30000) */

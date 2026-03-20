@@ -23,6 +23,7 @@ import type {
 import { FORCE_EMBEDDED } from './helpers';
 import { AddBatcher } from './addBatcher';
 import { resolveToken } from '../resolveToken';
+import { getSharedManager } from '../manager';
 
 // Import operation modules
 import * as addOps from './operations/add';
@@ -56,6 +57,8 @@ export class Queue<T = unknown> {
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
 
     if (this.embedded) {
+      // Initialize shared manager with programmatic dataPath (if provided)
+      getSharedManager(opts.dataPath);
       this.tcpPool = null;
       this.useSharedPool = false;
       this.addBatcher = null;

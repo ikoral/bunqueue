@@ -138,6 +138,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     });
 
     if (this.embedded) {
+      // Initialize shared manager with programmatic dataPath (if provided)
+      getSharedManager(opts.dataPath);
       this.tcp = null;
       this.tcpPool = null;
     } else {

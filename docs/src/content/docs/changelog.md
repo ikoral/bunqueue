@@ -10,6 +10,13 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.47] - 2026-03-20
+
+### Added
+- **Programmatic `dataPath` for embedded mode** — Queue and Worker accept `dataPath` option to set the SQLite database path without env vars. Resolves conflicts with apps that use their own `DATA_PATH`. ([#59](https://github.com/egeominotti/bunqueue/issues/59))
+- **`BUNQUEUE_DATA_PATH` / `BQ_DATA_PATH` env vars** — New namespaced env vars for data path configuration. Priority: `BUNQUEUE_DATA_PATH` > `BQ_DATA_PATH` > `DATA_PATH` > `SQLITE_PATH`. Backward compatible.
+- **Cloud: snapshots via WebSocket** — Snapshots are now sent over WS when connected (`{ type: "snapshot", ...data }`), falling back to HTTP POST only when WS is down.
+
 ## [2.6.46] - 2026-03-20
 
 ### Added

@@ -135,7 +135,7 @@ export class CloudAgent {
     cloudLog.info('Disconnected from dashboard');
   }
 
-  /** Collect and send a snapshot. Heavy data included every Nth snapshot. */
+  /** Collect and send a snapshot. Prefers WS, falls back to HTTP. */
   private async sendSnapshot(): Promise<void> {
     try {
       this.snapshotCount++;
@@ -151,8 +151,14 @@ export class CloudAgent {
         includeHeavy,
       });
 
-      // Dual-channel fallback: embed buffered events when WS is down
-      if (this.wsSender && !this.wsSender.isConnected()) {
+      // WS connected → send snapshot via WS
+      if (this.wsSender?.isConnected()) {
+        this.wsSender.sendRaw({ type: 'snapshot', ...snapshot });
+        return;
+      }
+
+      // WS down → embed buffered events in HTTP snapshot and fall back
+      if (this.wsSender) {
         const buffered = this.wsSender.drainBufferedEvents();
         if (buffered.length > 0) {
           snapshot.events = buffered;

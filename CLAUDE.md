@@ -153,8 +153,10 @@ Cleanup runs every 10s. Evicts 10% when full.
 ```bash
 # Server
 TCP_PORT=6789              HTTP_PORT=6790
-HOST=0.0.0.0               DATA_PATH=./data/bunq.db
+HOST=0.0.0.0               BUNQUEUE_DATA_PATH=./data/bunq.db
 AUTH_TOKENS=token1,token2  CORS_ALLOW_ORIGIN=*
+# Data path aliases (priority: BUNQUEUE_DATA_PATH > BQ_DATA_PATH > DATA_PATH)
+# BQ_DATA_PATH, DATA_PATH also supported for backward compatibility
 
 # S3 Backup
 S3_BACKUP_ENABLED=0        S3_BUCKET=my-bucket
@@ -211,8 +213,14 @@ bunqueue stats|metrics|health
 ```typescript
 import { Queue, Worker } from 'bunqueue/client';
 
-// Queue
+// Queue (TCP mode)
 const queue = new Queue<T>('emails', { connection: { port: 6789 } });
+
+// Queue (embedded mode — programmatic dataPath, no env var needed)
+const embeddedQueue = new Queue<T>('emails', {
+  embedded: true,
+  dataPath: './data/myapp.db',
+});
 await queue.add('send', { email: 'user@test.com' });
 await queue.add('payment', data, { durable: true }); // Immediate disk write
 queue.pause();
