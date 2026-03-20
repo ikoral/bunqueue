@@ -47,7 +47,7 @@ describe('loadCloudConfig', () => {
   });
 
   test('returns null when API key is missing', () => {
-    Bun.env.BUNQUEUE_CLOUD_URL = 'https://bunqueue.io';
+    Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
     expect(loadCloudConfig()).toBeNull();
   });
 
@@ -56,25 +56,25 @@ describe('loadCloudConfig', () => {
   });
 
   test('returns config when both URL and API key are set', () => {
-    Bun.env.BUNQUEUE_CLOUD_URL = 'https://bunqueue.io';
+    Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
 
     const config = loadCloudConfig();
     expect(config).not.toBeNull();
-    expect(config!.url).toBe('https://bunqueue.io');
+    expect(config!.url).toBe('https://cloud.bunqueue.io');
     expect(config!.apiKey).toBe('dk_test_123');
   });
 
   test('strips trailing slashes from URL', () => {
-    Bun.env.BUNQUEUE_CLOUD_URL = 'https://bunqueue.io///';
+    Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io///';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
 
     const config = loadCloudConfig()!;
-    expect(config.url).toBe('https://bunqueue.io');
+    expect(config.url).toBe('https://cloud.bunqueue.io');
   });
 
   test('parses all optional config with defaults', () => {
-    Bun.env.BUNQUEUE_CLOUD_URL = 'https://bunqueue.io';
+    Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
 
     const config = loadCloudConfig()!;
@@ -92,7 +92,7 @@ describe('loadCloudConfig', () => {
   });
 
   test('parses custom values', () => {
-    Bun.env.BUNQUEUE_CLOUD_URL = 'https://bunqueue.io';
+    Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
     Bun.env.BUNQUEUE_CLOUD_SIGNING_SECRET = 'my-secret';
     Bun.env.BUNQUEUE_CLOUD_INSTANCE_NAME = 'prod-1';
