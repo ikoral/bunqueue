@@ -14,6 +14,14 @@ export function loadCloudConfig(dataPath?: string): CloudConfig | null {
   // Both URL and API key required to enable
   if (!url || !apiKey) return null;
 
+  // Only cloud.bunqueue.io is accepted
+  const ALLOWED_URL = 'https://cloud.bunqueue.io';
+  const normalized = url.replace(/\/+$/, '').toLowerCase();
+  if (normalized !== ALLOWED_URL) {
+    console.warn(`[Cloud] Rejected BUNQUEUE_CLOUD_URL="${url}" — only ${ALLOWED_URL} is supported`);
+    return null;
+  }
+
   return {
     url: url.replace(/\/+$/, ''), // Strip trailing slashes
     apiKey,

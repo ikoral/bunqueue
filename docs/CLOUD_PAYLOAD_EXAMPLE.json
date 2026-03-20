@@ -1,0 +1,400 @@
+{
+  "instanceId": "35cb013f-2b60-4584-967c-291842be9fa4",
+  "instanceName": "prod-eu-1",
+  "version": "2.6.43",
+  "hostname": "Mac-Studio-di-Egeo-3.local",
+  "pid": 70239,
+  "startedAt": 1773957826829,
+  "timestamp": 1773958266875,
+  "sequenceId": 42,
+
+  "stats": {
+    "waiting": 22448,
+    "delayed": 0,
+    "active": 0,
+    "dlq": 10,
+    "completed": 4631,
+    "stalled": 0,
+    "paused": 0,
+    "totalPushed": "30286",
+    "totalPulled": "5328",
+    "totalCompleted": "4631",
+    "totalFailed": "10",
+    "uptime": 440046,
+    "cronJobs": 2,
+    "cronPending": 0
+  },
+
+  "throughput": {
+    "pushPerSec": 70.77,
+    "pullPerSec": 0,
+    "completePerSec": 0,
+    "failPerSec": 0
+  },
+
+  "latency": {
+    "averages": {
+      "pushMs": 0.82,
+      "pullMs": 1.35,
+      "ackMs": 0.86
+    },
+    "percentiles": {
+      "push": { "p50": 1, "p95": 2.5, "p99": 10 },
+      "pull": { "p50": 0.5, "p95": 10, "p99": 25 },
+      "ack": { "p50": 0.5, "p95": 5, "p99": 10 }
+    }
+  },
+
+  "memory": {
+    "heapUsed": 54,
+    "heapTotal": 55,
+    "rss": 246,
+    "external": 0.5
+  },
+
+  "collections": {
+    "jobIndex": 27089,
+    "completedJobs": 4631,
+    "jobResults": 4631,
+    "jobLogs": 0,
+    "customIdMap": 0,
+    "jobLocks": 0,
+    "processingTotal": 0,
+    "queuedTotal": 22448,
+    "temporalIndexTotal": 22331,
+    "delayedHeapTotal": 0
+  },
+
+  "queues": [
+    {
+      "name": "emails",
+      "waiting": 209,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 0,
+      "paused": true,
+      "totalCompleted": 379,
+      "totalFailed": 0
+    },
+    {
+      "name": "orders",
+      "waiting": 3313,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 0,
+      "paused": false,
+      "totalCompleted": 472,
+      "totalFailed": 0
+    },
+    {
+      "name": "payments",
+      "waiting": 2248,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 5,
+      "paused": false,
+      "totalCompleted": 1532,
+      "totalFailed": 5
+    },
+    {
+      "name": "notifications",
+      "waiting": 3367,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 1,
+      "paused": false,
+      "totalCompleted": 417,
+      "totalFailed": 1
+    },
+    {
+      "name": "analytics",
+      "waiting": 2842,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 0,
+      "paused": false,
+      "totalCompleted": 580,
+      "totalFailed": 0
+    },
+    {
+      "name": "webhooks",
+      "waiting": 2858,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 1,
+      "paused": false,
+      "totalCompleted": 410,
+      "totalFailed": 1
+    },
+    {
+      "name": "exports",
+      "waiting": 2862,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 1,
+      "paused": false,
+      "totalCompleted": 390,
+      "totalFailed": 1
+    },
+    {
+      "name": "imports",
+      "waiting": 2835,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 2,
+      "paused": false,
+      "totalCompleted": 451,
+      "totalFailed": 2
+    },
+    {
+      "name": "monitoring",
+      "waiting": 4,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 0,
+      "paused": false,
+      "totalCompleted": 0,
+      "totalFailed": 0
+    },
+    {
+      "name": "maintenance",
+      "waiting": 2,
+      "delayed": 0,
+      "active": 0,
+      "dlq": 0,
+      "paused": false,
+      "totalCompleted": 0,
+      "totalFailed": 0
+    }
+  ],
+
+  "workers": {
+    "total": 8,
+    "active": 0,
+    "totalProcessed": 4631,
+    "totalFailed": 10,
+    "activeJobs": 0
+  },
+
+  "crons": [
+    {
+      "name": "cleanup",
+      "queue": "maintenance",
+      "schedule": "*/5 * * * *",
+      "nextRun": 1773958500000,
+      "executions": 2,
+      "maxLimit": null
+    },
+    {
+      "name": "health-check",
+      "queue": "monitoring",
+      "schedule": "*/2 * * * *",
+      "nextRun": 1773958380000,
+      "executions": 4,
+      "maxLimit": null
+    }
+  ],
+
+  "storage": {
+    "diskFull": false,
+    "error": null
+  },
+
+  "taskErrors": {
+    "cleanup": { "consecutiveFailures": 0 },
+    "dependency": { "consecutiveFailures": 0 }
+  },
+
+  "connections": {
+    "tcp": 12,
+    "ws": 1,
+    "sse": 0
+  },
+
+  "recentJobs": [
+    {
+      "id": "019d0820-92c4-7000-aec7-c0e10ba9903f",
+      "name": "send-email",
+      "queue": "emails",
+      "state": "completed",
+      "data": { "name": "job", "t": 1773957845690, "user": "user0" },
+      "priority": 11,
+      "createdAt": 1773957845700,
+      "startedAt": 1773957845716,
+      "completedAt": 1773957845780,
+      "attempts": 1,
+      "maxAttempts": 3,
+      "duration": 64
+    },
+    {
+      "id": "019d0820-933f-7000-b6dd-dbc948a7fb95",
+      "name": "process-order",
+      "queue": "orders",
+      "state": "waiting",
+      "data": { "name": "job", "t": 1773957845822, "user": "user8" },
+      "priority": 6,
+      "createdAt": 1773957845823,
+      "attempts": 0,
+      "maxAttempts": 3
+    },
+    {
+      "id": "019d0820-93a5-7000-8044-c1babd4f289f",
+      "name": "charge-payment",
+      "queue": "payments",
+      "state": "active",
+      "data": { "name": "job", "t": 1773957845925, "user": "user16" },
+      "priority": 7,
+      "createdAt": 1773957845925,
+      "startedAt": 1773957845960,
+      "failedReason": "Retry 1/3",
+      "attempts": 1,
+      "maxAttempts": 3
+    },
+    {
+      "id": "019d0820-9410-7000-9922-aabb11223344",
+      "name": "send-notification",
+      "queue": "notifications",
+      "state": "delayed",
+      "data": { "name": "job", "t": 1773957846000, "user": "user24" },
+      "priority": 3,
+      "createdAt": 1773957846000,
+      "attempts": 0,
+      "maxAttempts": 3
+    },
+    {
+      "id": "019d0820-9500-7000-5566-ccdd44556677",
+      "name": "track-analytics",
+      "queue": "analytics",
+      "state": "failed",
+      "data": { "name": "job", "t": 1773957846200, "user": "user32" },
+      "priority": 1,
+      "createdAt": 1773957846200,
+      "startedAt": 1773957846250,
+      "completedAt": 1773957846300,
+      "failedReason": "Processing timeout",
+      "attempts": 3,
+      "maxAttempts": 3,
+      "duration": 50
+    }
+  ],
+
+  "dlqEntries": [
+    {
+      "jobId": "019d0821-a100-7000-1234-aabbccddeeff",
+      "queue": "payments",
+      "reason": "max_attempts_exceeded",
+      "error": "Rate limit exceeded",
+      "enteredAt": 1773957873305,
+      "retryCount": 0,
+      "attempts": 3
+    },
+    {
+      "jobId": "019d0822-b200-7000-5678-112233445566",
+      "queue": "payments",
+      "reason": "max_attempts_exceeded",
+      "error": "DB connection lost",
+      "enteredAt": 1773957907377,
+      "retryCount": 0,
+      "attempts": 3
+    },
+    {
+      "jobId": "019d0823-c300-7000-9abc-ffeeddccbbaa",
+      "queue": "notifications",
+      "reason": "max_attempts_exceeded",
+      "error": "Processing timeout",
+      "enteredAt": 1773957920000,
+      "retryCount": 0,
+      "attempts": 3
+    }
+  ],
+
+  "workerDetails": [
+    {
+      "id": "worker-emails-1773957830000-abc123",
+      "name": "emails",
+      "queues": ["emails"],
+      "concurrency": 4,
+      "hostname": "Mac-Studio-di-Egeo-3.local",
+      "pid": 70100,
+      "lastSeen": 1773958266000,
+      "activeJobs": 0,
+      "processedJobs": 379,
+      "failedJobs": 52,
+      "currentJob": null
+    },
+    {
+      "id": "worker-orders-1773957830000-def456",
+      "name": "orders",
+      "queues": ["orders"],
+      "concurrency": 4,
+      "hostname": "Mac-Studio-di-Egeo-3.local",
+      "pid": 70101,
+      "lastSeen": 1773958265000,
+      "activeJobs": 0,
+      "processedJobs": 472,
+      "failedJobs": 61,
+      "currentJob": null
+    },
+    {
+      "id": "worker-payments-1773957830000-ghi789",
+      "name": "payments",
+      "queues": ["payments"],
+      "concurrency": 4,
+      "hostname": "Mac-Studio-di-Egeo-3.local",
+      "pid": 70102,
+      "lastSeen": 1773958264000,
+      "activeJobs": 0,
+      "processedJobs": 1532,
+      "failedJobs": 198,
+      "currentJob": null
+    }
+  ],
+
+  "queueConfigs": {
+    "emails": {
+      "paused": true,
+      "rateLimit": null,
+      "concurrencyLimit": null,
+      "concurrencyActive": 0,
+      "stallConfig": { "stallInterval": 30000, "maxStalls": 3 },
+      "dlqConfig": { "maxRetries": 3, "maxAge": 604800000 }
+    },
+    "orders": {
+      "paused": false,
+      "rateLimit": null,
+      "concurrencyLimit": null,
+      "concurrencyActive": 0,
+      "stallConfig": { "stallInterval": 30000, "maxStalls": 3 },
+      "dlqConfig": { "maxRetries": 3, "maxAge": 604800000 }
+    },
+    "payments": {
+      "paused": false,
+      "rateLimit": null,
+      "concurrencyLimit": null,
+      "concurrencyActive": 0,
+      "stallConfig": { "stallInterval": 30000, "maxStalls": 3 },
+      "dlqConfig": { "maxRetries": 3, "maxAge": 604800000 }
+    }
+  },
+
+  "webhooks": [
+    {
+      "id": "wh-001",
+      "url": "https://api.acme.com/webhooks/bunqueue",
+      "events": ["job.completed", "job.failed"],
+      "queue": null,
+      "enabled": true,
+      "successCount": 1200,
+      "failureCount": 3,
+      "lastTriggered": 1773957265000
+    }
+  ],
+
+  "topErrors": [
+    { "message": "Processing timeout", "count": 5, "queue": "emails", "lastSeen": 1773958260000 },
+    { "message": "DB connection lost", "count": 3, "queue": "payments", "lastSeen": 1773958250000 },
+    { "message": "Rate limit exceeded", "count": 2, "queue": "payments", "lastSeen": 1773958240000 }
+  ],
+
+  "s3Backup": null
+}
