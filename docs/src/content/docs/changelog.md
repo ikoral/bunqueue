@@ -10,6 +10,18 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.46] - 2026-03-20
+
+### Added
+- **Cloud: resilient WebSocket with ring buffer** — Events are buffered (max 1000) when WS is disconnected and flushed after `handshake_ack` on reconnect (with 5s fallback timeout). Zero event loss during brief disconnections.
+- **Cloud: client-side ping heartbeat** — bunqueue sends `{ type: "ping" }` every 10s to the dashboard; if no pong within 5s, closes socket and reconnects. Dead connection detection reduced from ~40s to ~10s.
+- **Cloud: dual-channel failover** — When WS is down, buffered events are embedded in the HTTP snapshot (`snapshot.events`), so the dashboard stays informed even during prolonged disconnections.
+
+### Fixed
+- **Cloud: double reconnect race** — Pong timeout no longer calls `scheduleReconnect()` directly; delegates to `onclose` to prevent duplicate sockets.
+- **Cloud: local socket reference** — All handlers (pong, handshake, commands) use the local `ws` variable, not `this.ws`, preventing replies on stale sockets after reconnect.
+- **Cloud: old socket cleanup** — Previous socket is explicitly closed and handlers nulled before creating a new connection.
+
 ## [2.6.45] - 2026-03-20
 
 ### Added

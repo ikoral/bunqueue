@@ -228,6 +228,9 @@ export interface CloudSnapshot {
     lastSeen: number;
   }>;
 
+  /** Buffered events embedded in snapshot when WS is down (dual-channel fallback) */
+  events?: CloudEvent[];
+
   /** S3 backup status (null if not configured) */
   s3Backup: {
     enabled: boolean;

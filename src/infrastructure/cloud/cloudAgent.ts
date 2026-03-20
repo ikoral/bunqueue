@@ -150,6 +150,16 @@ export class CloudAgent {
         serverHandles: this.serverHandles,
         includeHeavy,
       });
+
+      // Dual-channel fallback: embed buffered events when WS is down
+      if (this.wsSender && !this.wsSender.isConnected()) {
+        const buffered = this.wsSender.drainBufferedEvents();
+        if (buffered.length > 0) {
+          snapshot.events = buffered;
+          cloudLog.debug('Embedded events in HTTP snapshot (WS down)', { count: buffered.length });
+        }
+      }
+
       await this.httpSender.send(snapshot);
     } catch (err) {
       cloudLog.debug('Snapshot send failed', { error: String(err) });
