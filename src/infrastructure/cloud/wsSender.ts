@@ -3,10 +3,11 @@
  * Maintains a persistent outbound WebSocket to the dashboard for real-time events.
  *
  * Features:
+ * - Auth via HTTP upgrade headers (Bun-specific) — no handshake message needed
  * - Ring buffer: events are buffered when disconnected, flushed on reconnect
- * - Client-side ping: detects dead connections in ~10s (vs 40s server-side)
  * - Binary frame handling: works behind Cloudflare (text + ArrayBuffer)
  * - Local socket ref: pong always replies on the correct socket after reconnect
+ * - Keepalive: server sends ping every 25s, bunqueue responds pong
  */
 
 import type { CloudConfig, CloudEvent } from './types';
@@ -14,9 +15,6 @@ import type { CloudCommand } from './commandHandler';
 import { cloudLog } from './logger';
 
 const EVENT_BUFFER_MAX = 1000;
-const CLIENT_PING_INTERVAL = 10_000;
-const CLIENT_PONG_TIMEOUT = 5_000;
-const HANDSHAKE_ACK_TIMEOUT = 5_000;
 
 export class WsSender {
   private ws: WebSocket | null = null;
@@ -25,11 +23,6 @@ export class WsSender {
   private stopped = false;
   private connected = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-  private pingTimer: ReturnType<typeof setInterval> | null = null;
-  private pongTimer: ReturnType<typeof setTimeout> | null = null;
-  private awaitingPong = false;
-  private handshakeAckTimer: ReturnType<typeof setTimeout> | null = null;
-  private flushed = false;
 
   /** Ring buffer for events while disconnected */
   private readonly eventBuffer: CloudEvent[] = [];
@@ -57,7 +50,14 @@ export class WsSender {
 
     let ws: WebSocket;
     try {
-      ws = new WebSocket(wsUrl);
+      // Auth via HTTP upgrade headers (Bun-specific extension) — no handshake message needed
+      ws = new WebSocket(wsUrl, {
+        headers: {
+          Authorization: `Bearer ${this.config.apiKey}`,
+          'X-Instance-Id': this.instanceId,
+          'X-Remote-Commands': this.config.remoteCommands ? '1' : '0',
+        },
+      } as unknown as string[]);
     } catch (err) {
       cloudLog.debug('WS connect error', { error: String(err) });
       this.scheduleReconnect();
@@ -71,31 +71,11 @@ export class WsSender {
       this.reconnectDelay = 1000;
       cloudLog.info('WebSocket stream connected');
 
-      // Send handshake
-      ws.send(
-        JSON.stringify({
-          type: 'handshake',
-          instanceId: this.instanceId,
-          apiKey: this.config.apiKey,
-          remoteCommands: this.config.remoteCommands,
-        })
-      );
-
-      // Flush after handshake_ack, with fallback timeout
-      this.flushed = false;
-      this.handshakeAckTimer = setTimeout(() => {
-        if (!this.flushed) {
-          cloudLog.debug('handshake_ack timeout — flushing buffer anyway');
-          this.flushed = true;
-          this.flushBuffer(ws);
-        }
-      }, HANDSHAKE_ACK_TIMEOUT);
-
-      // Start client-side ping
-      this.startClientPing(ws);
+      // Flush buffered events immediately — auth already done via headers
+      this.flushBuffer(ws);
     };
 
-    // Handle incoming messages (pings + pongs + commands)
+    // Handle incoming messages (pings + commands from dashboard)
     // Uses local `ws` ref — NOT `this.ws` — to always reply on the correct socket
     ws.onmessage = (event) => {
       try {
@@ -119,26 +99,13 @@ export class WsSender {
           return;
         }
 
-        // Response to our client-side ping
+        // Server pong (in case we add client ping back later)
         if (msg.type === 'pong') {
-          this.awaitingPong = false;
-          if (this.pongTimer) {
-            clearTimeout(this.pongTimer);
-            this.pongTimer = null;
-          }
           return;
         }
 
         if (msg.type === 'handshake_ack') {
           cloudLog.debug('Handshake acknowledged');
-          if (!this.flushed) {
-            this.flushed = true;
-            if (this.handshakeAckTimer) {
-              clearTimeout(this.handshakeAckTimer);
-              this.handshakeAckTimer = null;
-            }
-            this.flushBuffer(ws);
-          }
           return;
         }
 
@@ -163,9 +130,8 @@ export class WsSender {
     };
 
     ws.onclose = (ev) => {
-      cloudLog.debug('WebSocket closed', { code: ev.code, reason: ev.reason });
+      cloudLog.info('WebSocket closed', { code: ev.code, reason: ev.reason });
       this.connected = false;
-      this.stopClientPing();
       if (!this.stopped) {
         this.scheduleReconnect();
       }
@@ -223,14 +189,9 @@ export class WsSender {
   /** Graceful shutdown */
   stop(): void {
     this.stopped = true;
-    this.stopClientPing();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
-    }
-    if (this.handshakeAckTimer) {
-      clearTimeout(this.handshakeAckTimer);
-      this.handshakeAckTimer = null;
     }
     this.cleanup();
     this.connected = false;
@@ -260,51 +221,6 @@ export class WsSender {
     }
   }
 
-  /** Client-side ping: detect dead connections faster than server timeout */
-  private startClientPing(ws: WebSocket): void {
-    this.stopClientPing();
-
-    this.pingTimer = setInterval(() => {
-      if (!this.connected || this.awaitingPong) return;
-
-      try {
-        ws.send(JSON.stringify({ type: 'ping' }));
-        this.awaitingPong = true;
-
-        // If no pong within timeout, connection is dead.
-        // Only close the socket — onclose will handle scheduleReconnect.
-        this.pongTimer = setTimeout(() => {
-          if (this.awaitingPong) {
-            cloudLog.debug('Client ping timeout — closing socket');
-            this.awaitingPong = false;
-            this.stopClientPing();
-            try {
-              ws.close(4000, 'ping timeout');
-            } catch {
-              // If close fails, force state and reconnect manually
-              this.connected = false;
-              this.scheduleReconnect();
-            }
-          }
-        }, CLIENT_PONG_TIMEOUT);
-      } catch {
-        // Socket dead, onclose will handle reconnect
-      }
-    }, CLIENT_PING_INTERVAL);
-  }
-
-  private stopClientPing(): void {
-    if (this.pingTimer) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = null;
-    }
-    if (this.pongTimer) {
-      clearTimeout(this.pongTimer);
-      this.pongTimer = null;
-    }
-    this.awaitingPong = false;
-  }
-
   /** Clean up socket handlers and close */
   private cleanup(): void {
     if (this.ws) {
@@ -323,10 +239,14 @@ export class WsSender {
   private scheduleReconnect(): void {
     if (this.stopped) return;
 
+    // Prevent duplicate reconnect timers
+    if (this.reconnectTimer) return;
+
     const jitter = Math.random() * 1000;
     const delay = this.reconnectDelay + jitter;
 
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.connect();
     }, delay);
 

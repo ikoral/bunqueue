@@ -10,6 +10,16 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.48] - 2026-03-20
+
+### Changed
+- **Cloud: auth via HTTP upgrade headers** — WebSocket authentication now uses `Authorization`, `X-Instance-Id`, and `X-Remote-Commands` headers on the upgrade request (Bun-specific). Eliminates the JSON handshake message and the 100ms delay workaround.
+- **Cloud: removed client-side ping** — Client-side ping (every 10s) was causing false disconnects (code 4000). Keepalive now relies solely on server-side ping (25s) with bunqueue responding pong.
+
+### Fixed
+- **Cloud: duplicate reconnect guard** — `scheduleReconnect()` now prevents multiple concurrent reconnect timers.
+- **Cloud: `onclose` logs at `info` level** — Previously `debug`, making reconnect failures invisible in production logs.
+
 ## [2.6.47] - 2026-03-20
 
 ### Added
