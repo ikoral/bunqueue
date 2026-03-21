@@ -1,20 +1,18 @@
 /**
- * WebSocket Sender
- * Maintains a persistent outbound WebSocket to the dashboard for real-time events.
+ * WebSocket Command Channel
+ * Persistent WebSocket connection for receiving commands from the dashboard.
  *
  * Features:
  * - Auth via HTTP upgrade headers (Bun-specific) — no handshake message needed
- * - Ring buffer: events are buffered when disconnected, flushed on reconnect
- * - Binary frame handling: works behind Cloudflare (text + ArrayBuffer)
- * - Local socket ref: pong always replies on the correct socket after reconnect
+ * - MessagePack + zstd: binary frames with ~95% compression
+ * - Commands only: all data goes via HTTP, WS is for remote commands
  * - Keepalive: server sends ping every 25s, bunqueue responds pong
  */
 
-import type { CloudConfig, CloudEvent } from './types';
+import { pack, unpack } from 'msgpackr';
+import type { CloudConfig } from './types';
 import type { CloudCommand } from './commandHandler';
 import { cloudLog } from './logger';
-
-const EVENT_BUFFER_MAX = 1000;
 
 export class WsSender {
   private ws: WebSocket | null = null;
@@ -23,10 +21,6 @@ export class WsSender {
   private stopped = false;
   private connected = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-  /** Ring buffer for events while disconnected */
-  private readonly eventBuffer: CloudEvent[] = [];
-
   private onCommand: ((cmd: CloudCommand) => void) | null = null;
 
   constructor(
@@ -42,20 +36,19 @@ export class WsSender {
   /** Open the WebSocket connection */
   connect(): void {
     if (this.stopped) return;
-
-    // Close previous socket if still lingering
     this.cleanup();
 
-    const wsUrl = this.config.url.replace(/^http/, 'ws').concat('/api/v1/stream');
+    const wsUrl = this.config.url.replace(/^http/, 'ws').concat('/api/v1/commands');
 
     let ws: WebSocket;
     try {
-      // Auth via HTTP upgrade headers (Bun-specific extension) — no handshake message needed
       ws = new WebSocket(wsUrl, {
         headers: {
           Authorization: `Bearer ${this.config.apiKey}`,
           'X-Instance-Id': this.instanceId,
           'X-Remote-Commands': this.config.remoteCommands ? '1' : '0',
+          'X-Protocol': 'msgpack',
+          'X-Encoding': 'zstd',
         },
       } as unknown as string[]);
     } catch (err) {
@@ -65,72 +58,26 @@ export class WsSender {
     }
 
     this.ws = ws;
+    ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
       this.connected = true;
       this.reconnectDelay = 1000;
-      cloudLog.info('WebSocket stream connected');
-
-      // Flush buffered events immediately — auth already done via headers
-      this.flushBuffer(ws);
+      cloudLog.info('Command channel connected (msgpack+zstd)');
     };
 
-    // Handle incoming messages (pings + commands from dashboard)
-    // Uses local `ws` ref — NOT `this.ws` — to always reply on the correct socket
     ws.onmessage = (event) => {
-      try {
-        let raw: string;
-        const d: unknown = event.data;
-        if (typeof d === 'string') {
-          raw = d;
-        } else if (d instanceof ArrayBuffer) {
-          raw = new TextDecoder().decode(d);
-        } else if (d instanceof Buffer) {
-          raw = d.toString('utf-8');
-        } else {
-          raw = String(d);
-        }
-
-        const msg = JSON.parse(raw) as Record<string, unknown>;
-
-        // Server heartbeat — respond immediately on the SAME socket
-        if (msg.type === 'ping') {
-          ws.send(JSON.stringify({ type: 'pong' }));
-          return;
-        }
-
-        // Server pong (in case we add client ping back later)
-        if (msg.type === 'pong') {
-          return;
-        }
-
-        if (msg.type === 'handshake_ack') {
-          cloudLog.debug('Handshake acknowledged');
-          return;
-        }
-
-        // Commands
-        if (
-          this.onCommand &&
-          this.config.remoteCommands &&
-          msg.type === 'command' &&
-          msg.action &&
-          msg.id
-        ) {
-          this.onCommand(msg as unknown as CloudCommand);
-        }
-      } catch (err) {
+      this.handleMessage(ws, event.data).catch((err: unknown) => {
         cloudLog.debug('WS message parse error', {
           dataType: typeof event.data,
           isArrayBuffer: event.data instanceof ArrayBuffer,
-          preview: String(event.data).slice(0, 100),
           error: String(err),
         });
-      }
+      });
     };
 
     ws.onclose = (ev) => {
-      cloudLog.info('WebSocket closed', { code: ev.code, reason: ev.reason });
+      cloudLog.info('Command channel closed', { code: ev.code, reason: ev.reason });
       this.connected = false;
       if (!this.stopped) {
         this.scheduleReconnect();
@@ -142,48 +89,12 @@ export class WsSender {
     };
   }
 
-  /** Send an event. Buffers in ring buffer if disconnected. */
-  send(event: CloudEvent): void {
-    if (this.connected && this.ws) {
-      try {
-        this.ws.send(JSON.stringify(event));
-        return;
-      } catch {
-        // Fall through to buffer
-      }
-    }
-
-    // Buffer when disconnected (ring buffer — drop oldest)
-    if (this.eventBuffer.length >= EVENT_BUFFER_MAX) {
-      this.eventBuffer.shift();
-    }
-    this.eventBuffer.push(event);
-  }
-
-  /** Send any JSON payload on the WebSocket */
+  /** Send a command result back to dashboard */
   sendRaw(data: unknown): void {
     if (!this.connected || !this.ws) return;
-
-    try {
-      this.ws.send(JSON.stringify(data));
-    } catch {
+    this.sendBinary(this.ws, data).catch(() => {
       // Best-effort: dropped
-    }
-  }
-
-  /**
-   * Drain buffered events for HTTP fallback (dual-channel).
-   * Returns and clears all buffered events.
-   */
-  drainBufferedEvents(): CloudEvent[] {
-    if (this.eventBuffer.length === 0) return [];
-    const events = this.eventBuffer.splice(0);
-    return events;
-  }
-
-  /** Number of buffered events */
-  getBufferSize(): number {
-    return this.eventBuffer.length;
+    });
   }
 
   /** Graceful shutdown */
@@ -201,24 +112,62 @@ export class WsSender {
     return this.connected;
   }
 
-  /** Flush buffered events on reconnect */
-  private flushBuffer(ws: WebSocket): void {
-    if (this.eventBuffer.length === 0) return;
+  /** Handle incoming WS message (async for zstd decompression) */
+  private async handleMessage(ws: WebSocket, data: unknown): Promise<void> {
+    const msg = await this.decodeMessage(data);
+    if (!msg) return;
 
-    const count = this.eventBuffer.length;
-    cloudLog.info('Flushing buffered events', { count });
-
-    while (this.eventBuffer.length > 0) {
-      const event = this.eventBuffer.shift();
-      if (!event) break;
-      try {
-        ws.send(JSON.stringify(event));
-      } catch {
-        // Re-buffer remaining events
-        this.eventBuffer.unshift(event);
-        break;
-      }
+    if (msg.type === 'ping') {
+      await this.sendBinary(ws, { type: 'pong' });
+      return;
     }
+    if (msg.type === 'pong') return;
+    if (msg.type === 'handshake_ack') {
+      cloudLog.debug('Handshake acknowledged');
+      return;
+    }
+    if (
+      this.onCommand &&
+      this.config.remoteCommands &&
+      msg.type === 'command' &&
+      msg.action &&
+      msg.id
+    ) {
+      this.onCommand(msg as unknown as CloudCommand);
+    }
+  }
+
+  /** Encode and send as zstd(msgpack) binary frame */
+  private async sendBinary(ws: WebSocket, data: unknown): Promise<void> {
+    ws.send(await Bun.zstdCompress(pack(data)));
+  }
+
+  /** Decode incoming message — supports zstd+msgpack, plain msgpack, and JSON (text) */
+  private decodeMessage(data: unknown): Promise<Record<string, unknown> | null> {
+    if (data instanceof ArrayBuffer) {
+      return this.decodeBinary(Buffer.from(data));
+    }
+    if (typeof data === 'string') {
+      return Promise.resolve(JSON.parse(data) as Record<string, unknown>);
+    }
+    if (data instanceof Buffer) {
+      return this.decodeBinary(data);
+    }
+    return Promise.resolve(null);
+  }
+
+  /** Decode binary buffer — auto-detect zstd (magic bytes 28 b5 2f fd) vs plain msgpack */
+  private async decodeBinary(buf: Buffer): Promise<Record<string, unknown>> {
+    if (
+      buf.length >= 4 &&
+      buf[0] === 0x28 &&
+      buf[1] === 0xb5 &&
+      buf[2] === 0x2f &&
+      buf[3] === 0xfd
+    ) {
+      return unpack(Buffer.from(await Bun.zstdDecompress(buf))) as Record<string, unknown>;
+    }
+    return unpack(buf) as Record<string, unknown>;
   }
 
   /** Clean up socket handlers and close */
@@ -238,8 +187,6 @@ export class WsSender {
 
   private scheduleReconnect(): void {
     if (this.stopped) return;
-
-    // Prevent duplicate reconnect timers
     if (this.reconnectTimer) return;
 
     const jitter = Math.random() * 1000;

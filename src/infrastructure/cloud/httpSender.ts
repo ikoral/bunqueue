@@ -1,8 +1,10 @@
 /**
  * HTTP Sender
  * Posts snapshots to the remote dashboard via HTTP with retry and HMAC signing
+ * Uses msgpack + zstd encoding (same as WebSocket channel)
  */
 
+import { pack } from 'msgpackr';
 import type { CloudConfig, CloudSnapshot } from './types';
 import { CircuitBreaker } from './circuitBreaker';
 import { SnapshotBuffer } from './buffer';
@@ -74,11 +76,13 @@ export class HttpSender {
     }
   }
 
-  /** HTTP POST with auth headers and optional HMAC */
+  /** HTTP POST with auth headers and optional HMAC — sends zstd(msgpack) */
   private async post(url: string, body: unknown): Promise<void> {
-    const json = JSON.stringify(body);
+    const msgpackBuf = pack(body);
+    const compressed = new Uint8Array(await Bun.zstdCompress(msgpackBuf));
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-msgpack',
+      'Content-Encoding': 'zstd',
       Authorization: `Bearer ${this.config.apiKey}`,
       'X-Timestamp': String(Date.now()),
     };
@@ -91,14 +95,14 @@ export class HttpSender {
         false,
         ['sign']
       );
-      const sig = await crypto.subtle.sign('HMAC', this.hmacKey, new TextEncoder().encode(json));
+      const sig = await crypto.subtle.sign('HMAC', this.hmacKey, compressed);
       headers['X-Signature'] = Buffer.from(sig).toString('hex');
     }
 
     const res = await fetch(url, {
       method: 'POST',
       headers,
-      body: json,
+      body: compressed,
       signal: AbortSignal.timeout(10_000),
     });
 

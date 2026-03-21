@@ -8,7 +8,7 @@
 import { Queue, Worker } from '../src/client';
 
 const TCP_PORT = parseInt(process.env.TCP_PORT ?? '6789');
-const DURATION_MS = 12 * 60 * 60 * 1000;
+const DURATION_MS = 24 * 60 * 60 * 1000;
 const PUSH_INTERVAL_MS = 500; // push every 500ms
 
 const TCP_OPTS = { port: TCP_PORT, commandTimeout: 60000, pingInterval: 0 };

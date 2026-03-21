@@ -295,7 +295,11 @@ describe('HttpSender', () => {
     server = Bun.serve({
       port: 0,
       fetch: async (req) => {
-        const body = await req.json();
+        const { unpack } = await import('msgpackr');
+        const raw = Buffer.from(await req.arrayBuffer());
+        const encoding = req.headers.get('content-encoding');
+        const buf = encoding === 'zstd' ? Buffer.from(await Bun.zstdDecompress(raw)) : raw;
+        const body = unpack(buf);
         received.push({ url: new URL(req.url).pathname, body, headers: Object.fromEntries(req.headers) });
         return new Response('ok', { status: statusCode });
       },
@@ -334,7 +338,7 @@ describe('HttpSender', () => {
     const r = received[0] as { url: string; body: unknown; headers: Record<string, string> };
     expect(r.url).toBe('/api/v1/ingest');
     expect(r.headers.authorization).toBe('Bearer dk_test_123');
-    expect(r.headers['content-type']).toBe('application/json');
+    expect(r.headers['content-type']).toBe('application/x-msgpack');
     expect(r.headers['x-timestamp']).toBeDefined();
   });
 

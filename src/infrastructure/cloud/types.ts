@@ -128,6 +128,7 @@ export interface CloudSnapshot {
     nextRun: number;
     executions: number;
     maxLimit: number | null;
+    lastRun: number | null;
   }>;
 
   storage: {
@@ -228,7 +229,90 @@ export interface CloudSnapshot {
     lastSeen: number;
   }>;
 
-  /** Buffered events embedded in snapshot when WS is down (dual-channel fallback) */
+  /** Per-queue throughput (push/complete/fail per second) */
+  queueThroughput: Record<
+    string,
+    {
+      pushPerSec: number;
+      completePerSec: number;
+      failPerSec: number;
+      errorRate: number;
+    }
+  >;
+
+  /** Job duration histogram buckets (ms thresholds) */
+  durationHistogram: {
+    lt100ms: number;
+    lt1s: number;
+    lt10s: number;
+    lt60s: number;
+    gt60s: number;
+  };
+
+  /** Per-worker utilization (activeJobs / concurrency) */
+  workerUtilization: Array<{
+    id: string;
+    name: string;
+    utilization: number;
+  }>;
+
+  /** SQLite storage stats (null if in-memory mode) */
+  sqliteStats: {
+    dbSizeBytes: number;
+    writeBufferPending: number;
+  } | null;
+
+  /** Runtime environment */
+  runtime: {
+    bunVersion: string;
+    os: string;
+    arch: string;
+    cpus: number;
+  };
+
+  /** Per-queue priority distribution */
+  queuePriorityDistribution: Record<string, Record<number, number>>;
+
+  /** Per-queue job wait time stats (time in queue before processing) */
+  queueWaitTime: Record<
+    string,
+    {
+      avgMs: number;
+      maxMs: number;
+      minMs: number;
+    }
+  >;
+
+  /** Per-queue retry rate (% jobs with attempts > 0) */
+  queueRetryRate: Record<
+    string,
+    {
+      retryRate: number;
+      retrying: number;
+      total: number;
+    }
+  >;
+
+  /** Queue backlog velocity — delta of waiting jobs between snapshots */
+  queueBacklogVelocity: Record<
+    string,
+    {
+      deltaWaiting: number;
+      deltaPerMin: number;
+      trend: 'growing' | 'shrinking' | 'stable';
+    }
+  >;
+
+  /** Stall details — currently stalled jobs */
+  stallDetails: Array<{
+    jobId: string;
+    queue: string;
+    workerId: string | null;
+    stalledAt: number;
+    stalledForMs: number;
+  }>;
+
+  /** Buffered events embedded in snapshot */
   events?: CloudEvent[];
 
   /** S3 backup status (null if not configured) */
