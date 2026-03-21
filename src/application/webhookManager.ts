@@ -10,6 +10,7 @@ import {
   type WebhookPayload,
   createWebhook,
 } from '../domain/types/webhook';
+import { validateWebhookUrl } from '../shared/webhookValidation';
 import { webhookLog } from '../shared/logger';
 
 /** Maximum webhook delivery retries (configurable via WEBHOOK_MAX_RETRIES env var) */
@@ -32,18 +33,30 @@ export class WebhookManager {
   private readonly webhooks = new Map<WebhookId, Webhook>();
   private readonly maxRetries = WEBHOOK_MAX_RETRIES;
   private readonly retryDelay = WEBHOOK_RETRY_DELAY_MS;
+  private readonly validateUrls: boolean;
   private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
 
   /** Running counter for enabled webhooks - avoids O(n) filter in getStats */
   private enabledCount = 0;
+
+  constructor(options?: { validateUrls?: boolean }) {
+    this.validateUrls = options?.validateUrls !== false;
+  }
 
   /** Set the dashboard event emitter callback */
   setDashboardEmit(callback: (event: string, data: Record<string, unknown>) => void): void {
     this.dashboardEmit = callback;
   }
 
-  /** Add a webhook */
+  /** Add a webhook (validates URL to prevent SSRF) */
   add(url: string, events: string[], queue?: string, secret?: string): Webhook {
+    if (this.validateUrls) {
+      const urlError = validateWebhookUrl(url);
+      if (urlError) {
+        throw new Error(urlError);
+      }
+    }
+
     const webhook = createWebhook(url, events, queue, secret);
     this.webhooks.set(webhook.id, webhook);
     if (webhook.enabled) {

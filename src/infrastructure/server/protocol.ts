@@ -122,71 +122,8 @@ export function validateJobOptions(options: Record<string, unknown>): string | n
   return null;
 }
 
-/** Validate webhook URL to prevent SSRF */
-export function validateWebhookUrl(url: string): string | null {
-  if (!url || url.length === 0) {
-    return 'Webhook URL is required';
-  }
-
-  if (url.length > 2048) {
-    return 'Webhook URL too long (max 2048 characters)';
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return 'Invalid URL format';
-  }
-
-  // Only allow http and https
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    return 'Webhook URL must use http or https protocol';
-  }
-
-  // Block localhost and private IPs (SSRF prevention)
-  const hostname = parsed.hostname.toLowerCase();
-
-  // Block localhost variations
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname === '[::1]' ||
-    hostname.endsWith('.localhost')
-  ) {
-    return 'Webhook URL cannot point to localhost';
-  }
-
-  // Block private IP ranges
-  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4Match) {
-    const [, a, b] = ipv4Match.map(Number);
-    // 10.x.x.x
-    if (a === 10) return 'Webhook URL cannot point to private IP';
-    // 172.16.x.x - 172.31.x.x
-    if (a === 172 && b >= 16 && b <= 31) return 'Webhook URL cannot point to private IP';
-    // 192.168.x.x
-    if (a === 192 && b === 168) return 'Webhook URL cannot point to private IP';
-    // 169.254.x.x (link-local)
-    if (a === 169 && b === 254) return 'Webhook URL cannot point to link-local IP';
-    // 0.0.0.0
-    if (a === 0) return 'Webhook URL cannot point to unspecified IP';
-    // 127.x.x.x
-    if (a === 127) return 'Webhook URL cannot point to loopback IP';
-  }
-
-  // Block cloud metadata endpoints
-  if (
-    hostname === '169.254.169.254' ||
-    hostname === 'metadata.google.internal' ||
-    hostname.endsWith('.internal')
-  ) {
-    return 'Webhook URL cannot point to cloud metadata endpoints';
-  }
-
-  return null;
-}
+/** Re-export from shared module for backward compatibility */
+export { validateWebhookUrl } from '../../shared/webhookValidation';
 
 /** Connection state */
 export interface ConnectionState {

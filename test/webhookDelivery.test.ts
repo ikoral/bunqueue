@@ -40,7 +40,7 @@ describe('Webhook Delivery', () => {
   let mock: ReturnType<typeof createMockServer>;
 
   beforeEach(() => {
-    manager = new WebhookManager();
+    manager = new WebhookManager({ validateUrls: false });
     mock = createMockServer();
   });
 

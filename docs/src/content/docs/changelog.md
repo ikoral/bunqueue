@@ -10,6 +10,15 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.60] - 2026-03-21
+
+### Fixed
+- **Webhook SSRF prevention in embedded mode** — `WebhookManager.add()` now validates URLs against SSRF (localhost, private IPs, cloud metadata). Previously only enforced at TCP server layer, leaving embedded SDK unprotected.
+- **Docs: pin Zod v3 for Starlight** — Fixed Vercel build crash caused by Zod v4 incompatibility with Starlight 0.31.
+
+### Changed
+- **Extracted `validateWebhookUrl` to shared module** — `src/shared/webhookValidation.ts` is now the single source of truth, re-exported from `protocol.ts` for backward compatibility.
+
 ## [2.6.49] - 2026-03-20
 
 ### Added

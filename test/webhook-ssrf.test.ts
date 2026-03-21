@@ -1,13 +1,9 @@
 /**
  * Webhook SSRF Prevention Tests
  *
- * Tests the validateWebhookUrl function from protocol.ts which guards against
- * Server-Side Request Forgery (SSRF) attacks on webhook URLs.
- *
- * NOTE: The SSRF validation is enforced at the TCP server handler level
- * (handleAddWebhook). The embedded WebhookManager.add() does NOT validate URLs,
- * so these tests focus on the validateWebhookUrl function directly and document
- * the gap in embedded mode.
+ * Tests the validateWebhookUrl function and its enforcement in WebhookManager.add().
+ * SSRF validation is now applied at the WebhookManager level, protecting both
+ * TCP server mode and embedded SDK mode.
  */
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { validateWebhookUrl } from '../src/infrastructure/server/protocol';
@@ -228,7 +224,7 @@ describe('Webhook SSRF Prevention', () => {
     });
   });
 
-  describe('WebhookManager.add() embedded mode (no SSRF validation)', () => {
+  describe('WebhookManager.add() SSRF validation (embedded mode)', () => {
     let manager: WebhookManager;
 
     beforeEach(() => {
@@ -236,75 +232,80 @@ describe('Webhook SSRF Prevention', () => {
     });
 
     afterEach(() => {
-      // Clean up all registered webhooks
       for (const wh of manager.list()) {
         manager.remove(wh.id);
       }
     });
 
-    test('accepts valid external URL without validation', () => {
+    test('accepts valid external URL', () => {
       const wh = manager.add('http://example.com/webhook', ['job.completed']);
       expect(wh.url).toBe('http://example.com/webhook');
       expect(wh.enabled).toBe(true);
     });
 
-    test('accepts valid HTTPS URL without validation', () => {
+    test('accepts valid HTTPS URL', () => {
       const wh = manager.add('https://example.com/webhook', ['job.completed']);
       expect(wh.url).toBe('https://example.com/webhook');
     });
 
-    test('accepts URL with non-standard port without validation', () => {
+    test('accepts URL with non-standard port', () => {
       const wh = manager.add('http://example.com:9090/hook', ['job.completed']);
       expect(wh.url).toBe('http://example.com:9090/hook');
     });
 
-    // Document that embedded mode does NOT block private IPs
-    test('does NOT block localhost in embedded mode (no validation)', () => {
-      const wh = manager.add('http://localhost:3000/hook', ['job.completed']);
-      expect(wh.url).toBe('http://localhost:3000/hook');
-      expect(wh.id).toBeDefined();
+    test('blocks localhost in embedded mode', () => {
+      expect(() => manager.add('http://localhost:3000/hook', ['job.completed'])).toThrow(
+        'Webhook URL cannot point to localhost'
+      );
     });
 
-    test('does NOT block private IPs in embedded mode (no validation)', () => {
-      const wh = manager.add('http://10.0.0.1/hook', ['job.completed']);
-      expect(wh.url).toBe('http://10.0.0.1/hook');
-      expect(wh.id).toBeDefined();
+    test('blocks private IPs (10.x.x.x) in embedded mode', () => {
+      expect(() => manager.add('http://10.0.0.1/hook', ['job.completed'])).toThrow(
+        'Webhook URL cannot point to private IP'
+      );
     });
 
-    test('does NOT block 192.168.x.x in embedded mode (no validation)', () => {
-      const wh = manager.add('http://192.168.1.1/hook', ['job.completed']);
-      expect(wh.url).toBe('http://192.168.1.1/hook');
-      expect(wh.id).toBeDefined();
+    test('blocks 192.168.x.x in embedded mode', () => {
+      expect(() => manager.add('http://192.168.1.1/hook', ['job.completed'])).toThrow(
+        'Webhook URL cannot point to private IP'
+      );
     });
 
-    test('does NOT block 172.16.x.x in embedded mode (no validation)', () => {
-      const wh = manager.add('http://172.16.0.1/hook', ['job.completed']);
-      expect(wh.url).toBe('http://172.16.0.1/hook');
-      expect(wh.id).toBeDefined();
+    test('blocks 172.16.x.x in embedded mode', () => {
+      expect(() => manager.add('http://172.16.0.1/hook', ['job.completed'])).toThrow(
+        'Webhook URL cannot point to private IP'
+      );
     });
 
-    test('does NOT reject empty URL in embedded mode (no validation)', () => {
-      const wh = manager.add('', ['job.completed']);
-      expect(wh.url).toBe('');
-      expect(wh.id).toBeDefined();
+    test('rejects empty URL in embedded mode', () => {
+      expect(() => manager.add('', ['job.completed'])).toThrow('Webhook URL is required');
     });
 
-    test('does NOT reject invalid protocol in embedded mode (no validation)', () => {
-      const wh = manager.add('ftp://example.com/file', ['job.completed']);
-      expect(wh.url).toBe('ftp://example.com/file');
-      expect(wh.id).toBeDefined();
+    test('rejects invalid protocol in embedded mode', () => {
+      expect(() => manager.add('ftp://example.com/file', ['job.completed'])).toThrow(
+        'Webhook URL must use http or https protocol'
+      );
     });
 
-    test('does NOT reject URL without protocol in embedded mode (no validation)', () => {
-      const wh = manager.add('example.com/hook', ['job.completed']);
-      expect(wh.url).toBe('example.com/hook');
-      expect(wh.id).toBeDefined();
+    test('rejects URL without protocol in embedded mode', () => {
+      expect(() => manager.add('example.com/hook', ['job.completed'])).toThrow('Invalid URL format');
     });
 
-    test('does NOT reject URL with credentials in embedded mode (no validation)', () => {
+    test('accepts URL with credentials to external host', () => {
       const wh = manager.add('http://user:pass@example.com/hook', ['job.completed']);
       expect(wh.url).toBe('http://user:pass@example.com/hook');
-      expect(wh.id).toBeDefined();
+    });
+
+    test('blocks cloud metadata endpoint', () => {
+      expect(() =>
+        manager.add('http://169.254.169.254/latest/meta-data/', ['job.completed'])
+      ).toThrow();
+    });
+
+    test('blocks .internal domains', () => {
+      expect(() =>
+        manager.add('http://some-service.internal/webhook', ['job.completed'])
+      ).toThrow('Webhook URL cannot point to cloud metadata endpoints');
     });
   });
 });
