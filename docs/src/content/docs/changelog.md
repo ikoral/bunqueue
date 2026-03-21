@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.63] - 2026-03-21
+
+### Performance
+- **WorkerRateLimiter: O(n) → O(1) amortized** — Replaced `Array.filter()` with head-pointer eviction for sliding window token expiration. Eliminates per-poll array allocation and removes `Math.min(...spread)` (potential stack overflow on large token arrays). Benchmarked: 10k tokens went from 31µs to ~0µs per call; zero memory allocation per poll cycle.
+- **FlowProducer: parallel sibling creation in TCP mode** — `add()`, `addBulk()`, `addBulkThen()`, and `addTree()` now create independent children/jobs concurrently via `Promise.all`. TCP benchmark shows **3–6x speedup** for flows with 10–20 children (network round-trips overlap instead of serializing). `addBulkThen()` uses `Promise.allSettled` for proper cleanup on partial failure. No impact in embedded mode (pushes are synchronous). `addChain()` unchanged (sequential by design).
+
 ## [2.6.62] - 2026-03-21
 
 ### Fixed

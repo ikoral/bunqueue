@@ -138,11 +138,7 @@ export class FlowProducer {
 
   /** Add multiple flows (BullMQ v5 compatible). */
   async addBulk<T = unknown>(flows: FlowJob<T>[]): Promise<JobNode<T>[]> {
-    const results: JobNode<T>[] = [];
-    for (const flow of flows) {
-      results.push(await this.add(flow));
-    }
-    return results;
+    return Promise.all(flows.map((flow) => this.add(flow)));
   }
 
   /** Get a flow tree starting from a job (BullMQ v5 compatible). */
@@ -193,10 +189,28 @@ export class FlowProducer {
   ): Promise<{ parallelIds: string[]; finalId: string }> {
     const parallelIds: string[] = [];
     try {
-      for (const step of parallel) {
-        const data = { name: step.name, ...(step.data as object) };
-        const id = await pushJob(this.pushCtx, step.queueName, data, step.opts ?? {});
-        parallelIds.push(id);
+      // Push parallel jobs concurrently — they are independent by design
+      const results = await Promise.allSettled(
+        parallel.map(async (step) => {
+          const data = { name: step.name, ...(step.data as object) };
+          return pushJob(this.pushCtx, step.queueName, data, step.opts ?? {});
+        })
+      );
+
+      // Collect successful IDs and check for failures
+      const errors: unknown[] = [];
+      for (const r of results) {
+        if (r.status === 'fulfilled') {
+          parallelIds.push(r.value);
+        } else {
+          errors.push(r.reason);
+        }
+      }
+
+      if (errors.length > 0) {
+        // Clean up successfully created jobs before throwing
+        await cleanupJobs(this.pushCtx, parallelIds);
+        throw errors[0] instanceof Error ? errors[0] : new Error(String(errors[0]));
       }
 
       const finalData = {
@@ -389,8 +403,11 @@ export class FlowProducer {
 
     if (node.children && node.children.length > 0) {
       const tempParentRef = { id: 'pending', queue: node.queueName };
-      for (const child of node.children) {
-        const childNode = await this.addFlowNode(child, tempParentRef);
+      // Siblings are independent — create them concurrently
+      const results = await Promise.all(
+        node.children.map((child) => this.addFlowNode(child, tempParentRef))
+      );
+      for (const childNode of results) {
         childNodes.push(childNode);
         childIds.push(childNode.job.id);
       }
@@ -440,7 +457,7 @@ export class FlowProducer {
     jobIds.push(id);
 
     if (step.children) {
-      for (const child of step.children) await this.addTreeNode(child, id, jobIds);
+      await Promise.all(step.children.map((child) => this.addTreeNode(child, id, jobIds)));
     }
     return id;
   }
