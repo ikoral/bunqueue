@@ -25,6 +25,8 @@ export function handleCron(
       priority: cmd.priority,
       maxLimit: cmd.maxLimit,
       timezone: cmd.timezone,
+      uniqueKey: cmd.uniqueKey,
+      dedup: cmd.dedup,
     });
     ctx.queueManager.emitDashboardEvent(existing ? 'cron:updated' : 'cron:created', {
       name: cron.name,

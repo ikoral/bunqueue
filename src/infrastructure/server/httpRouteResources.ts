@@ -51,6 +51,8 @@ export async function routeResourceRoutes(
         priority: body['priority'] as number | undefined,
         maxLimit: body['maxLimit'] as number | undefined,
         timezone: body['timezone'] as string | undefined,
+        uniqueKey: body['uniqueKey'] as string | undefined,
+        dedup: body['dedup'] as { ttl?: number; extend?: boolean; replace?: boolean } | undefined,
       } as Parameters<typeof handleCommand>[0],
       ctx
     );

@@ -60,8 +60,8 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
 
   insertCron: `
     INSERT OR REPLACE INTO cron_jobs
-    (name, queue, data, schedule, repeat_every, priority, next_run, executions, max_limit, timezone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (name, queue, data, schedule, repeat_every, priority, next_run, executions, max_limit, timezone, unique_key, dedup)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   updateCron: 'UPDATE cron_jobs SET executions = ?, next_run = ? WHERE name = ?',
@@ -124,4 +124,6 @@ export interface DbCron {
   executions: number;
   max_limit: number | null;
   timezone: string | null;
+  unique_key: string | null;
+  dedup: Uint8Array | null; // MessagePack BLOB
 }

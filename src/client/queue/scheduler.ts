@@ -39,6 +39,24 @@ export interface SchedulerInfo {
   every?: number;
 }
 
+/** Build cron job data from template */
+function buildCronData(jobTemplate?: JobTemplate): unknown {
+  if (!jobTemplate) return {};
+  return jobTemplate.name
+    ? { name: jobTemplate.name, ...((jobTemplate.data ?? {}) as object) }
+    : (jobTemplate.data ?? {});
+}
+
+/** Extract dedup config from job template */
+function buildCronDedup(jobTemplate?: JobTemplate) {
+  const dedup = jobTemplate?.opts?.deduplication;
+  if (!dedup) return { uniqueKey: undefined, dedup: undefined };
+  return {
+    uniqueKey: dedup.id,
+    dedup: { ttl: dedup.ttl, extend: dedup.extend, replace: dedup.replace },
+  };
+}
+
 /** Create or update a job scheduler */
 export async function upsertJobScheduler(
   ctx: SchedulerContext,
@@ -48,18 +66,19 @@ export async function upsertJobScheduler(
 ): Promise<SchedulerInfo | null> {
   const cronPattern = repeatOpts.pattern;
   const repeatEvery = repeatOpts.every;
+  const data = buildCronData(jobTemplate);
+  const dedupFields = buildCronDedup(jobTemplate);
 
   if (ctx.embedded) {
     const manager = getSharedManager();
     manager.addCron({
       name: schedulerId,
       queue: ctx.name,
-      data: jobTemplate?.name
-        ? { name: jobTemplate.name, ...((jobTemplate.data ?? {}) as object) }
-        : (jobTemplate?.data ?? {}),
+      data,
       schedule: cronPattern,
       repeatEvery,
       timezone: repeatOpts.timezone ?? 'UTC',
+      ...dedupFields,
     });
     return {
       id: schedulerId,
@@ -72,12 +91,11 @@ export async function upsertJobScheduler(
     cmd: 'Cron',
     name: schedulerId,
     queue: ctx.name,
-    data: jobTemplate?.name
-      ? { name: jobTemplate.name, ...((jobTemplate.data ?? {}) as object) }
-      : (jobTemplate?.data ?? {}),
+    data,
     schedule: cronPattern,
     repeatEvery,
     timezone: repeatOpts.timezone,
+    ...dedupFields,
   });
 
   if (!response.ok) return null;

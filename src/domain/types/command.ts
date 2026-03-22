@@ -307,6 +307,10 @@ export interface CronCommand extends BaseCommand {
   readonly maxLimit?: number;
   /** IANA timezone for cron schedule (e.g., "Europe/Rome", "America/New_York") */
   readonly timezone?: string;
+  /** Unique key for deduplication of cron-spawned jobs */
+  readonly uniqueKey?: string;
+  /** Deduplication options for cron-spawned jobs */
+  readonly dedup?: { ttl?: number; extend?: boolean; replace?: boolean };
 }
 
 export interface CronDeleteCommand extends BaseCommand {

@@ -999,9 +999,9 @@ describe('SQL_STATEMENTS', () => {
       expect(SQL_STATEMENTS.insertCron.toUpperCase()).toContain('INSERT OR REPLACE');
     });
 
-    test('insertCron should have 10 parameters', () => {
+    test('insertCron should have 12 parameters', () => {
       const paramCount = (SQL_STATEMENTS.insertCron.match(/\?/g) || []).length;
-      expect(paramCount).toBe(10);
+      expect(paramCount).toBe(12);
     });
 
     test('insertCron should reference cron_jobs table', () => {
@@ -1215,7 +1215,9 @@ describe('prepareStatements', () => {
         now + 3600000,     // next_run
         0,                 // executions
         null,              // max_limit
-        'UTC'              // timezone
+        'UTC',             // timezone
+        null,              // unique_key
+        null               // dedup
       );
     }).not.toThrow();
 

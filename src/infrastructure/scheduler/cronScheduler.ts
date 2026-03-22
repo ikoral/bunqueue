@@ -372,7 +372,12 @@ export class CronScheduler {
       return;
     }
 
-    await this.pushJob!(cron.queue, { data: cron.data, priority: cron.priority });
+    await this.pushJob!(cron.queue, {
+      data: cron.data,
+      priority: cron.priority,
+      uniqueKey: cron.uniqueKey ?? undefined,
+      dedup: cron.dedup ?? undefined,
+    });
     this.lastFiredAt.set(cron.name, now);
     this.dashboardEmit?.('cron:fired', { name: cron.name, queue: cron.queue });
   }

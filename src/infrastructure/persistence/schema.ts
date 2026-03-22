@@ -104,7 +104,9 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     next_run INTEGER NOT NULL,
     executions INTEGER NOT NULL DEFAULT 0,
     max_limit INTEGER,
-    timezone TEXT
+    timezone TEXT,
+    unique_key TEXT,
+    dedup BLOB
 );
 
 -- Queue state persistence (optional)
@@ -125,7 +127,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {
@@ -146,5 +148,10 @@ CREATE INDEX IF NOT EXISTS idx_jobs_group_id
 -- Pending jobs: compound index for priority-ordered retrieval
 CREATE INDEX IF NOT EXISTS idx_jobs_pending_priority
     ON jobs(queue, state, priority DESC, run_at ASC) WHERE state IN ('waiting', 'delayed');
+`,
+  // Migration 6: Add deduplication fields to cron_jobs
+  6: `
+ALTER TABLE cron_jobs ADD COLUMN unique_key TEXT;
+ALTER TABLE cron_jobs ADD COLUMN dedup BLOB;
 `,
 };

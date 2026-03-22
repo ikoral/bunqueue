@@ -8,7 +8,7 @@ import { Database } from 'bun:sqlite';
 import type { Job, JobId } from '../../domain/types/job';
 import type { CronJob } from '../../domain/types/cron';
 import type { DlqEntry } from '../../domain/types/dlq';
-import { PRAGMA_SETTINGS, SCHEMA, MIGRATION_TABLE, SCHEMA_VERSION } from './schema';
+import { PRAGMA_SETTINGS, SCHEMA, MIGRATION_TABLE, SCHEMA_VERSION, MIGRATIONS } from './schema';
 import { prepareStatements, type StatementName, type DbJob, type DbCron } from './statements';
 import { pack, unpack, rowToJob, reconstructDlqEntry } from './sqliteSerializer';
 import { BatchInsertManager, WriteBuffer } from './sqliteBatch';
@@ -125,6 +125,17 @@ export class SqliteStorage {
 
     if (currentVersion < SCHEMA_VERSION) {
       this.db.run(SCHEMA);
+      // Apply incremental migrations for existing databases
+      for (const [ver, sql] of Object.entries(MIGRATIONS)) {
+        const v = Number(ver);
+        if (v > currentVersion && v > 1) {
+          try {
+            this.db.run(sql);
+          } catch {
+            // Column/index may already exist from SCHEMA creation
+          }
+        }
+      }
       this.db
         .prepare('INSERT INTO migrations (version, applied_at) VALUES (?, ?)')
         .run(SCHEMA_VERSION, Date.now());
@@ -425,7 +436,9 @@ export class SqliteStorage {
           cron.nextRun,
           cron.executions,
           cron.maxLimit,
-          cron.timezone
+          cron.timezone,
+          cron.uniqueKey,
+          cron.dedup ? pack(cron.dedup) : null
         );
     });
   }
@@ -443,6 +456,10 @@ export class SqliteStorage {
       nextRun: row.next_run,
       executions: row.executions,
       maxLimit: row.max_limit,
+      uniqueKey: row.unique_key ?? null,
+      dedup: row.dedup
+        ? (unpack(row.dedup, null, `loadCronDedup:${row.name}`) as CronJob['dedup'])
+        : null,
     }));
   }
 

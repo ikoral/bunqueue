@@ -2,6 +2,13 @@
  * Cron job domain types
  */
 
+/** Deduplication config for cron-spawned jobs */
+export interface CronDedup {
+  readonly ttl?: number;
+  readonly extend?: boolean;
+  readonly replace?: boolean;
+}
+
 /** Cron job definition */
 export interface CronJob {
   readonly name: string;
@@ -15,6 +22,10 @@ export interface CronJob {
   nextRun: number;
   executions: number;
   readonly maxLimit: number | null;
+  /** Unique key for deduplication of cron-spawned jobs */
+  readonly uniqueKey: string | null;
+  /** Deduplication options for cron-spawned jobs */
+  readonly dedup: CronDedup | null;
 }
 
 /** Input for creating a cron job */
@@ -28,6 +39,10 @@ export interface CronJobInput {
   maxLimit?: number;
   /** IANA timezone for cron schedule (e.g., "Europe/Rome", "America/New_York") */
   timezone?: string;
+  /** Unique key for deduplication of cron-spawned jobs */
+  uniqueKey?: string;
+  /** Deduplication options for cron-spawned jobs */
+  dedup?: CronDedup;
 }
 
 /** Create a new cron job */
@@ -47,6 +62,8 @@ export function createCronJob(input: CronJobInput, nextRun: number): CronJob {
     nextRun,
     executions: 0,
     maxLimit: input.maxLimit ?? null,
+    uniqueKey: input.uniqueKey ?? null,
+    dedup: input.dedup ?? null,
   };
 }
 
