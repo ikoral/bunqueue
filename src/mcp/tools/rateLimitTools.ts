@@ -16,7 +16,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       limit: z.number().min(1).describe('Max jobs per second'),
     },
-    withErrorHandler(async ({ queue, limit }) => {
+    withErrorHandler('bunqueue_set_rate_limit', async ({ queue, limit }) => {
       await backend.setRateLimit(queue, limit);
       return {
         content: [
@@ -35,7 +35,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_clear_rate_limit', async ({ queue }) => {
       await backend.clearRateLimit(queue);
       return {
         content: [
@@ -55,7 +55,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       limit: z.number().min(1).describe('Max concurrent jobs'),
     },
-    withErrorHandler(async ({ queue, limit }) => {
+    withErrorHandler('bunqueue_set_concurrency', async ({ queue, limit }) => {
       await backend.setConcurrency(queue, limit);
       return {
         content: [
@@ -74,7 +74,7 @@ export function registerRateLimitTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_clear_concurrency', async ({ queue }) => {
       await backend.clearConcurrency(queue);
       return {
         content: [

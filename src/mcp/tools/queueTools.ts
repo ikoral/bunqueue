@@ -14,7 +14,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     'bunqueue_list_queues',
     'List all queues.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_list_queues', async () => {
       const queues = await backend.listQueues();
       return { content: [{ type: 'text' as const, text: JSON.stringify({ queues }) }] };
     })
@@ -26,7 +26,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_count_jobs', async ({ queue }) => {
       const count = await backend.countJobs(queue);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ queue, count }) }] };
     })
@@ -44,7 +44,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
       start: z.number().optional().describe('Start index for pagination (default: 0)'),
       end: z.number().optional().describe('End index for pagination (default: 20)'),
     },
-    withErrorHandler(async ({ queue, state, start, end }) => {
+    withErrorHandler('bunqueue_get_jobs', async ({ queue, state, start, end }) => {
       const jobs = await backend.getJobs(queue, { state, start: start ?? 0, end: end ?? 20 });
       return {
         content: [
@@ -63,7 +63,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_get_job_counts', async ({ queue }) => {
       const counts = await backend.getJobCounts(queue);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ queue, ...counts }) }] };
     })
@@ -75,7 +75,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_pause_queue', async ({ queue }) => {
       await backend.pauseQueue(queue);
       return {
         content: [
@@ -94,7 +94,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_resume_queue', async ({ queue }) => {
       await backend.resumeQueue(queue);
       return {
         content: [
@@ -113,7 +113,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_drain_queue', async ({ queue }) => {
       const removed = await backend.drainQueue(queue);
       return {
         content: [
@@ -129,7 +129,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_obliterate_queue', async ({ queue }) => {
       await backend.obliterateQueue(queue);
       return {
         content: [
@@ -154,7 +154,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
         .describe('State to clean (default: both completed and failed)'),
       limit: z.number().optional().describe('Maximum number of jobs to remove'),
     },
-    withErrorHandler(async ({ queue, graceMs, state, limit }) => {
+    withErrorHandler('bunqueue_clean_queue', async ({ queue, graceMs, state, limit }) => {
       const removed = await backend.cleanQueue(queue, graceMs, state, limit);
       return {
         content: [
@@ -170,7 +170,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_is_paused', async ({ queue }) => {
       const paused = await backend.isPaused(queue);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ queue, paused }) }] };
     })
@@ -182,7 +182,7 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_get_counts_per_priority', async ({ queue }) => {
       const counts = await backend.getCountsPerPriority(queue);
       return {
         content: [

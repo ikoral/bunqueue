@@ -20,21 +20,24 @@ export function registerCronTools(server: McpServer, backend: McpBackend) {
       repeatEvery: z.number().optional().describe('Alternative: repeat every N milliseconds'),
       priority: z.number().optional().describe('Job priority'),
     },
-    withErrorHandler(async ({ name, queue, data, schedule, repeatEvery, priority }) => {
-      const cron = await backend.addCron({ name, queue, data, schedule, repeatEvery, priority });
-      return {
-        content: [
-          { type: 'text' as const, text: JSON.stringify({ success: true, ...cron }, null, 2) },
-        ],
-      };
-    })
+    withErrorHandler(
+      'bunqueue_add_cron',
+      async ({ name, queue, data, schedule, repeatEvery, priority }) => {
+        const cron = await backend.addCron({ name, queue, data, schedule, repeatEvery, priority });
+        return {
+          content: [
+            { type: 'text' as const, text: JSON.stringify({ success: true, ...cron }, null, 2) },
+          ],
+        };
+      }
+    )
   );
 
   server.tool(
     'bunqueue_list_crons',
     'List all scheduled cron jobs with their next run times.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_list_crons', async () => {
       const crons = await backend.listCrons();
       return {
         content: [
@@ -50,7 +53,7 @@ export function registerCronTools(server: McpServer, backend: McpBackend) {
     {
       name: z.string().describe('Cron job name'),
     },
-    withErrorHandler(async ({ name }) => {
+    withErrorHandler('bunqueue_get_cron', async ({ name }) => {
       const cron = await backend.getCron(name);
       if (!cron) {
         return {
@@ -70,7 +73,7 @@ export function registerCronTools(server: McpServer, backend: McpBackend) {
     {
       name: z.string().describe('Cron job name to delete'),
     },
-    withErrorHandler(async ({ name }) => {
+    withErrorHandler('bunqueue_delete_cron', async ({ name }) => {
       const success = await backend.deleteCron(name);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, name }) }] };
     })

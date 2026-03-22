@@ -17,7 +17,7 @@ export function registerWorkerMgmtTools(server: McpServer, backend: McpBackend) 
       name: z.string().describe('Worker name/identifier'),
       queues: z.array(z.string()).min(1).describe('Queues this worker will process'),
     },
-    withErrorHandler(async ({ name, queues }) => {
+    withErrorHandler('bunqueue_register_worker', async ({ name, queues }) => {
       const worker = await backend.registerWorker(name, queues);
       return {
         content: [
@@ -33,7 +33,7 @@ export function registerWorkerMgmtTools(server: McpServer, backend: McpBackend) 
     {
       workerId: z.string().describe('Worker ID to unregister'),
     },
-    withErrorHandler(async ({ workerId }) => {
+    withErrorHandler('bunqueue_unregister_worker', async ({ workerId }) => {
       const success = await backend.unregisterWorker(workerId);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, workerId }) }] };
     })
@@ -45,7 +45,7 @@ export function registerWorkerMgmtTools(server: McpServer, backend: McpBackend) 
     {
       workerId: z.string().describe('Worker ID'),
     },
-    withErrorHandler(async ({ workerId }) => {
+    withErrorHandler('bunqueue_worker_heartbeat', async ({ workerId }) => {
       const success = await backend.workerHeartbeat(workerId);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, workerId }) }] };
     })

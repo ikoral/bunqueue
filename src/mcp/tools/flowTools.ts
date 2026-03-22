@@ -55,7 +55,7 @@ export function registerFlowTools(server: McpServer, backend: McpBackend) {
         .optional()
         .describe('Child jobs (processed BEFORE this job)'),
     },
-    withErrorHandler(async ({ name, queueName, data, opts, children }) => {
+    withErrorHandler('bunqueue_add_flow', async ({ name, queueName, data, opts, children }) => {
       const result = await backend.addFlow({
         name,
         queueName,
@@ -76,7 +76,7 @@ export function registerFlowTools(server: McpServer, backend: McpBackend) {
         .min(1)
         .describe('Steps executed in order, each depending on the previous'),
     },
-    withErrorHandler(async ({ steps }) => {
+    withErrorHandler('bunqueue_add_flow_chain', async ({ steps }) => {
       const result = await backend.addFlowChain(steps);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     })
@@ -89,7 +89,7 @@ export function registerFlowTools(server: McpServer, backend: McpBackend) {
       parallel: z.array(flowStepSchema).min(1).describe('Jobs that run in parallel'),
       final: flowStepSchema.describe('Final job that runs after all parallel jobs complete'),
     },
-    withErrorHandler(async ({ parallel, final: finalStep }) => {
+    withErrorHandler('bunqueue_add_flow_bulk_then', async ({ parallel, final: finalStep }) => {
       const result = await backend.addFlowBulkThen(parallel, finalStep);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     })
@@ -104,7 +104,7 @@ export function registerFlowTools(server: McpServer, backend: McpBackend) {
       depth: z.number().optional().describe('Max traversal depth (default: 10)'),
       maxChildren: z.number().optional().describe('Max children per level'),
     },
-    withErrorHandler(async ({ jobId, queueName, depth, maxChildren }) => {
+    withErrorHandler('bunqueue_get_flow', async ({ jobId, queueName, depth, maxChildren }) => {
       const result = await backend.getFlow(jobId, queueName, depth ?? 10, maxChildren);
       if (!result) {
         return {

@@ -315,6 +315,25 @@ export interface CloudSnapshot {
   /** Buffered events embedded in snapshot */
   events?: CloudEvent[];
 
+  /** MCP tool invocation history (drained each snapshot) */
+  mcpOperations?: Array<{
+    tool: string;
+    queue: string | null;
+    timestamp: number;
+    durationMs: number;
+    success: boolean;
+    error: string | null;
+  }>;
+
+  /** MCP usage summary stats */
+  mcpSummary?: {
+    totalInvocations: number;
+    successCount: number;
+    failureCount: number;
+    avgDurationMs: number;
+    topTools: Array<{ tool: string; count: number }>;
+  };
+
   /** S3 backup status (null if not configured) */
   s3Backup: {
     enabled: boolean;

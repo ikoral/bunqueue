@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.65] - 2026-03-22
+
+### Added
+- **MCP operation tracking for Cloud dashboard** — Every MCP tool invocation (73 tools) is now tracked and sent to bunqueue.io as part of the cloud snapshot. Each operation records: tool name, queue affected, timestamp, duration, success/failure, and error message. Data is buffered in a bounded ring buffer (max 200 ops, ~40KB) and drained into each snapshot. In embedded mode, the MCP process creates its own CloudAgent to send telemetry. Zero overhead when cloud is not configured. Includes `mcpOperations` (raw invocation history) and `mcpSummary` (aggregated stats with top tools) fields in `CloudSnapshot`.
+
 ## [2.6.64] - 2026-03-21
 
 ### Fixed

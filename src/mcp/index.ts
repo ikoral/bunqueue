@@ -60,6 +60,9 @@ import { registerFlowTools } from './tools/flowTools';
 import { registerHandlerTools } from './tools/handlerTools';
 import { HttpHandlerRegistry } from './httpHandler';
 import { registerPrompts } from './prompts';
+import { mcpTracker } from './tools/mcpTracker';
+import { CloudAgent } from '../infrastructure/cloud/cloudAgent';
+import { getSharedManager } from '../client/manager';
 
 async function main() {
   const backend = await createBackend();
@@ -90,9 +93,30 @@ async function main() {
   registerResources(server, backend);
   registerPrompts(server, backend);
 
+  // Start Cloud agent for MCP telemetry (embedded mode only)
+  let cloudAgent: CloudAgent | null = null;
+  if (mode === 'embedded' && process.env.BUNQUEUE_CLOUD_URL) {
+    const manager = getSharedManager();
+    cloudAgent = CloudAgent.create(manager);
+    if (cloudAgent) {
+      cloudAgent.setServerHandles({
+        getConnectionCount: () => 0,
+        getWsClientCount: () => 0,
+        getSseClientCount: () => 0,
+        getMcpOperations: () => {
+          // IMPORTANT: getSummary() MUST be called before drain() — drain empties the buffer
+          const summary = mcpTracker.getSummary();
+          const operations = mcpTracker.drain();
+          return { operations, summary };
+        },
+      });
+    }
+  }
+
   // Graceful shutdown — allow backend and transport to flush before exit
   const shutdown = async () => {
     try {
+      if (cloudAgent) await cloudAgent.stop();
       handlerRegistry.shutdown();
       backend.shutdown();
       await server.close();

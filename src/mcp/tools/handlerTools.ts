@@ -31,26 +31,29 @@ export function registerHandlerTools(server: McpServer, registry: HttpHandlerReg
         .optional()
         .describe('Request timeout in ms (default: 30000)'),
     },
-    withErrorHandler(async ({ queue, url, method, headers, body, timeoutMs }) => {
-      registry.register(queue, { url, method, headers, body, timeoutMs });
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(
-              {
-                success: true,
-                queue,
-                handler: { url, method, timeoutMs: timeoutMs ?? 30000 },
-                message: `Worker started. Jobs in "${queue}" will be processed via ${method} ${url}`,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    })
+    withErrorHandler(
+      'bunqueue_register_handler',
+      async ({ queue, url, method, headers, body, timeoutMs }) => {
+        registry.register(queue, { url, method, headers, body, timeoutMs });
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                {
+                  success: true,
+                  queue,
+                  handler: { url, method, timeoutMs: timeoutMs ?? 30000 },
+                  message: `Worker started. Jobs in "${queue}" will be processed via ${method} ${url}`,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+    )
   );
 
   server.tool(
@@ -59,7 +62,7 @@ export function registerHandlerTools(server: McpServer, registry: HttpHandlerReg
     {
       queue: z.string().describe('Queue name to remove the handler from'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_unregister_handler', async ({ queue }) => {
       const removed = registry.unregister(queue);
       return {
         content: [
@@ -76,7 +79,7 @@ export function registerHandlerTools(server: McpServer, registry: HttpHandlerReg
     'bunqueue_list_handlers',
     'List all active HTTP handlers and their workers.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_list_handlers', async () => {
       const handlers = registry.list();
       return {
         content: [

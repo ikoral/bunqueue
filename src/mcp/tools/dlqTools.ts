@@ -16,7 +16,7 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       limit: z.number().optional().describe('Max entries to return (default: 20)'),
     },
-    withErrorHandler(async ({ queue, limit }) => {
+    withErrorHandler('bunqueue_get_dlq', async ({ queue, limit }) => {
       const jobs = await backend.getDlq(queue, limit ?? 20);
       return {
         content: [
@@ -36,7 +36,7 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
       queue: z.string().describe('Queue name'),
       jobId: z.string().optional().describe('Specific job ID to retry (omit to retry all)'),
     },
-    withErrorHandler(async ({ queue, jobId }) => {
+    withErrorHandler('bunqueue_retry_dlq', async ({ queue, jobId }) => {
       const retried = await backend.retryDlq(queue, jobId);
       return {
         content: [
@@ -52,7 +52,7 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_purge_dlq', async ({ queue }) => {
       const purged = await backend.purgeDlq(queue);
       return {
         content: [
@@ -72,7 +72,7 @@ export function registerDlqTools(server: McpServer, backend: McpBackend) {
         .optional()
         .describe('Specific job ID to retry (omit to retry all completed)'),
     },
-    withErrorHandler(async ({ queue, jobId }) => {
+    withErrorHandler('bunqueue_retry_completed', async ({ queue, jobId }) => {
       const retried = await backend.retryCompleted(queue, jobId);
       return {
         content: [

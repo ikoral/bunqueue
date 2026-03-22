@@ -13,7 +13,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     'bunqueue_get_stats',
     'Get overall queue server statistics including throughput, memory usage, and uptime.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_get_stats', async () => {
       const stats = await backend.getStats();
       return { content: [{ type: 'text' as const, text: JSON.stringify(stats, null, 2) }] };
     })
@@ -25,7 +25,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     {
       queue: z.string().describe('Queue name'),
     },
-    withErrorHandler(async ({ queue }) => {
+    withErrorHandler('bunqueue_get_queue_stats', async ({ queue }) => {
       const counts = await backend.getJobCounts(queue);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ queue, ...counts }, null, 2) }],
@@ -37,7 +37,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     'bunqueue_list_workers',
     'List all registered workers with their status, queues, and processing stats.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_list_workers', async () => {
       const workers = await backend.listWorkers();
       return {
         content: [
@@ -56,7 +56,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     {
       jobId: z.string().describe('Job ID'),
     },
-    withErrorHandler(async ({ jobId }) => {
+    withErrorHandler('bunqueue_get_job_logs', async ({ jobId }) => {
       const logs = await backend.getJobLogs(jobId);
       return {
         content: [
@@ -77,7 +77,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
       message: z.string().describe('Log message'),
       level: z.enum(['info', 'warn', 'error']).optional().describe('Log level (default: info)'),
     },
-    withErrorHandler(async ({ jobId, message, level }) => {
+    withErrorHandler('bunqueue_add_job_log', async ({ jobId, message, level }) => {
       const success = await backend.addJobLog(jobId, message, level);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, jobId }) }] };
     })
@@ -87,7 +87,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     'bunqueue_get_storage_status',
     'Get storage health status. Reports if disk is full or has errors.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_get_storage_status', async () => {
       const status = await backend.getStorageStatus();
       return { content: [{ type: 'text' as const, text: JSON.stringify(status, null, 2) }] };
     })
@@ -97,7 +97,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     'bunqueue_get_per_queue_stats',
     'Get detailed statistics broken down per queue (throughput, latency, etc.).',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_get_per_queue_stats', async () => {
       const stats = await backend.getPerQueueStats();
       return { content: [{ type: 'text' as const, text: JSON.stringify(stats, null, 2) }] };
     })
@@ -107,7 +107,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     'bunqueue_get_memory_stats',
     'Get memory usage statistics (jobIndex, completedJobs, cache sizes, etc.).',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_get_memory_stats', async () => {
       const stats = await backend.getMemoryStats();
       return { content: [{ type: 'text' as const, text: JSON.stringify(stats, null, 2) }] };
     })
@@ -117,7 +117,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     'bunqueue_get_prometheus_metrics',
     'Get metrics in Prometheus exposition format for monitoring.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_get_prometheus_metrics', async () => {
       const metrics = await backend.getPrometheusMetrics();
       return { content: [{ type: 'text' as const, text: metrics }] };
     })
@@ -134,7 +134,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
         .optional()
         .describe('Number of recent log entries to keep (default: 0 = clear all)'),
     },
-    withErrorHandler(async ({ jobId, keepLogs }) => {
+    withErrorHandler('bunqueue_clear_job_logs', async ({ jobId, keepLogs }) => {
       await backend.clearJobLogs(jobId, keepLogs);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ success: true, jobId }) }],
@@ -146,7 +146,7 @@ export function registerMonitoringTools(server: McpServer, backend: McpBackend) 
     'bunqueue_compact_memory',
     'Force memory compaction to free unused memory.',
     {},
-    withErrorHandler(async () => {
+    withErrorHandler('bunqueue_compact_memory', async () => {
       await backend.compactMemory();
       return {
         content: [

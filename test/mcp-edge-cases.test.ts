@@ -81,7 +81,7 @@ describe('MCP Tool Listing', () => {
 // 2. Call tool with missing required parameters returns error
 describe('Missing Required Parameters', () => {
   test('addJob without queue returns error via withErrorHandler', async () => {
-    const handler = withErrorHandler(async (args: { queue: string }) => {
+    const handler = withErrorHandler('test_add_job', async (args: { queue: string }) => {
       await backend.addJob(args.queue, 'test', {});
       return { content: [{ type: 'text' as const, text: 'ok' }] };
     });
@@ -202,17 +202,17 @@ describe('MCP Resources', () => {
 // 9-11. HTTP handler with invalid JSON / wrong content type / missing method (via withErrorHandler)
 describe('withErrorHandler Edge Cases', () => {
   test('wraps thrown Error into isError response', async () => {
-    const r = await withErrorHandler(async () => { throw new Error('broke'); })({} as never);
+    const r = await withErrorHandler('test_throw', async () => { throw new Error('broke'); })({} as never);
     expect(r.isError).toBe(true);
     expect(JSON.parse(r.content[0].text).error).toBe('broke');
   });
   test('wraps non-Error throw into isError response', async () => {
-    const r = await withErrorHandler(async () => { throw 'str error'; })({} as never);
+    const r = await withErrorHandler('test_throw_str', async () => { throw 'str error'; })({} as never);
     expect(r.isError).toBe(true);
     expect(JSON.parse(r.content[0].text).error).toBe('str error');
   });
   test('successful handler does not set isError', async () => {
-    const r = await withErrorHandler(async () => ({
+    const r = await withErrorHandler('test_success', async () => ({
       content: [{ type: 'text' as const, text: '{"ok":true}' }],
     }))({} as never);
     expect(r.isError).toBeUndefined();

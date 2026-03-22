@@ -22,7 +22,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
         .optional()
         .describe('Long-poll timeout in ms (0 = no wait)'),
     },
-    withErrorHandler(async ({ queue, timeoutMs }) => {
+    withErrorHandler('bunqueue_pull_job', async ({ queue, timeoutMs }) => {
       const job = await backend.pullJob(queue, timeoutMs);
       return {
         content: [
@@ -45,7 +45,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
         .optional()
         .describe('Long-poll timeout in ms (0 = no wait)'),
     },
-    withErrorHandler(async ({ queue, count, timeoutMs }) => {
+    withErrorHandler('bunqueue_pull_job_batch', async ({ queue, count, timeoutMs }) => {
       const jobs = await backend.pullJobBatch(queue, count, timeoutMs);
       return {
         content: [
@@ -62,7 +62,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
       jobId: z.string().describe('Job ID to acknowledge'),
       result: z.unknown().optional().describe('Optional result data'),
     },
-    withErrorHandler(async ({ jobId, result }) => {
+    withErrorHandler('bunqueue_ack_job', async ({ jobId, result }) => {
       await backend.ackJob(jobId, result);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ success: true, jobId }) }],
@@ -76,7 +76,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
     {
       jobIds: z.array(z.string()).min(1).describe('Array of job IDs to acknowledge'),
     },
-    withErrorHandler(async ({ jobIds }) => {
+    withErrorHandler('bunqueue_ack_job_batch', async ({ jobIds }) => {
       await backend.ackJobBatch(jobIds);
       return {
         content: [
@@ -93,7 +93,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
       jobId: z.string().describe('Job ID to fail'),
       error: z.string().optional().describe('Error message'),
     },
-    withErrorHandler(async ({ jobId, error }) => {
+    withErrorHandler('bunqueue_fail_job', async ({ jobId, error }) => {
       await backend.failJob(jobId, error);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ success: true, jobId }) }],
@@ -107,7 +107,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
     {
       jobId: z.string().describe('Job ID'),
     },
-    withErrorHandler(async ({ jobId }) => {
+    withErrorHandler('bunqueue_job_heartbeat', async ({ jobId }) => {
       const success = await backend.jobHeartbeat(jobId);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, jobId }) }] };
     })
@@ -119,7 +119,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
     {
       jobIds: z.array(z.string()).min(1).describe('Array of job IDs'),
     },
-    withErrorHandler(async ({ jobIds }) => {
+    withErrorHandler('bunqueue_job_heartbeat_batch', async ({ jobIds }) => {
       const count = await backend.jobHeartbeatBatch(jobIds);
       return {
         content: [
@@ -137,7 +137,7 @@ export function registerConsumptionTools(server: McpServer, backend: McpBackend)
       token: z.string().describe('Lock token'),
       duration: z.number().min(1000).describe('Extension duration in milliseconds'),
     },
-    withErrorHandler(async ({ jobId, token, duration }) => {
+    withErrorHandler('bunqueue_extend_lock', async ({ jobId, token, duration }) => {
       const success = await backend.extendLock(jobId, token, duration);
       return { content: [{ type: 'text' as const, text: JSON.stringify({ success, jobId }) }] };
     })

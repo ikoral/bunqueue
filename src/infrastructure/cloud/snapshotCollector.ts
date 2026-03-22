@@ -54,6 +54,23 @@ export interface ServerHandles {
     isRunning: boolean;
   } | null;
   getSqliteStats?: () => { dbSizeBytes: number; writeBufferPending: number } | null;
+  getMcpOperations?: () => {
+    operations: Array<{
+      tool: string;
+      queue: string | null;
+      timestamp: number;
+      durationMs: number;
+      success: boolean;
+      error: string | null;
+    }>;
+    summary: {
+      totalInvocations: number;
+      successCount: number;
+      failureCount: number;
+      avgDurationMs: number;
+      topTools: Array<{ tool: string; count: number }>;
+    };
+  };
 }
 
 /** Parameters for snapshot collection */
@@ -90,6 +107,9 @@ let cachedHeavy: Pick<
 /** Collect a snapshot. Light data always fresh, heavy data cached between refreshes. */
 export async function collectSnapshot(params: CollectSnapshotParams): Promise<CloudSnapshot> {
   const { queueManager, instanceId, instanceName, startedAt, sequenceId, serverHandles } = params;
+
+  // ─── MCP operations (drain buffer into snapshot) ───
+  const mcpData = serverHandles?.getMcpOperations?.();
 
   // ─── Light data (O(SHARD_COUNT), every snapshot) ───
   const stats = queueManager.getStats();
@@ -238,6 +258,11 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
     queueBacklogVelocity: collectBacklogVelocity(queues),
     stallDetails: await collectStallDetails(queueManager),
     queuePriorityDistribution: collectPriorityDistribution(cachedHeavy.recentJobs),
+
+    // MCP telemetry
+    ...(mcpData && mcpData.operations.length > 0
+      ? { mcpOperations: mcpData.operations, mcpSummary: mcpData.summary }
+      : {}),
 
     ...cachedHeavy,
   };

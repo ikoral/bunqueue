@@ -762,7 +762,7 @@ describe('EmbeddedBackend - getChildrenValues parallel fetch', () => {
 
 describe('withErrorHandler - error format consistency', () => {
   test('wraps thrown errors with isError: true', async () => {
-    const handler = withErrorHandler(async () => {
+    const handler = withErrorHandler('test_throw', async () => {
       throw new Error('test failure');
     });
     const result = await handler({});
@@ -774,7 +774,7 @@ describe('withErrorHandler - error format consistency', () => {
   });
 
   test('passes through successful results unchanged', async () => {
-    const handler = withErrorHandler(async () => ({
+    const handler = withErrorHandler('test_success', async () => ({
       content: [{ type: 'text' as const, text: '{"ok":true}' }],
     }));
     const result = await handler({});
@@ -783,7 +783,7 @@ describe('withErrorHandler - error format consistency', () => {
   });
 
   test('handles non-Error thrown values', async () => {
-    const handler = withErrorHandler(async () => {
+    const handler = withErrorHandler('test_throw_str', async () => {
       throw 'string error';
     });
     const result = await handler({});
