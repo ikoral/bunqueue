@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.67] - 2026-03-22
+
+### Changed
+- **Disabled flaky SandboxedWorker tests** — Commented out all 35 SandboxedWorker tests across 5 files. Bun's Worker threads are still unstable and cause intermittent race conditions and crashes in parallel test runs. Tests will be re-enabled once Bun Workers stabilize.
+
 ## [2.6.66] - 2026-03-22
 
 ### Fixed
