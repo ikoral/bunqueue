@@ -18,62 +18,156 @@ const prevQueueWaiting = new Map<string, { waiting: number; timestamp: number }>
 
 // ─── Heavy data collectors (called every ~90s) ───
 
-/** Collect recent jobs — only from active queues */
-export function collectRecentJobs(
+/** All job states */
+const ALL_STATES = ['waiting', 'active', 'delayed', 'failed', 'completed'] as const;
+
+/** Max total jobs in snapshot — dashboard has exact totals per queue for the rest */
+const MAX_JOBS_TOTAL = 10_000;
+
+/** Collect jobs — all states, max 10k total across all queues, by priority */
+type DomainJob = ReturnType<QueueManager['getJobs']>[number];
+type SnapshotJob = CloudSnapshot['recentJobs'][number];
+
+/** Convert falsy/empty values to undefined for compact serialization */
+function orUndef<T>(val: T): T | undefined {
+  return val || undefined;
+}
+function nullUndef<T>(val: T | null): T | undefined {
+  return val ?? undefined;
+}
+function posOrUndef(val: number): number | undefined {
+  return val > 0 ? val : undefined;
+}
+function arrOrUndef<T>(arr: T[]): T[] | undefined {
+  return arr.length > 0 ? arr : undefined;
+}
+
+/** Map core job fields (identity, state, timing) */
+function mapJobCore(
+  j: DomainJob,
+  state: string
+): Pick<
+  SnapshotJob,
+  | 'id'
+  | 'name'
+  | 'queue'
+  | 'state'
+  | 'data'
+  | 'priority'
+  | 'createdAt'
+  | 'startedAt'
+  | 'completedAt'
+  | 'runAt'
+  | 'failedReason'
+  | 'attempts'
+  | 'maxAttempts'
+  | 'backoff'
+  | 'timeout'
+  | 'ttl'
+  | 'duration'
+  | 'waitTime'
+  | 'totalDuration'
+> {
+  const data = j.data as Record<string, unknown> | undefined;
+  const processTime = j.completedAt && j.startedAt ? j.completedAt - j.startedAt : undefined;
+  return {
+    id: String(j.id),
+    name: (data?.name as string | undefined) ?? 'default',
+    queue: j.queue,
+    state,
+    data,
+    priority: j.priority,
+    createdAt: j.createdAt,
+    startedAt: nullUndef(j.startedAt),
+    completedAt: nullUndef(j.completedAt),
+    runAt: j.runAt,
+    failedReason:
+      state === 'active' && j.attempts > 0 ? `Retry ${j.attempts}/${j.maxAttempts}` : undefined,
+    attempts: j.attempts,
+    maxAttempts: j.maxAttempts,
+    backoff: j.backoff,
+    timeout: nullUndef(j.timeout),
+    ttl: nullUndef(j.ttl),
+    duration: processTime,
+    waitTime: j.startedAt ? j.startedAt - j.createdAt : undefined,
+    totalDuration: j.completedAt ? j.completedAt - j.createdAt : undefined,
+  };
+}
+
+/** Map extended job fields (metadata, relationships, config) */
+function mapJobExtended(j: DomainJob): Partial<SnapshotJob> {
+  return {
+    progress: posOrUndef(j.progress),
+    progressMessage: nullUndef(j.progressMessage),
+    customId: nullUndef(j.customId),
+    uniqueKey: nullUndef(j.uniqueKey),
+    tags: arrOrUndef(j.tags),
+    groupId: nullUndef(j.groupId),
+    parentId: j.parentId ? String(j.parentId) : undefined,
+    childrenIds: j.childrenIds.length > 0 ? j.childrenIds.map(String) : undefined,
+    dependsOn: j.dependsOn.length > 0 ? j.dependsOn.map(String) : undefined,
+    childrenCompleted: posOrUndef(j.childrenCompleted),
+    lastHeartbeat: posOrUndef(j.lastHeartbeat),
+    stallCount: posOrUndef(j.stallCount),
+    stallTimeout: nullUndef(j.stallTimeout),
+    removeOnComplete: orUndef(j.removeOnComplete),
+    removeOnFail: orUndef(j.removeOnFail),
+    lifo: orUndef(j.lifo),
+    backoffConfig: nullUndef(j.backoffConfig),
+    repeat: nullUndef(j.repeat),
+    stackTraceLimit: j.stackTraceLimit,
+    keepLogs: nullUndef(j.keepLogs),
+    sizeLimit: nullUndef(j.sizeLimit),
+    failParentOnFailure: orUndef(j.failParentOnFailure),
+    removeDependencyOnFailure: orUndef(j.removeDependencyOnFailure),
+    continueParentOnFailure: orUndef(j.continueParentOnFailure),
+    ignoreDependencyOnFailure: orUndef(j.ignoreDependencyOnFailure),
+    deduplicationTtl: nullUndef(j.deduplicationTtl),
+    deduplicationExtend: orUndef(j.deduplicationExtend),
+    deduplicationReplace: orUndef(j.deduplicationReplace),
+    debounceId: nullUndef(j.debounceId),
+    debounceTtl: nullUndef(j.debounceTtl),
+  };
+}
+
+/** Map a domain Job to the snapshot format */
+function mapJobToSnapshot(j: DomainJob, state: string): SnapshotJob {
+  return { ...mapJobCore(j, state), ...mapJobExtended(j) } as SnapshotJob;
+}
+
+export function collectLiveJobs(
   queueManager: QueueManager,
-  activeQueueNames: string[]
+  queueNames: string[]
 ): CloudSnapshot['recentJobs'] {
-  if (activeQueueNames.length === 0) return [];
+  if (queueNames.length === 0) return [];
 
   const jobs: CloudSnapshot['recentJobs'] = [];
-  const perQueue = Math.max(1, Math.floor(50 / activeQueueNames.length));
+  const perQueueState = Math.max(
+    1,
+    Math.floor(MAX_JOBS_TOTAL / (queueNames.length * ALL_STATES.length))
+  );
 
-  for (const name of activeQueueNames) {
-    try {
-      const queueJobs = queueManager.getJobs(name, {
-        state: ['waiting', 'active', 'delayed', 'completed', 'failed'],
-        start: 0,
-        end: perQueue - 1,
-      });
-      for (const j of queueJobs) {
-        const data = j.data as Record<string, unknown> | undefined;
-        const state = j.completedAt
-          ? 'completed'
-          : j.startedAt
-            ? 'active'
-            : j.runAt > Date.now()
-              ? 'delayed'
-              : 'waiting';
-
-        jobs.push({
-          id: String(j.id),
-          name: (data?.name as string | undefined) ?? 'default',
-          queue: j.queue,
-          state,
-          data,
-          priority: j.priority,
-          createdAt: j.createdAt,
-          startedAt: j.startedAt ?? undefined,
-          completedAt: j.completedAt ?? undefined,
-          failedReason:
-            state === 'active' && j.attempts > 0
-              ? `Retry ${j.attempts}/${j.maxAttempts}`
-              : undefined,
-          attempts: j.attempts,
-          maxAttempts: j.maxAttempts,
-          duration: j.completedAt && j.startedAt ? j.completedAt - j.startedAt : undefined,
-          progress: j.progress > 0 ? j.progress : undefined,
+  for (const name of queueNames) {
+    for (const state of ALL_STATES) {
+      try {
+        const queueJobs = queueManager.getJobs(name, {
+          state: [state],
+          start: 0,
+          end: perQueueState - 1,
         });
+        for (const j of queueJobs) {
+          jobs.push(mapJobToSnapshot(j, state));
+        }
+      } catch {
+        // Skip queue/state on error
       }
-    } catch {
-      // Skip queue on error
     }
   }
 
-  return jobs.sort((a, b) => b.createdAt - a.createdAt).slice(0, 50);
+  return jobs.slice(0, MAX_JOBS_TOTAL);
 }
 
-/** Collect DLQ entries — only from queues with DLQ > 0 */
+/** Collect ALL DLQ entries — no cap */
 export function collectDlqEntries(
   queueManager: QueueManager,
   dlqQueueNames: string[]
@@ -85,7 +179,7 @@ export function collectDlqEntries(
   for (const name of dlqQueueNames) {
     try {
       const dlq = queueManager.getDlqEntries(name);
-      for (const e of dlq.slice(0, 20)) {
+      for (const e of dlq) {
         entries.push({
           jobId: String(e.job.id),
           queue: e.job.queue,
@@ -93,7 +187,22 @@ export function collectDlqEntries(
           error: e.error,
           enteredAt: e.enteredAt,
           retryCount: e.retryCount,
-          attempts: e.job.attempts,
+          lastRetryAt: e.lastRetryAt ?? undefined,
+          nextRetryAt: e.nextRetryAt ?? undefined,
+          expiresAt: (e as unknown as { expiresAt?: number }).expiresAt ?? undefined,
+          jobAttempts: e.job.attempts,
+          jobMaxAttempts: e.job.maxAttempts,
+          jobData: e.job.data,
+          jobCreatedAt: e.job.createdAt,
+          jobPriority: e.job.priority,
+          attemptHistory: e.attempts.map((a) => ({
+            attempt: a.attempt,
+            startedAt: a.startedAt,
+            failedAt: a.failedAt,
+            reason: a.reason,
+            error: a.error,
+            duration: a.duration,
+          })),
         });
       }
     } catch {
@@ -101,7 +210,7 @@ export function collectDlqEntries(
     }
   }
 
-  return entries.sort((a, b) => b.enteredAt - a.enteredAt).slice(0, 50);
+  return entries.sort((a, b) => b.enteredAt - a.enteredAt);
 }
 
 /** Collect per-queue config */
@@ -117,13 +226,25 @@ export function collectQueueConfigs(
       const stall = queueManager.getStallConfig(name);
       const dlq = queueManager.getDlqConfig(name);
       const pq = perQueue.get(name);
+      const limits = queueManager.getQueueLimits(name);
       configs[name] = {
         paused: queueManager.isPaused(name),
-        rateLimit: null,
-        concurrencyLimit: null,
+        rateLimit: limits.rateLimit,
+        concurrencyLimit: limits.concurrencyLimit,
         concurrencyActive: pq?.active ?? 0,
-        stallConfig: { stallInterval: stall.stallInterval, maxStalls: stall.maxStalls },
-        dlqConfig: { maxRetries: dlq.maxAutoRetries, maxAge: dlq.maxAge ?? 0 },
+        stallConfig: {
+          enabled: stall.enabled,
+          stallInterval: stall.stallInterval,
+          maxStalls: stall.maxStalls,
+          gracePeriod: stall.gracePeriod,
+        },
+        dlqConfig: {
+          autoRetry: dlq.autoRetry,
+          autoRetryInterval: dlq.autoRetryInterval,
+          maxRetries: dlq.maxAutoRetries,
+          maxAge: dlq.maxAge ?? 0,
+          maxEntries: dlq.maxEntries,
+        },
       };
     } catch {
       // Skip
@@ -184,8 +305,7 @@ export function collectTopErrors(
 
   return [...errorMap.entries()]
     .map(([message, data]) => ({ message, ...data }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 20);
+    .sort((a, b) => b.count - a.count);
 }
 
 // ─── Analytics collectors (derived from recent jobs + queue state) ───

@@ -34,8 +34,6 @@ export class CloudAgent {
   private snapshotCount = 0;
   private stopped = false;
   private serverHandles?: ServerHandles;
-  /** Heavy data collected every N snapshots (default: every 6th = every 90s at 15s interval) */
-  private readonly heavyEveryN = 6;
   /** Event buffer — flushed into each HTTP snapshot */
   private readonly eventBuffer: CloudEvent[] = [];
 
@@ -156,11 +154,9 @@ export class CloudAgent {
   }
 
   /** Collect and send a snapshot via HTTP. Events are always embedded. */
-  private async sendSnapshot(forceHeavy = false): Promise<void> {
+  private async sendSnapshot(_forceHeavy = false): Promise<void> {
     try {
       this.snapshotCount++;
-      const includeHeavy =
-        forceHeavy || this.snapshotCount % this.heavyEveryN === 1 || this.snapshotCount === 1;
 
       const snapshot = await collectSnapshot({
         queueManager: this.queueManager,
@@ -169,7 +165,7 @@ export class CloudAgent {
         startedAt: this.startedAt,
         sequenceId: ++this.sequenceId,
         serverHandles: this.serverHandles,
-        includeHeavy,
+        includeHeavy: true,
       });
 
       // Embed buffered events in snapshot

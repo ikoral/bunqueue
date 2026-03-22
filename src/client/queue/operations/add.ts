@@ -268,9 +268,29 @@ export async function addBulk<T>(
       maxAttempts: m.attempts,
       backoff: m.backoff,
       timeout: m.timeout,
+      ttl: m.ttl,
       customId: m.jobId,
+      tags: m.tags,
+      groupId: m.groupId,
+      uniqueKey: m.deduplication?.id,
+      dedup: m.deduplication
+        ? {
+            ttl: m.deduplication.ttl,
+            extend: m.deduplication.extend,
+            replace: m.deduplication.replace,
+          }
+        : undefined,
+      lifo: m.lifo,
+      stallTimeout: m.stallTimeout,
       repeat: m.repeat,
       durable: m.durable,
+      stackTraceLimit: m.stackTraceLimit,
+      keepLogs: m.keepLogs,
+      sizeLimit: m.sizeLimit,
+      failParentOnFailure: m.failParentOnFailure,
+      removeDependencyOnFailure: m.removeDependencyOnFailure,
+      debounceId: m.debounce?.id,
+      debounceTtl: m.debounce?.ttl,
     };
   });
 

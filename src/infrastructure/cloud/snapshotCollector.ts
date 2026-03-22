@@ -13,8 +13,9 @@ import { latencyTracker } from '../../application/latencyTracker';
 import { getTaskErrorStats } from '../../application/backgroundTasks';
 import { VERSION } from '../../shared/version';
 import type { CloudSnapshot } from './types';
+import { cloudLog } from './logger';
 import {
-  collectRecentJobs,
+  collectLiveJobs,
   collectDlqEntries,
   collectTopErrors,
   collectQueueConfigs,
@@ -84,28 +85,9 @@ export interface CollectSnapshotParams {
   includeHeavy: boolean;
 }
 
-/** Cached heavy data — reused between snapshots until refreshed */
-let cachedHeavy: Pick<
-  CloudSnapshot,
-  | 'recentJobs'
-  | 'dlqEntries'
-  | 'topErrors'
-  | 'workerDetails'
-  | 'queueConfigs'
-  | 'webhooks'
-  | 's3Backup'
-> = {
-  recentJobs: [],
-  dlqEntries: [],
-  topErrors: [],
-  workerDetails: [],
-  queueConfigs: {},
-  webhooks: [],
-  s3Backup: null,
-};
-
 /** Collect a snapshot. Light data always fresh, heavy data cached between refreshes. */
 export async function collectSnapshot(params: CollectSnapshotParams): Promise<CloudSnapshot> {
+  const t0 = performance.now();
   const { queueManager, instanceId, instanceName, startedAt, sequenceId, serverHandles } = params;
 
   // ─── MCP operations (drain buffer into snapshot) ───
@@ -130,6 +112,8 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
       waiting: counts.waiting,
       delayed: counts.delayed,
       active: counts.active,
+      completed: counts.completed,
+      failed: counts.failed,
       dlq: perQueue.get(name)?.dlq ?? 0,
       paused: queueManager.isPaused(name),
       totalCompleted: counts.totalCompleted,
@@ -141,51 +125,76 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
     name: c.name,
     queue: c.queue,
     schedule: c.schedule ?? null,
+    repeatEvery: c.repeatEvery ?? null,
     nextRun: c.nextRun,
     executions: c.executions,
     maxLimit: c.maxLimit,
     lastRun: c.executions > 0 && c.repeatEvery ? c.nextRun - c.repeatEvery : null,
+    priority: c.priority,
+    timezone: c.timezone ?? null,
+    data: c.data,
+    uniqueKey: c.uniqueKey ?? null,
+    dedup: c.dedup ?? null,
   }));
 
-  // ─── Heavy data (only when requested) ───
-  if (params.includeHeavy) {
-    const activeQueues = queues.filter((q) => q.waiting > 0 || q.active > 0 || q.delayed > 0);
-    const allQueuesForJobs = queues.length <= 20 ? queues : activeQueues;
-    const dlqQueues = queues.filter((q) => q.dlq > 0);
+  // ─── Full data (every snapshot) ───
+  const allQueueNames = queues.map((q) => q.name);
+  const dlqQueues = queues.filter((q) => q.dlq > 0);
 
-    cachedHeavy = {
-      recentJobs: collectRecentJobs(
-        queueManager,
-        allQueuesForJobs.map((q) => q.name)
-      ),
-      dlqEntries: collectDlqEntries(
-        queueManager,
-        dlqQueues.map((q) => q.name)
-      ),
-      topErrors: collectTopErrors(
-        queueManager,
-        dlqQueues.map((q) => q.name)
-      ),
-      workerDetails: queueManager.workerManager.list().map((w) => ({
-        id: w.id,
-        name: w.name,
-        queues: w.queues,
-        concurrency: w.concurrency,
-        hostname: w.hostname,
-        pid: w.pid,
-        lastSeen: w.lastSeen,
-        activeJobs: w.activeJobs,
-        processedJobs: w.processedJobs,
-        failedJobs: w.failedJobs,
-        currentJob: w.currentJob,
-      })),
-      queueConfigs: collectQueueConfigs(queueManager, new Set(queueNames)),
-      webhooks: collectWebhooks(queueManager),
-      s3Backup: serverHandles?.getBackupStatus?.() ?? null,
-    };
-  }
+  // Live jobs: waiting/active/delayed/failed — bounded by processing capacity
+  const recentJobs = collectLiveJobs(queueManager, allQueueNames);
 
-  return {
+  const dlqEntries = collectDlqEntries(
+    queueManager,
+    dlqQueues.map((q) => q.name)
+  );
+  const topErrors = collectTopErrors(
+    queueManager,
+    dlqQueues.map((q) => q.name)
+  );
+  const workerDetails = queueManager.workerManager.list().map((w) => ({
+    id: w.id,
+    name: w.name,
+    queues: w.queues,
+    concurrency: w.concurrency,
+    hostname: w.hostname,
+    pid: w.pid,
+    registeredAt: w.registeredAt,
+    lastSeen: w.lastSeen,
+    activeJobs: w.activeJobs,
+    processedJobs: w.processedJobs,
+    failedJobs: w.failedJobs,
+    currentJob: w.currentJob,
+  }));
+  const queueConfigs = collectQueueConfigs(queueManager, new Set(queueNames));
+  const webhooks = collectWebhooks(queueManager);
+  const s3Backup = serverHandles?.getBackupStatus?.() ?? null;
+
+  // Job results, logs, and locks
+  const jobResultsMap = queueManager.getAllJobResults();
+  const jobResults: Record<string, unknown> = {};
+  for (const [id, val] of jobResultsMap) jobResults[id] = val;
+
+  const jobLogsMap = queueManager.getAllJobLogs();
+  const jobLogEntries: Record<
+    string,
+    Array<{ timestamp: number; level: 'info' | 'warn' | 'error'; message: string }>
+  > = {};
+  for (const [id, logs] of jobLogsMap) jobLogEntries[id] = logs;
+
+  const locksMap = queueManager.getAllJobLocks();
+  const activeLocks = [...locksMap.values()].map((l) => ({
+    jobId: String(l.jobId),
+    owner: l.owner,
+    token: l.token,
+    createdAt: l.createdAt,
+    expiresAt: l.expiresAt,
+    lastRenewalAt: l.lastRenewalAt,
+    renewalCount: l.renewalCount,
+    ttl: l.ttl,
+  }));
+
+  const result: CloudSnapshot = {
     instanceId,
     instanceName,
     version: VERSION,
@@ -249,21 +258,32 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
 
     // Analytics
     queueThroughput: collectQueueThroughput(queues),
-    durationHistogram: collectDurationHistogram(cachedHeavy.recentJobs),
+    durationHistogram: collectDurationHistogram(recentJobs),
     workerUtilization: collectWorkerUtilization(queueManager),
     sqliteStats: serverHandles?.getSqliteStats?.() ?? null,
     runtime: RUNTIME,
-    queueWaitTime: collectQueueWaitTime(cachedHeavy.recentJobs),
-    queueRetryRate: collectQueueRetryRate(cachedHeavy.recentJobs),
+    queueWaitTime: collectQueueWaitTime(recentJobs),
+    queueRetryRate: collectQueueRetryRate(recentJobs),
     queueBacklogVelocity: collectBacklogVelocity(queues),
     stallDetails: await collectStallDetails(queueManager),
-    queuePriorityDistribution: collectPriorityDistribution(cachedHeavy.recentJobs),
+    queuePriorityDistribution: collectPriorityDistribution(recentJobs),
 
     // MCP telemetry
     ...(mcpData && mcpData.operations.length > 0
       ? { mcpOperations: mcpData.operations, mcpSummary: mcpData.summary }
       : {}),
 
-    ...cachedHeavy,
+    recentJobs,
+    dlqEntries,
+    topErrors,
+    workerDetails,
+    queueConfigs,
+    webhooks,
+    s3Backup,
+    jobResults,
+    jobLogEntries,
+    activeLocks,
   };
+  cloudLog.info('Snapshot collect', { ms: Math.round((performance.now() - t0) * 100) / 100 });
+  return result;
 }

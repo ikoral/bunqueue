@@ -107,6 +107,8 @@ export interface CloudSnapshot {
     waiting: number;
     delayed: number;
     active: number;
+    completed: number;
+    failed: number;
     dlq: number;
     paused: boolean;
     totalCompleted: number;
@@ -125,10 +127,16 @@ export interface CloudSnapshot {
     name: string;
     queue: string;
     schedule: string | null;
+    repeatEvery: number | null;
     nextRun: number;
     executions: number;
     maxLimit: number | null;
     lastRun: number | null;
+    priority: number;
+    timezone: string | null;
+    data: unknown;
+    uniqueKey: string | null;
+    dedup: unknown;
   }>;
 
   storage: {
@@ -145,7 +153,7 @@ export interface CloudSnapshot {
     }
   >;
 
-  /** Recent jobs across all queues (last ~50, newest first) */
+  /** All jobs across all queues, all states, no cap */
   recentJobs: Array<{
     id: string;
     name: string;
@@ -156,14 +164,49 @@ export interface CloudSnapshot {
     createdAt: number;
     startedAt?: number;
     completedAt?: number;
+    runAt: number;
     failedReason?: string;
     attempts: number;
     maxAttempts: number;
+    backoff: number;
+    timeout?: number;
+    ttl?: number;
     duration?: number;
+    waitTime?: number;
+    totalDuration?: number;
     progress?: number;
+    progressMessage?: string;
+    customId?: string;
+    uniqueKey?: string;
+    tags?: string[];
+    groupId?: string;
+    parentId?: string;
+    childrenIds?: string[];
+    dependsOn?: string[];
+    childrenCompleted?: number;
+    lastHeartbeat?: number;
+    stallCount?: number;
+    stallTimeout?: number;
+    removeOnComplete?: boolean;
+    removeOnFail?: boolean;
+    lifo?: boolean;
+    backoffConfig?: unknown;
+    repeat?: unknown;
+    stackTraceLimit: number;
+    keepLogs?: number;
+    sizeLimit?: number;
+    failParentOnFailure?: boolean;
+    removeDependencyOnFailure?: boolean;
+    continueParentOnFailure?: boolean;
+    ignoreDependencyOnFailure?: boolean;
+    deduplicationTtl?: number;
+    deduplicationExtend?: boolean;
+    deduplicationReplace?: boolean;
+    debounceId?: string;
+    debounceTtl?: number;
   }>;
 
-  /** DLQ entries across all queues (last ~50) */
+  /** All DLQ entries across all queues — full data */
   dlqEntries: Array<{
     jobId: string;
     queue: string;
@@ -171,7 +214,22 @@ export interface CloudSnapshot {
     error: string | null;
     enteredAt: number;
     retryCount: number;
-    attempts: number;
+    lastRetryAt?: number;
+    nextRetryAt?: number;
+    expiresAt?: number;
+    jobAttempts: number;
+    jobMaxAttempts: number;
+    jobData?: unknown;
+    jobCreatedAt: number;
+    jobPriority: number;
+    attemptHistory: Array<{
+      attempt: number;
+      startedAt: number;
+      failedAt: number;
+      reason: string;
+      error: string | null;
+      duration: number;
+    }>;
   }>;
 
   /** Individual worker details */
@@ -182,6 +240,7 @@ export interface CloudSnapshot {
     concurrency: number;
     hostname: string;
     pid: number;
+    registeredAt: number;
     lastSeen: number;
     activeJobs: number;
     processedJobs: number;
@@ -197,8 +256,19 @@ export interface CloudSnapshot {
       rateLimit: number | null;
       concurrencyLimit: number | null;
       concurrencyActive: number;
-      stallConfig?: { stallInterval: number; maxStalls: number };
-      dlqConfig?: { maxRetries: number; maxAge: number };
+      stallConfig?: {
+        enabled: boolean;
+        stallInterval: number;
+        maxStalls: number;
+        gracePeriod: number;
+      };
+      dlqConfig?: {
+        autoRetry: boolean;
+        autoRetryInterval: number;
+        maxRetries: number;
+        maxAge: number;
+        maxEntries: number;
+      };
     }
   >;
 
@@ -343,6 +413,31 @@ export interface CloudSnapshot {
     retention: number;
     isRunning: boolean;
   } | null;
+
+  /** Job results — return values from completed jobs (from LRU cache, max 5k) */
+  jobResults: Record<string, unknown>;
+
+  /** Job logs — per-job log entries (from LRU cache, max 10k) */
+  jobLogEntries: Record<
+    string,
+    Array<{
+      timestamp: number;
+      level: 'info' | 'warn' | 'error';
+      message: string;
+    }>
+  >;
+
+  /** Active job locks — current lock ownership for processing jobs */
+  activeLocks: Array<{
+    jobId: string;
+    owner: string;
+    token: string;
+    createdAt: number;
+    expiresAt: number;
+    lastRenewalAt: number;
+    renewalCount: number;
+    ttl: number;
+  }>;
 }
 
 /** Event payload forwarded via WebSocket */

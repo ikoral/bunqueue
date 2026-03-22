@@ -78,8 +78,19 @@ export class HttpSender {
 
   /** HTTP POST with auth headers and optional HMAC — sends zstd(msgpack) */
   private async post(url: string, body: unknown): Promise<void> {
+    const tPack = performance.now();
     const msgpackBuf = pack(body);
-    const compressed = new Uint8Array(await Bun.zstdCompress(msgpackBuf));
+    const packMs = Math.round((performance.now() - tPack) * 100) / 100;
+    const tZstd = performance.now();
+    const compressed = new Uint8Array(await Bun.zstdCompress(msgpackBuf, { level: 6 }));
+    const zstdMs = Math.round((performance.now() - tZstd) * 100) / 100;
+    cloudLog.info('Snapshot size', {
+      rawKB: Math.round(msgpackBuf.byteLength / 1024),
+      compressedKB: Math.round(compressed.byteLength / 1024),
+      ratio: `${Math.round((1 - compressed.byteLength / msgpackBuf.byteLength) * 100)}%`,
+      packMs,
+      zstdMs,
+    });
     const headers: Record<string, string> = {
       'Content-Type': 'application/x-msgpack',
       'Content-Encoding': 'zstd',

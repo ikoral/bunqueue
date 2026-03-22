@@ -8,7 +8,7 @@
 import { Queue, Worker } from '../src/client';
 
 const TCP_PORT = parseInt(process.env.TCP_PORT ?? '6789');
-const DURATION_MS = 24 * 60 * 60 * 1000;
+const DURATION_MS = parseInt(process.env.DURATION_MS ?? String(24 * 60 * 60 * 1000));
 const PUSH_INTERVAL_MS = 500; // push every 500ms
 
 const TCP_OPTS = { port: TCP_PORT, commandTimeout: 60000, pingInterval: 0 };
@@ -108,8 +108,8 @@ async function main() {
         {
           concurrency: q.concurrency,
           connection: TCP_OPTS,
-          heartbeatInterval: 0,
-          useLocks: false,
+          heartbeatInterval: 10000,
+          useLocks: true,
         },
       );
 
@@ -128,16 +128,28 @@ async function main() {
 
       for (let j = 0; j < q.pushRate; j++) {
         const isDelayed = Math.random() < 0.12;
+        const uid = Math.random().toString(36).slice(2, 10);
+        const GROUPS = ['billing', 'onboarding', 'support', 'enterprise', 'free-tier'];
+        const TAG_POOL = ['urgent', 'batch', 'retry', 'scheduled', 'manual', 'api', 'webhook', 'cron', 'high-value', 'internal'];
+        const tags = TAG_POOL.filter(() => Math.random() < 0.3);
         batch.push({
           name: `${q.name}-${Date.now()}-${j}`,
           data: {
             type: q.name,
-            payload: { id: Math.random().toString(36).slice(2, 10) },
+            payload: { id: uid, email: `user-${uid}@example.com`, amount: Math.round(Math.random() * 10000) / 100 },
             ts: Date.now(),
+            metadata: { source: 'sim', region: ['us-east', 'eu-west', 'ap-south'][Math.floor(Math.random() * 3)] },
           },
           opts: {
             priority: Math.floor(Math.random() * 10),
             ...(isDelayed ? { delay: 1000 + Math.floor(Math.random() * 5000) } : {}),
+            ...(Math.random() < 0.15 ? { jobId: `custom-${q.name}-${uid}` } : {}),
+            ...(tags.length > 0 ? { tags } : {}),
+            ...(Math.random() < 0.2 ? { groupId: GROUPS[Math.floor(Math.random() * GROUPS.length)] } : {}),
+            ...(Math.random() < 0.1 ? { timeout: 15000 + Math.floor(Math.random() * 45000) } : {}),
+            ...(Math.random() < 0.05 ? { ttl: 60000 + Math.floor(Math.random() * 300000) } : {}),
+            attempts: 1 + Math.floor(Math.random() * 5),
+            backoff: 1000 + Math.floor(Math.random() * 4000),
           },
         });
       }

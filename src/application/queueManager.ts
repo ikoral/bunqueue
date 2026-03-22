@@ -785,6 +785,31 @@ export class QueueManager {
     this.shards[shardIndex(queue)].clearConcurrency(queue);
   }
 
+  /** Get rate limit and concurrency limit for a queue */
+  getQueueLimits(queue: string): { rateLimit: number | null; concurrencyLimit: number | null } {
+    const state = this.shards[shardIndex(queue)].getState(queue);
+    return { rateLimit: state.rateLimit, concurrencyLimit: state.concurrencyLimit };
+  }
+
+  /** Get all job results (for cloud telemetry) */
+  getAllJobResults(): Map<JobId, unknown> {
+    const map = new Map<JobId, unknown>();
+    for (const [k, v] of this.jobResults.entries()) map.set(k, v);
+    return map;
+  }
+
+  /** Get all job logs (for cloud telemetry) */
+  getAllJobLogs(): Map<JobId, JobLogEntry[]> {
+    const map = new Map<JobId, JobLogEntry[]>();
+    for (const [k, v] of this.jobLogs.entries()) map.set(k, v);
+    return map;
+  }
+
+  /** Get all active job locks (for cloud telemetry) */
+  getAllJobLocks(): Map<JobId, JobLock> {
+    return this.jobLocks;
+  }
+
   // ============ Stall & DLQ Config ============
 
   setStallConfig(queue: string, config: Record<string, unknown>): void {

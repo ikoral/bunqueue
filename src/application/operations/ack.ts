@@ -86,6 +86,8 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
   }
 
   if (!job.removeOnComplete) {
+    const now = Date.now();
+    job.completedAt = now;
     ctx.completedJobs.add(jobId);
     ctx.completedJobsData.set(jobId, job);
     if (result !== undefined) {
@@ -93,7 +95,7 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
       ctx.storage?.storeResult(jobId, result);
     }
     ctx.jobIndex.set(jobId, { type: 'completed', queueName: job.queue });
-    ctx.storage?.markCompleted(jobId, Date.now());
+    ctx.storage?.markCompleted(jobId, now);
   } else {
     ctx.jobIndex.delete(jobId);
     ctx.storage?.deleteJob(jobId);
