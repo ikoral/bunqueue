@@ -72,9 +72,6 @@ export class CloudAgent {
       ws: this.config.useWebSocket,
     });
 
-    // Preconnect: resolve DNS + TCP + TLS before first snapshot
-    fetch.preconnect(this.config.url);
-
     // Channel 1: HTTP snapshots
     if (this.config.useHttp) {
       // Send first snapshot immediately
