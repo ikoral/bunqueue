@@ -64,6 +64,7 @@ function fakeJob(overrides: Partial<Job> & { id: JobId; queue: string }): Job {
     deduplicationReplace: false,
     debounceId: null,
     debounceTtl: null,
+    timeline: [],
     ...overrides,
   } as Job;
 }

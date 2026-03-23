@@ -207,6 +207,13 @@ export interface CloudSnapshot {
     deduplicationReplace?: boolean;
     debounceId?: string;
     debounceTtl?: number;
+    timeline?: Array<{
+      state: string;
+      timestamp: number;
+      worker?: string;
+      error?: string;
+      attempt?: number;
+    }>;
   }>;
 
   /** All DLQ entries across all queues — full data */

@@ -762,6 +762,7 @@ describe('reconstructDlqEntry', () => {
         deduplicationReplace: false,
         debounceId: null,
         debounceTtl: null,
+        timeline: [],
       },
       enteredAt: now,
       reason: 'max_attempts_exceeded' as any,
@@ -877,9 +878,9 @@ describe('SQL_STATEMENTS', () => {
       expect(SQL_STATEMENTS.insertJob).toContain('jobs');
     });
 
-    test('should have 23 placeholder parameters', () => {
+    test('should have 24 placeholder parameters', () => {
       const paramCount = (SQL_STATEMENTS.insertJob.match(/\?/g) || []).length;
-      expect(paramCount).toBe(23);
+      expect(paramCount).toBe(24);
     });
 
     test('should include all required columns', () => {
@@ -1100,7 +1101,8 @@ describe('prepareStatements', () => {
         null,                    // group_id
         0,                       // remove_on_complete
         0,                       // remove_on_fail
-        null                     // stall_timeout
+        null,                    // stall_timeout
+        null                     // timeline
       );
     }).not.toThrow();
   });
@@ -1123,7 +1125,7 @@ describe('prepareStatements', () => {
     const now = Date.now();
 
     expect(() => {
-      updateStmt.run('active', now, 'prepared-test-1');
+      updateStmt.run('active', now, null, 'prepared-test-1');
     }).not.toThrow();
 
     const getStmt = statements.get('getJob')!;
@@ -1138,7 +1140,7 @@ describe('prepareStatements', () => {
     const now = Date.now();
 
     expect(() => {
-      completeStmt.run('completed', now, 'prepared-test-1');
+      completeStmt.run('completed', now, null, 'prepared-test-1');
     }).not.toThrow();
 
     const getStmt = statements.get('getJob')!;
@@ -1298,7 +1300,8 @@ describe('end-to-end pack/unpack via SQLite', () => {
       'group-1',
       1,
       1,
-      15000
+      15000,
+      null
     );
 
     const getStmt = db.prepare(SQL_STATEMENTS.getJob);
@@ -1357,6 +1360,7 @@ describe('end-to-end pack/unpack via SQLite', () => {
       null,
       0,
       0,
+      null,
       null
     );
 

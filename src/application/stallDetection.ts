@@ -4,7 +4,7 @@
  */
 
 import type { Job } from '../domain/types/job';
-import { calculateBackoff } from '../domain/types/job';
+import { calculateBackoff, MAX_TIMELINE_ENTRIES } from '../domain/types/job';
 import { FailureReason } from '../domain/types/dlq';
 import { StallAction, getStallAction, incrementStallCount } from '../domain/types/stall';
 import { EventType } from '../domain/types/queue';
@@ -159,8 +159,18 @@ function retryStalliedJob(
   incrementStallCount(job);
   job.attempts++;
   job.startedAt = null;
-  job.runAt = Date.now() + calculateBackoff(job);
-  job.lastHeartbeat = Date.now();
+  const stallNow = Date.now();
+  job.runAt = stallNow + calculateBackoff(job);
+  job.lastHeartbeat = stallNow;
+  if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+    job.timeline.push({
+      state: 'failed',
+      timestamp: stallNow,
+      error: 'stalled',
+      attempt: job.attempts,
+    });
+    job.timeline.push({ state: 'waiting', timestamp: stallNow, attempt: job.attempts + 1 });
+  }
 
   ctx.processingShards[procIdx].delete(job.id);
   shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);

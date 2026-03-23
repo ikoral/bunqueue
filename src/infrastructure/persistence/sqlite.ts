@@ -5,7 +5,7 @@
  */
 
 import { Database } from 'bun:sqlite';
-import type { Job, JobId } from '../../domain/types/job';
+import type { Job, JobId, JobTimelineEntry } from '../../domain/types/job';
 import type { CronJob } from '../../domain/types/cron';
 import type { DlqEntry } from '../../domain/types/dlq';
 import { PRAGMA_SETTINGS, SCHEMA, MIGRATION_TABLE, SCHEMA_VERSION, MIGRATIONS } from './schema';
@@ -185,20 +185,30 @@ export class SqliteStorage {
           job.groupId,
           job.removeOnComplete ? 1 : 0,
           job.removeOnFail ? 1 : 0,
-          job.stallTimeout
+          job.stallTimeout,
+          job.timeline.length > 0 ? pack(job.timeline) : null
         );
     });
   }
 
-  markActive(jobId: JobId, startedAt: number): void {
+  markActive(jobId: JobId, startedAt: number, timeline?: JobTimelineEntry[]): void {
     this.safeWrite(() => {
-      this.statements.get('updateJobState')!.run('active', startedAt, jobId);
+      this.statements
+        .get('updateJobState')!
+        .run('active', startedAt, timeline && timeline.length > 0 ? pack(timeline) : null, jobId);
     });
   }
 
-  markCompleted(jobId: JobId, completedAt: number): void {
+  markCompleted(jobId: JobId, completedAt: number, timeline?: JobTimelineEntry[]): void {
     this.safeWrite(() => {
-      this.statements.get('completeJob')!.run('completed', completedAt, jobId);
+      this.statements
+        .get('completeJob')!
+        .run(
+          'completed',
+          completedAt,
+          timeline && timeline.length > 0 ? pack(timeline) : null,
+          jobId
+        );
     });
   }
 
@@ -262,8 +272,14 @@ export class SqliteStorage {
   updateForRetry(job: Job): void {
     this.safeWrite(() => {
       this.db
-        .prepare('UPDATE jobs SET attempts = ?, run_at = ?, state = ? WHERE id = ?')
-        .run(job.attempts, job.runAt, 'waiting', job.id);
+        .prepare('UPDATE jobs SET attempts = ?, run_at = ?, state = ?, timeline = ? WHERE id = ?')
+        .run(
+          job.attempts,
+          job.runAt,
+          'waiting',
+          job.timeline.length > 0 ? pack(job.timeline) : null,
+          job.id
+        );
     });
   }
 

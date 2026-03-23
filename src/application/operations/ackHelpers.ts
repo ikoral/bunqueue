@@ -3,6 +3,7 @@
  */
 
 import type { Job, JobId } from '../../domain/types/job';
+import { MAX_TIMELINE_ENTRIES } from '../../domain/types/job';
 import type { JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { RWLock } from '../../shared/lock';
@@ -221,6 +222,10 @@ export function finalizeBatchAck<T>(
     }
 
     if (!job.removeOnComplete) {
+      // Timeline: completed
+      if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+        job.timeline.push({ state: 'completed', timestamp: now });
+      }
       // 1. Store result first (if any) - must happen before completedJobs.add()
       if (includeResults && result !== undefined) {
         ctx.jobResults.set(jobId, result);
@@ -229,7 +234,7 @@ export function finalizeBatchAck<T>(
       // 2. Update job index and store job data for completed listing
       ctx.jobIndex.set(jobId, { type: 'completed' as const, queueName: job.queue });
       ctx.completedJobsData.set(jobId, job);
-      if (hasStorage) storage.markCompleted(jobId, now);
+      if (hasStorage) storage.markCompleted(jobId, now, job.timeline);
       // 3. Mark as completed LAST - this is the signal other threads wait for
       ctx.completedJobs.add(jobId);
     } else {

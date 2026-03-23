@@ -482,7 +482,7 @@ export class QueueManager {
         ctx.storage?.storeResult(jId, result);
       }
       ctx.jobIndex.set(jId, { type: 'completed', queueName: (job as Job).queue });
-      ctx.storage?.markCompleted(jId, Date.now());
+      ctx.storage?.markCompleted(jId, Date.now(), (job as Job).timeline);
     } else {
       ctx.jobIndex.delete(jId);
       ctx.storage?.deleteJob(jId);

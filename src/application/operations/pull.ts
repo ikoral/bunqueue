@@ -3,7 +3,13 @@
  * Job pull logic with timeout support
  */
 
-import { type Job, type JobId, isExpired, isReady } from '../../domain/types/job';
+import {
+  type Job,
+  type JobId,
+  isExpired,
+  isReady,
+  MAX_TIMELINE_ENTRIES,
+} from '../../domain/types/job';
 import type { JobLocation, EventType } from '../../domain/types/queue';
 import type { Shard } from '../../domain/queue/shard';
 import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
@@ -84,6 +90,9 @@ function tryDequeueNextJob(
 
   job.startedAt = now;
   job.lastHeartbeat = now;
+  if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+    job.timeline.push({ state: 'active', timestamp: now });
+  }
 
   return { status: 'job', job };
 }
@@ -100,7 +109,7 @@ async function moveToProcessing(job: Job, queue: string, ctx: PullContext): Prom
   });
 
   ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
-  ctx.storage?.markActive(job.id, job.startedAt ?? now);
+  ctx.storage?.markActive(job.id, job.startedAt ?? now, job.timeline);
   ctx.totalPulled.value++;
   throughputTracker.pullRate.increment();
   ctx.broadcast({
@@ -142,7 +151,7 @@ async function moveToProcessingBatch(jobs: Job[], queue: string, ctx: PullContex
   for (const job of jobs) {
     const procIdx = processingShardIndex(job.id);
     ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
-    ctx.storage?.markActive(job.id, job.startedAt ?? now);
+    ctx.storage?.markActive(job.id, job.startedAt ?? now, job.timeline);
     ctx.totalPulled.value++;
     throughputTracker.pullRate.increment();
     ctx.broadcast({

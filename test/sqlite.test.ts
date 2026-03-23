@@ -84,6 +84,7 @@ describe('SqliteStorage', () => {
       lastHeartbeat: Date.now(),
       stallTimeout: null,
       stallCount: 0,
+      timeline: [],
     });
 
     test('should insert and retrieve job', () => {
@@ -179,6 +180,7 @@ describe('SqliteStorage', () => {
       lastHeartbeat: Date.now(),
       stallTimeout: null,
       stallCount: 0,
+      timeline: [],
     });
 
     test('should insert batch of jobs', () => {
@@ -243,6 +245,7 @@ describe('SqliteStorage', () => {
       lastHeartbeat: Date.now(),
       stallTimeout: null,
       stallCount: 0,
+      timeline: [],
     });
 
     test('should store and retrieve result', () => {
@@ -400,6 +403,7 @@ describe('SqliteStorage', () => {
       lastHeartbeat: Date.now(),
       stallTimeout: null,
       stallCount: 0,
+      timeline: [],
     });
 
     test('should load pending jobs', () => {
@@ -454,6 +458,7 @@ describe('SqliteStorage', () => {
       lastHeartbeat: Date.now(),
       stallTimeout: null,
       stallCount: 0,
+      timeline: [],
     });
 
     test('should serialize and deserialize complex job data', () => {

@@ -273,6 +273,7 @@ describe('serializeJob', () => {
       'stallTimeout',
       'stallCount',
       'lifo',
+      'timeline',
     ];
 
     const resultKeys = Object.keys(result).sort();

@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     remove_on_complete INTEGER DEFAULT 0,
     remove_on_fail INTEGER DEFAULT 0,
     stall_timeout INTEGER,
-    last_heartbeat INTEGER
+    last_heartbeat INTEGER,
+    timeline BLOB
 );
 
 -- Indexes for common queries
@@ -127,7 +128,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {
@@ -153,5 +154,9 @@ CREATE INDEX IF NOT EXISTS idx_jobs_pending_priority
   6: `
 ALTER TABLE cron_jobs ADD COLUMN unique_key TEXT;
 ALTER TABLE cron_jobs ADD COLUMN dedup BLOB;
+`,
+  // Migration 7: Add timeline blob to jobs
+  7: `
+ALTER TABLE jobs ADD COLUMN timeline BLOB;
 `,
 };

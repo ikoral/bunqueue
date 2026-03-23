@@ -168,9 +168,11 @@ function insertJobToShard(
   const hasDeps = job.dependsOn.length > 0;
   const needsWaiting = hasDeps && !job.dependsOn.every((depId) => ctx.completedJobs.has(depId));
 
+  const now = Date.now();
   if (needsWaiting) {
     shard.waitingDeps.set(job.id, job);
     shard.registerDependencies(job.id, job.dependsOn);
+    job.timeline.push({ state: 'waiting-children', timestamp: now });
     ctx.dashboardEmit?.('job:waiting-children', {
       jobId: String(job.id),
       queue,
@@ -178,8 +180,11 @@ function insertJobToShard(
     });
   } else {
     shard.getQueue(queue).push(job);
-    const isDelayed = job.runAt > Date.now();
+    const isDelayed = job.runAt > now;
     shard.incrementQueued(job.id, isDelayed, job.createdAt, queue, job.runAt);
+    // Timeline: initial state based on scheduling and priority
+    const state = isDelayed ? 'delayed' : job.priority > 0 ? 'prioritized' : 'waiting';
+    job.timeline.push({ state, timestamp: now });
   }
 
   ctx.jobIndex.set(job.id, { type: 'queue', shardIdx, queueName: queue });

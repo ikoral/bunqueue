@@ -5,7 +5,7 @@
  */
 
 import { pack as msgpackEncode, unpack as msgpackDecode } from 'msgpackr';
-import { type Job, jobId } from '../../domain/types/job';
+import { type Job, type JobTimelineEntry, jobId } from '../../domain/types/job';
 import type { DlqEntry } from '../../domain/types/dlq';
 import type { DbJob } from './statements';
 import { storageLog } from '../../shared/logger';
@@ -82,6 +82,9 @@ export function rowToJob(row: DbJob): Job {
     deduplicationReplace: false,
     debounceId: null,
     debounceTtl: null,
+    timeline: row.timeline
+      ? unpack<JobTimelineEntry[]>(row.timeline, [], `${jobContext}:timeline`)
+      : [],
   };
 }
 

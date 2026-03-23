@@ -4,6 +4,7 @@
  */
 
 import type { Job, JobId } from '../domain/types/job';
+import { MAX_TIMELINE_ENTRIES } from '../domain/types/job';
 import type { JobLocation } from '../domain/types/queue';
 import type { Shard } from '../domain/queue/shard';
 import type { DlqEntry, DlqConfig, DlqFilter, DlqStats } from '../domain/types/dlq';
@@ -99,6 +100,9 @@ export function retryDlqJob(queue: string, jobId: JobId, ctx: DlqContext): Job |
   job.runAt = now;
   job.stallCount = 0;
   job.lastHeartbeat = now;
+  if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+    job.timeline.push({ state: 'waiting', timestamp: now });
+  }
 
   shard.getQueue(queue).push(job);
   const isDelayed = job.runAt > now;
@@ -131,6 +135,9 @@ export function retryDlqJobs(queue: string, ctx: DlqContext, jobId?: JobId): num
     job.runAt = now;
     job.stallCount = 0;
     job.lastHeartbeat = now;
+    if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+      job.timeline.push({ state: 'waiting', timestamp: now });
+    }
 
     shard.getQueue(queue).push(job);
     const isDelayed = job.runAt > now;
@@ -162,6 +169,9 @@ export function retryDlqByFilter(queue: string, ctx: DlqContext, filter: DlqFilt
     job.runAt = now;
     job.stallCount = 0;
     job.lastHeartbeat = now;
+    if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+      job.timeline.push({ state: 'waiting', timestamp: now });
+    }
 
     shard.getQueue(queue).push(job);
     const isDelayed = job.runAt > now;
@@ -199,6 +209,9 @@ export function processAutoRetry(queue: string, ctx: DlqContext): number {
     job.runAt = now;
     job.stallCount = 0;
     job.lastHeartbeat = now;
+    if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+      job.timeline.push({ state: 'waiting', timestamp: now });
+    }
 
     shard.getQueue(queue).push(job);
     const isDelayed = job.runAt > now;
@@ -284,6 +297,9 @@ function requeueCompletedJob(job: Job, ctx: RetryCompletedContext): number {
   job.completedAt = null;
   job.runAt = Date.now();
   job.progress = 0;
+  if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+    job.timeline.push({ state: 'waiting', timestamp: job.runAt });
+  }
 
   const idx = shardIndex(job.queue);
   const shard = ctx.shards[idx];

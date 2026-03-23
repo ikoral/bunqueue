@@ -3,7 +3,13 @@
  * Job acknowledgement and failure handling
  */
 
-import { type Job, type JobId, calculateBackoff, canRetry } from '../../domain/types/job';
+import {
+  type Job,
+  type JobId,
+  calculateBackoff,
+  canRetry,
+  MAX_TIMELINE_ENTRIES,
+} from '../../domain/types/job';
 import { type JobLocation, EventType } from '../../domain/types/queue';
 import { FailureReason } from '../../domain/types/dlq';
 import type { Shard } from '../../domain/queue/shard';
@@ -90,6 +96,9 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
   if (!job.removeOnComplete) {
     const now = Date.now();
     job.completedAt = now;
+    if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+      job.timeline.push({ state: 'completed', timestamp: now });
+    }
     ctx.completedJobs.add(jobId);
     ctx.completedJobsData.set(jobId, job);
     if (result !== undefined) {
@@ -97,7 +106,7 @@ export async function ackJob(jobId: JobId, result: unknown, ctx: AckContext): Pr
       ctx.storage?.storeResult(jobId, result);
     }
     ctx.jobIndex.set(jobId, { type: 'completed', queueName: job.queue });
-    ctx.storage?.markCompleted(jobId, now);
+    ctx.storage?.markCompleted(jobId, now, job.timeline);
   } else {
     ctx.jobIndex.delete(jobId);
     ctx.storage?.deleteJob(jobId);
@@ -156,6 +165,10 @@ export async function failJob(
   }
 
   job.attempts++;
+  const failNow = Date.now();
+  if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+    job.timeline.push({ state: 'failed', timestamp: failNow, error, attempt: job.attempts });
+  }
 
   const idx = shardIndex(job.queue);
   let wasRetried = false;
@@ -171,6 +184,9 @@ export async function failJob(
       ctx.jobIndex.set(jobId, { type: 'queue', shardIdx: idx, queueName: job.queue });
       ctx.storage?.updateForRetry(job);
       wasRetried = true;
+      if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+        job.timeline.push({ state: 'waiting', timestamp: now, attempt: job.attempts + 1 });
+      }
     } else if (job.removeOnFail) {
       ctx.jobIndex.delete(jobId);
       ctx.storage?.deleteJob(jobId);

@@ -10,6 +10,14 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.73] - 2026-03-23
+
+### Added
+- **Job timeline tracking** — Every job now records a `timeline: JobTimelineEntry[]` array that tracks all state transitions (`waiting`, `active`, `completed`, `failed`, `delayed`, `prioritized`, `waiting-children`) with timestamps, error messages, and attempt numbers. Max 20 entries per job.
+- **Timeline SQLite persistence** — Job timeline is persisted as a msgpack BLOB column in SQLite (schema v7 migration). Timeline survives server restarts and is available for DB-loaded jobs.
+- **Cloud snapshot: timeline field** — `recentJobs[]` in cloud snapshots now includes `timeline` when present, giving the dashboard exact state-transition history for each job.
+- **Cloud snapshot: failed job duration enrichment** — Failed jobs in `recentJobs[]` are now enriched with `duration`, `completedAt`, and `totalDuration` from DLQ attempt history, since `completedAt` is null for failed jobs.
+
 ## [2.6.72] - 2026-03-23
 
 ### Added

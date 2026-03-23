@@ -28,18 +28,19 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
       id, queue, data, priority, created_at, run_at, attempts,
       max_attempts, backoff, ttl, timeout, unique_key, custom_id,
       depends_on, parent_id, children_ids, tags, state, lifo, group_id,
-      remove_on_complete, remove_on_fail, stall_timeout
+      remove_on_complete, remove_on_fail, stall_timeout, timeline
     ) VALUES (
       ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?
+      ?, ?, ?, ?
     )
   `,
 
-  updateJobState: 'UPDATE jobs SET state = ?, started_at = ? WHERE id = ?',
+  updateJobState: 'UPDATE jobs SET state = ?, started_at = ?, timeline = ? WHERE id = ?',
 
-  completeJob: 'UPDATE jobs SET state = ?, completed_at = ?, progress = 100 WHERE id = ?',
+  completeJob:
+    'UPDATE jobs SET state = ?, completed_at = ?, progress = 100, timeline = ? WHERE id = ?',
 
   deleteJob: 'DELETE FROM jobs WHERE id = ?',
 
@@ -110,6 +111,7 @@ export interface DbJob {
   remove_on_fail: number;
   stall_timeout: number | null;
   last_heartbeat: number | null;
+  timeline: Uint8Array | null;
 }
 
 /** Database row type for cron jobs */

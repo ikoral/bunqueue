@@ -986,6 +986,7 @@ describe('Ack Operations', () => {
           deduplicationReplace: false,
           debounceId: null,
           debounceTtl: null,
+          timeline: [],
         }) as any;
 
       const extractedJobs = [

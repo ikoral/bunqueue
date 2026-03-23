@@ -40,6 +40,7 @@ export function serializeJob(job: Job): Record<string, unknown> {
     stallTimeout: job.stallTimeout,
     stallCount: job.stallCount,
     lifo: job.lifo,
+    timeline: job.timeline,
   };
 }
 

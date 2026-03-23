@@ -4,6 +4,7 @@
  */
 
 import type { Job, JobId } from '../domain/types/job';
+import { MAX_TIMELINE_ENTRIES } from '../domain/types/job';
 import { SHARD_COUNT } from '../shared/hash';
 import { withWriteLock } from '../shared/lock';
 import type { BackgroundContext } from './types';
@@ -79,6 +80,10 @@ function promoteJobsToQueue(
       const isDelayed = job.runAt > now;
       shard.incrementQueued(job.id, isDelayed, job.createdAt, job.queue, job.runAt);
       ctx.jobIndex.set(job.id, { type: 'queue', shardIdx, queueName: job.queue });
+      if (job.timeline.length < MAX_TIMELINE_ENTRIES) {
+        const state = isDelayed ? 'delayed' : job.priority > 0 ? 'prioritized' : 'waiting';
+        job.timeline.push({ state, timestamp: now });
+      }
     }
   }
 

@@ -65,6 +65,18 @@ export interface BackoffConfig {
 /** Default maximum backoff delay: 1 hour */
 export const DEFAULT_MAX_BACKOFF = 3_600_000;
 
+/** Timeline entry — tracks each state transition */
+export interface JobTimelineEntry {
+  readonly state: string;
+  readonly timestamp: number;
+  readonly worker?: string;
+  readonly error?: string;
+  readonly attempt?: number;
+}
+
+/** Max timeline entries per job (prevents unbounded growth) */
+export const MAX_TIMELINE_ENTRIES = 20;
+
 /** Core job structure */
 export interface Job {
   readonly id: JobId;
@@ -146,6 +158,9 @@ export interface Job {
   readonly debounceId: string | null;
   /** Debounce TTL in milliseconds */
   readonly debounceTtl: number | null;
+
+  /** State transition timeline (in-memory only, not persisted to SQLite) */
+  timeline: JobTimelineEntry[];
 }
 
 /** Input for creating a new job */
@@ -375,6 +390,7 @@ export function createJob(
     ...coreOpts,
     ...optionalFields,
     ...v5Opts,
+    timeline: [],
   };
 }
 

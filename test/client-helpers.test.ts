@@ -75,6 +75,7 @@ function makeInternalJob(overrides: Partial<InternalJob> = {}): InternalJob {
     deduplicationReplace: false,
     debounceId: null,
     debounceTtl: null,
+    timeline: [],
     ...overrides,
   };
 }

@@ -85,6 +85,31 @@ export interface CollectSnapshotParams {
   includeHeavy: boolean;
 }
 
+/** Enrich failed jobs in recentJobs with duration from DLQ attempt history */
+function enrichFailedJobDurations(
+  recentJobs: CloudSnapshot['recentJobs'],
+  dlqEntries: CloudSnapshot['dlqEntries']
+): void {
+  if (dlqEntries.length === 0) return;
+  const dlqMap = new Map<string, { duration: number; failedAt: number }>();
+  for (const e of dlqEntries) {
+    if (e.attemptHistory.length > 0) {
+      const last = e.attemptHistory[e.attemptHistory.length - 1];
+      dlqMap.set(e.jobId, { duration: last.duration, failedAt: last.failedAt });
+    }
+  }
+  for (const j of recentJobs) {
+    if (j.state === 'failed' && !j.duration) {
+      const dlq = dlqMap.get(j.id);
+      if (dlq) {
+        (j as { duration?: number }).duration = dlq.duration;
+        (j as { completedAt?: number }).completedAt = dlq.failedAt;
+        (j as { totalDuration?: number }).totalDuration = dlq.failedAt - j.createdAt;
+      }
+    }
+  }
+}
+
 /** Collect a snapshot. Light data always fresh, heavy data cached between refreshes. */
 export async function collectSnapshot(params: CollectSnapshotParams): Promise<CloudSnapshot> {
   const t0 = performance.now();
@@ -148,6 +173,9 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
     queueManager,
     dlqQueues.map((q) => q.name)
   );
+
+  enrichFailedJobDurations(recentJobs, dlqEntries);
+
   const topErrors = collectTopErrors(
     queueManager,
     dlqQueues.map((q) => q.name)

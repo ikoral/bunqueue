@@ -104,7 +104,9 @@ function mapJobCore(
 
 /** Map extended job fields (metadata, relationships, config) */
 function mapJobExtended(j: DomainJob): Partial<SnapshotJob> {
+  const timeline = j.timeline.length > 0 ? j.timeline : undefined;
   return {
+    timeline,
     progress: posOrUndef(j.progress),
     progressMessage: nullUndef(j.progressMessage),
     customId: nullUndef(j.customId),
