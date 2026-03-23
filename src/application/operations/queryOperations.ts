@@ -250,7 +250,64 @@ function collectJobsByState(
   if (!states || states.includes('completed')) {
     jobs.push(...collectCompletedJobs(queue, ctx, Infinity));
   }
+  if (!states || states.includes('waiting-children')) {
+    // Collect jobs waiting for deps or children to complete
+    for (const job of shard.waitingDeps.values()) {
+      if (job.queue === queue) jobs.push(job);
+    }
+    for (const job of shard.waitingChildren.values()) {
+      if (job.queue === queue) jobs.push(job);
+    }
+  }
   return jobs;
+}
+
+/** Collect waiting-children jobs from in-memory shard maps */
+function collectWaitingChildrenJobs(shard: Shard, queue: string): Job[] {
+  const jobs: Job[] = [];
+  for (const job of shard.waitingDeps.values()) {
+    if (job.queue === queue) jobs.push(job);
+  }
+  for (const job of shard.waitingChildren.values()) {
+    if (job.queue === queue) jobs.push(job);
+  }
+  return jobs;
+}
+
+/** Query SQLite with priority/waiting translation */
+function querySqliteWithPriority(
+  storage: NonNullable<GetJobsContext['storage']>,
+  queue: string,
+  sqlFilteredStates: string[],
+  opts: { limit: number; offset: number; asc: boolean }
+): Job[] {
+  const hasPrioritized = sqlFilteredStates.includes('prioritized');
+  const hasWaiting = sqlFilteredStates.includes('waiting');
+
+  if (!hasPrioritized && !hasWaiting) {
+    if (sqlFilteredStates.length === 1) {
+      return storage.queryJobs(queue, { state: sqlFilteredStates[0], ...opts });
+    }
+    return storage.queryJobs(queue, { states: sqlFilteredStates, ...opts });
+  }
+
+  // Map 'prioritized' to 'waiting' for SQLite, then post-filter by priority
+  const sqlStates = sqlFilteredStates
+    .map((s) => (s === 'prioritized' ? 'waiting' : s))
+    .filter((s, i, arr) => arr.indexOf(s) === i);
+
+  const overFetchOpts = { ...opts, limit: opts.limit * 2 };
+  let jobs =
+    sqlStates.length === 1
+      ? storage.queryJobs(queue, { state: sqlStates[0], ...overFetchOpts })
+      : storage.queryJobs(queue, { states: sqlStates, ...overFetchOpts });
+
+  if (hasPrioritized && !hasWaiting) {
+    jobs = jobs.filter((j) => j.priority > 0);
+  } else if (hasWaiting && !hasPrioritized) {
+    jobs = jobs.filter((j) => j.priority <= 0);
+  }
+  return jobs.slice(0, opts.limit);
 }
 
 /** Get jobs from queue with filters */
@@ -267,7 +324,6 @@ export function getJobs(
 ): Job[] {
   const { state, start = 0, end = 100, asc = true } = options;
 
-  // Normalize state to an array or null (no filter)
   const states = !state
     ? null
     : Array.isArray(state)
@@ -278,51 +334,35 @@ export function getJobs(
 
   const limit = end - start;
 
-  // Fast path: use SQLite pagination (idx_jobs_queue_state index)
-  // Routes ALL state combinations through SQLite when available — O(log n + k)
-  // Note: SQLite stores 'waiting' (never 'prioritized'), so we translate
-  // 'prioritized' → query 'waiting' with priority > 0, and filter results.
   if (ctx.storage) {
     if (!states) {
       return ctx.storage.queryJobs(queue, { limit, offset: start, asc });
     }
-    // Translate 'prioritized' → 'waiting' for SQLite, then filter in-memory
-    const hasPrioritized = states.includes('prioritized');
-    const hasWaiting = states.includes('waiting');
-    if (hasPrioritized || hasWaiting) {
-      // Map both to 'waiting' in SQLite, then filter by priority
-      const sqlStates = states
-        .map((s) => (s === 'prioritized' ? 'waiting' : s))
-        .filter((s, i, arr) => arr.indexOf(s) === i); // dedupe
-      let jobs: Job[];
-      if (sqlStates.length === 1) {
-        jobs = ctx.storage.queryJobs(queue, {
-          state: sqlStates[0],
-          limit: limit * 2,
-          offset: start,
-          asc,
-        });
-      } else {
-        jobs = ctx.storage.queryJobs(queue, {
-          states: sqlStates,
-          limit: limit * 2,
-          offset: start,
-          asc,
-        });
-      }
-      // Post-filter: 'prioritized' = priority > 0, 'waiting' = priority <= 0
-      if (hasPrioritized && !hasWaiting) {
-        jobs = jobs.filter((j) => j.priority > 0);
-      } else if (hasWaiting && !hasPrioritized) {
-        jobs = jobs.filter((j) => j.priority <= 0);
-      }
-      // else: both requested, no filter needed
-      return jobs.slice(0, limit);
+
+    const hasWaitingChildren = states.includes('waiting-children');
+    const sqlFilteredStates = states.filter((s) => s !== 'waiting-children');
+
+    // Only waiting-children: collect from in-memory
+    if (hasWaitingChildren && sqlFilteredStates.length === 0) {
+      const jobs = collectWaitingChildrenJobs(ctx.shards[shardIdx], queue);
+      jobs.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
+      return jobs.slice(start, end);
     }
-    if (states.length === 1) {
-      return ctx.storage.queryJobs(queue, { state: states[0], limit, offset: start, asc });
-    }
-    return ctx.storage.queryJobs(queue, { states, limit, offset: start, asc });
+
+    const jobs =
+      sqlFilteredStates.length > 0
+        ? querySqliteWithPriority(ctx.storage, queue, sqlFilteredStates, {
+            limit,
+            offset: start,
+            asc,
+          })
+        : [];
+
+    if (!hasWaitingChildren) return jobs;
+
+    const merged = jobs.concat(collectWaitingChildrenJobs(ctx.shards[shardIdx], queue));
+    merged.sort((a, b) => (asc ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
+    return merged.slice(0, limit);
   }
 
   // In-memory path (embedded mode only)

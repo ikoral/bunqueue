@@ -10,6 +10,20 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.72] - 2026-03-23
+
+### Added
+- **Cloud snapshot: `waiting-children` state** — Jobs in `waiting-children` state are now collected in `recentJobs[]` and counted in both global `stats` and per-queue `queues[]`. Dashboard can now display parent jobs waiting for children.
+- **Cloud snapshot: `prioritized` state in job collection** — `recentJobs[]` now includes jobs with `state: 'prioritized'`. Previously only `waiting/active/delayed/failed/completed` were collected.
+- **Cloud snapshot: worker computed fields** — `workerDetails[]` now includes `uptime` (ms since registration), `status` (`'active'|'idle'|'stalled'`), `errorRate` (0-1), and `utilization` (activeJobs/concurrency).
+- **Cloud snapshot: `queueExtended`** — Per-queue extended telemetry: `uniqueKeys` (active dedup keys), `activeGroups` (FIFO groups), `waitingDeps` (jobs awaiting dependencies), `waitingChildren` (parents awaiting children).
+- **Cloud snapshot: `eventSubscribers`** — Count of active event subscribers (SSE, WebSocket, internal).
+- **Cloud snapshot: `pendingDepChecks`** — Number of dependency checks awaiting flush.
+- **TCP `GetJobCounts`: `waiting-children`** — TCP protocol now returns `waiting-children` count in job counts response.
+
+### Fixed
+- **`getJobs()` with `state: 'waiting-children'`** — SQLite and in-memory query paths now correctly return jobs in `waitingDeps`/`waitingChildren` maps when filtering by `waiting-children` state.
+
 ## [2.6.71] - 2026-03-23
 
 ### Added

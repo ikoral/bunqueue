@@ -13,6 +13,7 @@ export interface QueueStats {
   active: number;
   dlq: number;
   completed: number;
+  'waiting-children': number;
   totalPushed: bigint;
   totalPulled: bigint;
   totalCompleted: bigint;
@@ -59,7 +60,8 @@ export function getStats(
     prioritized = 0,
     delayed = 0,
     active = 0,
-    dlq = 0;
+    dlq = 0,
+    waitingChildren = 0;
 
   const now = Date.now();
 
@@ -68,6 +70,7 @@ export function getStats(
     delayed += shardStats.delayedJobs;
     dlq += shardStats.dlqJobs;
     active += ctx.processingShards[i].size;
+    waitingChildren += ctx.shards[i].waitingChildren.size;
 
     // Scan queues to split waiting vs prioritized (BullMQ v5 compat)
     for (const queue of ctx.shards[i].queues.values()) {
@@ -91,6 +94,7 @@ export function getStats(
     active,
     dlq,
     completed: ctx.completedJobs.size,
+    'waiting-children': waitingChildren,
     totalPushed: ctx.metrics.totalPushed.value,
     totalPulled: ctx.metrics.totalPulled.value,
     totalCompleted: ctx.metrics.totalCompleted.value,
@@ -210,6 +214,7 @@ export function getQueueJobCounts(
   active: number;
   completed: number;
   failed: number;
+  'waiting-children': number;
   totalCompleted: number;
   totalFailed: number;
 } {
@@ -255,12 +260,30 @@ export function getQueueJobCounts(
   // Count failed (DLQ) jobs for this queue
   const failed = shard.getDlq(queueName).length;
 
+  // Count waiting-children jobs (parents waiting for child completion)
+  let waitingChildrenCount = 0;
+  for (const job of shard.waitingChildren.values()) {
+    if (job.queue === queueName) {
+      waitingChildrenCount++;
+    }
+  }
+
   // Per-queue cumulative counters
   const perQueue = ctx.perQueueMetrics?.get(queueName);
   const totalCompleted = Number(perQueue?.totalCompleted ?? 0n);
   const totalFailed = Number(perQueue?.totalFailed ?? 0n);
 
-  return { waiting, prioritized, delayed, active, completed, failed, totalCompleted, totalFailed };
+  return {
+    waiting,
+    prioritized,
+    delayed,
+    active,
+    completed,
+    failed,
+    'waiting-children': waitingChildrenCount,
+    totalCompleted,
+    totalFailed,
+  };
 }
 
 /**

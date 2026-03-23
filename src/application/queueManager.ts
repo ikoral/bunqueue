@@ -844,6 +844,43 @@ export class QueueManager {
     return this.shards[shardIndex(queue)].getDlqConfig(queue);
   }
 
+  /** Get extended telemetry data for cloud snapshot */
+  getCloudTelemetry(queueNames: string[]) {
+    const perQueue: Record<
+      string,
+      { uniqueKeys: number; activeGroups: number; waitingDeps: number; waitingChildren: number }
+    > = {};
+
+    for (const name of queueNames) {
+      const idx = shardIndex(name);
+      const shard = this.shards[idx];
+      const uniqueMap = shard.uniqueKeys.get(name);
+      const groupSet = shard.activeGroups.get(name);
+
+      let waitingDeps = 0;
+      for (const j of shard.waitingDeps.values()) {
+        if (j.queue === name) waitingDeps++;
+      }
+      let waitingChildren = 0;
+      for (const j of shard.waitingChildren.values()) {
+        if (j.queue === name) waitingChildren++;
+      }
+
+      perQueue[name] = {
+        uniqueKeys: uniqueMap?.size ?? 0,
+        activeGroups: groupSet?.size ?? 0,
+        waitingDeps,
+        waitingChildren,
+      };
+    }
+
+    return {
+      perQueue,
+      eventSubscribers: this.eventsManager.subscriberCount,
+      pendingDepChecks: this.pendingDepChecks.size,
+    };
+  }
+
   // ============ Job Management ============
 
   async cancel(jobId: JobId): Promise<boolean> {

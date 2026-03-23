@@ -18,8 +18,16 @@ const prevQueueWaiting = new Map<string, { waiting: number; timestamp: number }>
 
 // ─── Heavy data collectors (called every ~90s) ───
 
-/** All job states */
-const ALL_STATES = ['waiting', 'active', 'delayed', 'failed', 'completed'] as const;
+/** All job states (BullMQ v5 compatible) */
+const ALL_STATES = [
+  'waiting',
+  'active',
+  'delayed',
+  'failed',
+  'completed',
+  'prioritized',
+  'waiting-children',
+] as const;
 
 /** Max total jobs in snapshot — dashboard has exact totals per queue for the rest */
 const MAX_JOBS_TOTAL = 10_000;

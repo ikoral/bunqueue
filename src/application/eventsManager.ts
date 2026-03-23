@@ -27,6 +27,16 @@ export class EventsManager {
 
   constructor(private readonly webhookManager: WebhookManager) {}
 
+  /** Number of active event subscribers */
+  get subscriberCount(): number {
+    return this.subscribers.size;
+  }
+
+  /** Number of jobs with active completion waiters */
+  get completionWaiterCount(): number {
+    return this.completionWaiters.size;
+  }
+
   /** Subscribe to job events - O(1) add and remove */
   subscribe(callback: EventSubscriber): () => void {
     this.subscribers.add(callback);

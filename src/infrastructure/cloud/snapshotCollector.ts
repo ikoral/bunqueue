@@ -114,6 +114,7 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
       active: counts.active,
       completed: counts.completed,
       failed: counts.failed,
+      'waiting-children': counts['waiting-children'],
       paused: queueManager.isPaused(name),
       totalCompleted: counts.totalCompleted,
       totalFailed: counts.totalFailed,
@@ -151,23 +152,39 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
     queueManager,
     dlqQueues.map((q) => q.name)
   );
-  const workerDetails = queueManager.workerManager.list().map((w) => ({
-    id: w.id,
-    name: w.name,
-    queues: w.queues,
-    concurrency: w.concurrency,
-    hostname: w.hostname,
-    pid: w.pid,
-    registeredAt: w.registeredAt,
-    lastSeen: w.lastSeen,
-    activeJobs: w.activeJobs,
-    processedJobs: w.processedJobs,
-    failedJobs: w.failedJobs,
-    currentJob: w.currentJob,
-  }));
+  const now = Date.now();
+  const WORKER_TIMEOUT_MS = 30_000;
+  const workerDetails = queueManager.workerManager.list().map((w) => {
+    const totalJobs = w.processedJobs + w.failedJobs;
+    return {
+      id: w.id,
+      name: w.name,
+      queues: w.queues,
+      concurrency: w.concurrency,
+      hostname: w.hostname,
+      pid: w.pid,
+      registeredAt: w.registeredAt,
+      lastSeen: w.lastSeen,
+      activeJobs: w.activeJobs,
+      processedJobs: w.processedJobs,
+      failedJobs: w.failedJobs,
+      currentJob: w.currentJob,
+      // Computed fields
+      uptime: now - w.registeredAt,
+      status:
+        now - w.lastSeen > WORKER_TIMEOUT_MS
+          ? ('stalled' as const)
+          : w.activeJobs > 0
+            ? ('active' as const)
+            : ('idle' as const),
+      errorRate: totalJobs > 0 ? +(w.failedJobs / totalJobs).toFixed(4) : 0,
+      utilization: w.concurrency > 0 ? +(w.activeJobs / w.concurrency).toFixed(4) : 0,
+    };
+  });
   const queueConfigs = collectQueueConfigs(queueManager, new Set(queueNames));
   const webhooks = collectWebhooks(queueManager);
   const s3Backup = serverHandles?.getBackupStatus?.() ?? null;
+  const telemetry = queueManager.getCloudTelemetry(allQueueNames);
 
   // Job results, logs, and locks
   const jobResultsMap = queueManager.getAllJobResults();
@@ -210,6 +227,7 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
       active: stats.active,
       dlq: stats.dlq,
       completed: stats.completed,
+      'waiting-children': stats['waiting-children'],
       stalled: memStats.stalledCandidates,
       paused: queues.filter((q) => q.paused).length,
       totalPushed: String(stats.totalPushed),
@@ -283,6 +301,9 @@ export async function collectSnapshot(params: CollectSnapshotParams): Promise<Cl
     jobResults,
     jobLogEntries,
     activeLocks,
+    queueExtended: telemetry.perQueue,
+    eventSubscribers: telemetry.eventSubscribers,
+    pendingDepChecks: telemetry.pendingDepChecks,
   };
   cloudLog.info('Snapshot collect', { ms: Math.round((performance.now() - t0) * 100) / 100 });
   return result;

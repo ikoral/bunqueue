@@ -59,6 +59,7 @@ export function handleGetJobCounts(
       active: counts.active,
       completed: counts.completed,
       failed: counts.failed,
+      'waiting-children': counts['waiting-children'],
       paused: isPaused ? counts.waiting : 0,
     },
     reqId

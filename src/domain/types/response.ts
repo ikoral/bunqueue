@@ -77,6 +77,7 @@ export interface JobCounts {
   readonly active: number;
   readonly completed: number;
   readonly failed: number;
+  readonly 'waiting-children': number;
   readonly paused: number;
 }
 

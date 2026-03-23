@@ -56,6 +56,7 @@ export interface CloudSnapshot {
     active: number;
     dlq: number;
     completed: number;
+    'waiting-children': number;
     totalPushed: string;
     totalPulled: string;
     totalCompleted: string;
@@ -111,6 +112,7 @@ export interface CloudSnapshot {
     active: number;
     completed: number;
     failed: number;
+    'waiting-children': number;
     paused: boolean;
     totalCompleted: number;
     totalFailed: number;
@@ -247,6 +249,10 @@ export interface CloudSnapshot {
     processedJobs: number;
     failedJobs: number;
     currentJob: string | null;
+    uptime: number;
+    status: 'active' | 'idle' | 'stalled';
+    errorRate: number;
+    utilization: number;
   }>;
 
   /** Per-queue configuration (includes rate limit + concurrency) */
@@ -439,6 +445,23 @@ export interface CloudSnapshot {
     renewalCount: number;
     ttl: number;
   }>;
+
+  /** Per-queue extended telemetry (dedup, groups, dependencies) */
+  queueExtended: Record<
+    string,
+    {
+      uniqueKeys: number;
+      activeGroups: number;
+      waitingDeps: number;
+      waitingChildren: number;
+    }
+  >;
+
+  /** Active event subscribers (SSE, WebSocket, internal) */
+  eventSubscribers: number;
+
+  /** Pending dependency checks awaiting flush */
+  pendingDepChecks: number;
 }
 
 /** Event payload forwarded via WebSocket */
