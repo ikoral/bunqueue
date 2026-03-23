@@ -72,13 +72,11 @@ export class CloudAgent {
       ws: this.config.useWebSocket,
     });
 
-    // Channel 1: HTTP snapshots
+    // Channel 1: HTTP snapshots — dynamic interval based on compressed payload size
     if (this.config.useHttp) {
-      // Send first snapshot immediately
-      void this.sendSnapshot();
-      this.snapshotTimer = setInterval(() => {
-        void this.sendSnapshot();
-      }, this.config.intervalMs);
+      void this.sendSnapshot().then(() => {
+        this.scheduleNext();
+      });
     }
 
     // Channel 2: WebSocket — commands only (dashboard → bunqueue)
@@ -112,7 +110,7 @@ export class CloudAgent {
     this.stopped = true;
 
     if (this.snapshotTimer) {
-      clearInterval(this.snapshotTimer);
+      clearTimeout(this.snapshotTimer);
       this.snapshotTimer = null;
     }
 
@@ -151,6 +149,27 @@ export class CloudAgent {
       this.immediateSnapshotTimer = null;
       void this.sendSnapshot(true);
     }, 100);
+  }
+
+  /** Compute next interval from last compressed payload size */
+  private computeInterval(): number {
+    const kb = this.httpSender.lastCompressedKB;
+    if (kb < 50) return 5_000;
+    if (kb < 200) return 10_000;
+    if (kb < 500) return 20_000;
+    return 30_000;
+  }
+
+  /** Schedule next snapshot with dynamic interval */
+  private scheduleNext(): void {
+    if (this.stopped) return;
+    const intervalMs = this.computeInterval();
+    cloudLog.debug('Next snapshot', { intervalMs, compressedKB: this.httpSender.lastCompressedKB });
+    this.snapshotTimer = setTimeout(() => {
+      void this.sendSnapshot().then(() => {
+        this.scheduleNext();
+      });
+    }, intervalMs);
   }
 
   /** Collect and send a snapshot via HTTP. Events are always embedded. */

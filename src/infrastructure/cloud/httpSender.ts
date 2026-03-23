@@ -14,8 +14,8 @@ export class HttpSender {
   private readonly circuitBreaker: CircuitBreaker;
   private readonly buffer: SnapshotBuffer;
   private readonly ingestUrl: string;
-  private readonly batchUrl: string;
   private hmacKey: CryptoKey | null = null;
+  lastCompressedKB = 0;
 
   constructor(private readonly config: CloudConfig) {
     this.circuitBreaker = new CircuitBreaker(
@@ -24,7 +24,6 @@ export class HttpSender {
     );
     this.buffer = new SnapshotBuffer(config.bufferSize);
     this.ingestUrl = `${config.url}/api/v1/ingest`;
-    this.batchUrl = `${config.url}/api/v1/ingest/batch`;
   }
 
   /** Send a snapshot. Buffers on failure. */
@@ -53,23 +52,21 @@ export class HttpSender {
     }
   }
 
-  /** Try to send buffered snapshots in batches */
+  /** Try to send buffered snapshots one by one */
   private async flushBuffer(): Promise<void> {
     if (!this.circuitBreaker.canExecute()) return;
 
     while (!this.buffer.isEmpty) {
-      const batch = this.buffer.drain(50);
-      if (batch.length === 0) break;
+      const drained = this.buffer.drain(1);
+      if (drained.length === 0) break;
+      const snapshot = drained[0];
 
       try {
-        await this.post(this.batchUrl, batch);
+        await this.post(this.ingestUrl, snapshot);
         this.circuitBreaker.onSuccess();
-        cloudLog.debug('Buffer flushed', { sent: batch.length, remaining: this.buffer.size });
+        cloudLog.debug('Buffer flushed', { remaining: this.buffer.size });
       } catch {
-        // Put items back (they'll be at the front, order is acceptable)
-        for (let i = batch.length - 1; i >= 0; i--) {
-          this.buffer.push(batch[i]);
-        }
+        this.buffer.push(snapshot);
         this.circuitBreaker.onFailure();
         break;
       }
@@ -83,6 +80,7 @@ export class HttpSender {
     const packMs = Math.round((performance.now() - tPack) * 100) / 100;
     const tZstd = performance.now();
     const compressed = new Uint8Array(await Bun.zstdCompress(msgpackBuf, { level: 6 }));
+    this.lastCompressedKB = Math.round(compressed.byteLength / 1024);
     const zstdMs = Math.round((performance.now() - tZstd) * 100) / 100;
     cloudLog.info('Snapshot size', {
       rawKB: Math.round(msgpackBuf.byteLength / 1024),

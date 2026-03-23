@@ -29,10 +29,7 @@ const ALL_STATES = [
   'waiting-children',
 ] as const;
 
-/** Max total jobs in snapshot — dashboard has exact totals per queue for the rest */
-const MAX_JOBS_TOTAL = 10_000;
-
-/** Collect jobs — all states, max 10k total across all queues, by priority */
+/** Collect jobs — all states, all jobs (bounded by in-memory eviction limits) */
 type DomainJob = ReturnType<QueueManager['getJobs']>[number];
 type SnapshotJob = CloudSnapshot['recentJobs'][number];
 
@@ -152,19 +149,11 @@ export function collectLiveJobs(
   if (queueNames.length === 0) return [];
 
   const jobs: CloudSnapshot['recentJobs'] = [];
-  const perQueueState = Math.max(
-    1,
-    Math.floor(MAX_JOBS_TOTAL / (queueNames.length * ALL_STATES.length))
-  );
 
-  for (const name of queueNames) {
-    for (const state of ALL_STATES) {
+  for (const state of ALL_STATES) {
+    for (const name of queueNames) {
       try {
-        const queueJobs = queueManager.getJobs(name, {
-          state: [state],
-          start: 0,
-          end: perQueueState - 1,
-        });
+        const queueJobs = queueManager.getJobs(name, { state: [state], start: 0, end: -1 });
         for (const j of queueJobs) {
           jobs.push(mapJobToSnapshot(j, state));
         }
@@ -174,7 +163,7 @@ export function collectLiveJobs(
     }
   }
 
-  return jobs.slice(0, MAX_JOBS_TOTAL);
+  return jobs;
 }
 
 /** Collect ALL DLQ entries — no cap */
