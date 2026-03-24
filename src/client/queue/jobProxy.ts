@@ -144,7 +144,7 @@ export function createJobProxy<T>(id: string, name: string, data: T, ctx: JobPro
     },
     removeChildDependency: async () => {
       const res = await tcp.send({ cmd: 'RemoveChildDependency', id });
-      return res.ok === true;
+      return (res.removed as boolean | undefined) ?? false;
     },
     removeDeduplicationKey: () => Promise.resolve(false),
     removeUnprocessedChildren: async () => {

@@ -360,7 +360,7 @@ export async function handleRemoveChildDependency(
 ): Promise<Response> {
   try {
     const removed = await ctx.queueManager.removeChildDependency(jobId(cmd.id));
-    return { ok: removed, reqId } as Response;
+    return { ok: true, removed, reqId } as Response;
   } catch (err) {
     return resp.error(err instanceof Error ? err.message : String(err), reqId);
   }

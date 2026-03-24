@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.77] - 2026-03-24
+
+### Fixed
+- `removeChildDependency()` TCP response now returns `{ ok: true, removed: boolean }` separately; client reads `res.removed` instead of `res.ok` to correctly reflect whether the dependency was actually removed
+
 ## [2.6.76] - 2026-03-24
 
 ### Added
