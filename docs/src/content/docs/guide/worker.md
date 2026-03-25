@@ -61,7 +61,7 @@ const worker = new Worker('queue', processor, {
   maxStalledCount: 1,     // Max stalls before job moves to failed (default: 1)
   skipStalledCheck: false, // Skip stall detection (default: false)
   skipLockRenewal: false,  // Skip heartbeat lock renewal (default: false)
-  drainDelay: 5000,       // Pause when queue is empty (default: 5000)
+  drainDelay: 50,         // Delay between polls when queue is empty (default: 50)
 
   // Auto-Cleanup
   removeOnComplete: true,           // Remove completed jobs immediately
@@ -97,7 +97,7 @@ const worker = new Worker('queue', processor, {
 | `maxStalledCount` | `number` | `1` | Max times a job can stall before moving to failed |
 | `skipStalledCheck` | `boolean` | `false` | Skip stalled job detection |
 | `skipLockRenewal` | `boolean` | `false` | Skip lock renewal via heartbeat |
-| `drainDelay` | `number` | `5000` | Pause duration when queue is drained (ms) |
+| `drainDelay` | `number` | `50` | Delay between polls when queue is drained (ms) |
 | `removeOnComplete` | `boolean \| number \| KeepJobs` | `false` | Auto-remove completed jobs. `true` = immediate, `number` = max count, `{ age?, count? }` = by age/count |
 | `removeOnFail` | `boolean \| number \| KeepJobs` | `false` | Auto-remove failed jobs. Same format as `removeOnComplete` |
 
@@ -201,7 +201,55 @@ worker.resume();
 // Stop the worker
 await worker.close();      // Wait for active jobs
 await worker.close(true);  // Force close immediately
+
+// Check close status
+if (worker.closing) {
+  await worker.closing;    // Promise that resolves when close() finishes
+}
 ```
+
+### Runtime Concurrency
+
+Change concurrency without restarting the worker:
+
+```typescript
+const worker = new Worker('queue', processor, {
+  embedded: true,
+  concurrency: 1,
+});
+
+// Scale up under load
+worker.concurrency = 10;
+
+// Scale back down
+worker.concurrency = 2;
+
+// Read current value
+console.log(worker.concurrency); // 2
+```
+
+The worker immediately starts pulling more jobs when concurrency increases. Minimum value is 1.
+
+### Removing Event Listeners
+
+Use `off()` to remove previously registered event listeners:
+
+```typescript
+const handler = (job, result) => console.log(result);
+
+worker.on('completed', handler);
+// ... later
+worker.off('completed', handler);
+```
+
+### Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | `string` | Queue name this worker processes |
+| `opts` | `ExtendedWorkerOptions` | Resolved worker options with defaults |
+| `concurrency` | `number` | Get/set current concurrency |
+| `closing` | `Promise<void> \| null` | Promise that resolves when close finishes, or null |
 
 ## Heartbeats
 

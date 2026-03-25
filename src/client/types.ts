@@ -476,19 +476,19 @@ export interface WorkerOptions {
    * When set, limits the number of jobs processed within the duration window.
    */
   limiter?: RateLimiterOptions;
-  /** Lock duration in ms (default: 30000) - how long a job lock lasts before expiring */
+  /** Lock duration in ms (default: 30000). Passed to server on pull; also used by stall detection. */
   lockDuration?: number;
-  /** Maximum number of times a job can be stalled before being moved to failed (default: 1) */
+  /** Max stalls before moving to failed (default: 1). Passed to stall config when using embedded mode. */
   maxStalledCount?: number;
-  /** Skip stalled job check (default: false) */
+  /** Skip stalled job check — disables stalled event subscription (default: false) */
   skipStalledCheck?: boolean;
   /** Skip lock renewal via heartbeat (default: false) */
   skipLockRenewal?: boolean;
-  /** Delay in ms when draining queue (default: 5000) */
+  /** Delay in ms between polls when queue is drained (default: 50) */
   drainDelay?: number;
-  /** Remove jobs on complete (can be boolean or max age/count) */
+  /** Remove jobs on complete — applied as default for all jobs processed by this worker */
   removeOnComplete?: boolean | number | { age?: number; count?: number };
-  /** Remove jobs on fail (can be boolean or max age/count) */
+  /** Remove jobs on fail — applied as default for all jobs processed by this worker */
   removeOnFail?: boolean | number | { age?: number; count?: number };
 }
 

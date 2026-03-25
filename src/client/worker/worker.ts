@@ -21,12 +21,49 @@ import { startHeartbeat, type HeartbeatDeps } from './workerHeartbeat';
 import { pullEmbedded, pullTcp, type PullConfig } from './workerPull';
 import { resolveToken } from '../resolveToken';
 
+/** Resolve WorkerOptions into ExtendedWorkerOptions with defaults */
+function resolveWorkerOptions(opts: WorkerOptions, embedded: boolean): ExtendedWorkerOptions {
+  return {
+    concurrency: opts.concurrency ?? 1,
+    autorun: opts.autorun ?? true,
+    heartbeatInterval: opts.heartbeatInterval ?? 10000,
+    batchSize: Math.min(opts.batchSize ?? 10, 1000),
+    pollTimeout: Math.min(opts.pollTimeout ?? 0, WORKER_CONSTANTS.MAX_POLL_TIMEOUT),
+    embedded,
+    useLocks: opts.useLocks ?? true,
+    skipLockRenewal: opts.skipLockRenewal ?? false,
+    skipStalledCheck: opts.skipStalledCheck ?? false,
+    drainDelay: opts.drainDelay ?? 50,
+    lockDuration: opts.lockDuration ?? 30000,
+    maxStalledCount: opts.maxStalledCount ?? 1,
+    removeOnComplete: opts.removeOnComplete,
+    removeOnFail: opts.removeOnFail,
+  };
+}
+
+/** Create TCP connection pool from options */
+function createTcpPool(opts: WorkerOptions, concurrency: number): TcpConnectionPool {
+  const connOpts: ConnectionOptions = opts.connection ?? {};
+  const poolSize = connOpts.poolSize ?? Math.min(concurrency, 8);
+  const token = resolveToken(connOpts.token);
+  return new TcpConnectionPool({
+    host: connOpts.host ?? 'localhost',
+    port: connOpts.port ?? 6789,
+    token,
+    poolSize,
+    pingInterval: connOpts.pingInterval,
+    commandTimeout: connOpts.commandTimeout,
+    pipelining: connOpts.pipelining,
+    maxInFlight: connOpts.maxInFlight,
+  });
+}
+
 /**
  * Worker class for processing jobs
  */
 export class Worker<T = unknown, R = unknown> extends EventEmitter {
   readonly name: string;
-  private readonly opts: ExtendedWorkerOptions;
+  readonly opts: ExtendedWorkerOptions;
   private readonly processor: Processor<T, R>;
   private readonly embedded: boolean;
   private readonly tcp: TcpConnection | null;
@@ -37,7 +74,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   private running = false;
   private paused = false;
-  private closing = false;
+  private _closing = false;
+  private _closingPromise: Promise<void> | null = null;
   private closed = false;
   private activeJobs = 0;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -102,35 +140,32 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     return super.once(event, listener);
   }
 
+  off(event: 'ready' | 'drained' | 'closed', listener: () => void): this;
+  off(event: 'active', listener: (job: Job<T>) => void): this;
+  off(event: 'completed', listener: (job: Job<T>, result: R) => void): this;
+  off(event: 'failed', listener: (job: Job<T>, error: Error) => void): this;
+  off(event: 'progress', listener: (job: Job<T> | null, progress: number) => void): this;
+  off(event: 'stalled', listener: (jobId: string, reason: string) => void): this;
+  off(event: 'error', listener: (error: Error) => void): this;
+  off(event: 'cancelled', listener: (data: { jobId: string; reason: string }) => void): this;
+  off(event: 'log', listener: (job: Job<T>, message: string) => void): this;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  off(event: string, listener: (...args: any[]) => void): this {
+    return super.off(event, listener);
+  }
+
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
     this.name = name;
     this.processor = processor;
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
     this.startedAt = Date.now();
-
-    // Generate unique worker ID for lock ownership
     this.workerId = `worker-${name}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-    const concurrency = opts.concurrency ?? 1;
-    this.opts = {
-      concurrency,
-      autorun: opts.autorun ?? true,
-      heartbeatInterval: opts.heartbeatInterval ?? 10000,
-      batchSize: Math.min(opts.batchSize ?? 10, 1000),
-      pollTimeout: Math.min(opts.pollTimeout ?? 0, WORKER_CONSTANTS.MAX_POLL_TIMEOUT),
-      embedded: this.embedded,
-      useLocks: opts.useLocks ?? true,
-    };
-
-    // Initialize rate limiter (skip time-window rate limiting when groupKey is set)
+    this.opts = resolveWorkerOptions(opts, this.embedded);
     this.rateLimiter = new WorkerRateLimiter(
       opts.limiter?.groupKey ? null : (opts.limiter ?? null)
     );
-
-    // Initialize group concurrency limiter
     this.groupLimiter = GroupConcurrencyLimiter.fromOptions(opts.limiter);
-
     this.ackBatcher = new AckBatcher({
       batchSize: opts.batchSize ?? 10,
       interval: WORKER_CONSTANTS.DEFAULT_ACK_INTERVAL,
@@ -138,25 +173,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     });
 
     if (this.embedded) {
-      // Initialize shared manager with programmatic dataPath (if provided)
       getSharedManager(opts.dataPath);
       this.tcp = null;
       this.tcpPool = null;
     } else {
-      const connOpts: ConnectionOptions = opts.connection ?? {};
-      const poolSize = connOpts.poolSize ?? Math.min(concurrency, 8);
-      const token = resolveToken(connOpts.token);
-
-      this.tcpPool = new TcpConnectionPool({
-        host: connOpts.host ?? 'localhost',
-        port: connOpts.port ?? 6789,
-        token,
-        poolSize,
-        pingInterval: connOpts.pingInterval,
-        commandTimeout: connOpts.commandTimeout,
-        pipelining: connOpts.pipelining,
-        maxInFlight: connOpts.maxInFlight,
-      });
+      this.tcpPool = createTcpPool(opts, this.opts.concurrency);
       this.tcp = this.tcpPool;
       this.ackBatcher.setTcp(this.tcp);
     }
@@ -169,11 +190,12 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (this.running || this.closed) return;
     this.running = true;
     this.paused = false;
-    this.closing = false;
+    this._closing = false;
+    this._closingPromise = null;
     this.emit('ready');
 
     // Subscribe to stalled events in embedded mode (BullMQ v5)
-    if (this.embedded && !this.stalledUnsubscribe) {
+    if (this.embedded && !this.stalledUnsubscribe && !this.opts.skipStalledCheck) {
       this.subscribeToStalledEvents();
     }
 
@@ -182,7 +204,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       this.registerWithServer();
     }
 
-    if (this.opts.heartbeatInterval > 0) {
+    if (this.opts.heartbeatInterval > 0 && !this.opts.skipLockRenewal) {
       if (this.embedded) {
         this.heartbeatTimer = setInterval(() => {
           const manager = getSharedManager();
@@ -242,6 +264,26 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   isClosed(): boolean {
     return this.closed;
+  }
+
+  /** Get current concurrency */
+  get concurrency(): number {
+    return this.opts.concurrency;
+  }
+
+  /** Set concurrency at runtime (BullMQ v5 compatible) */
+  set concurrency(val: number) {
+    const clamped = Math.max(1, val);
+    const prev = this.opts.concurrency;
+    (this.opts as { concurrency: number }).concurrency = clamped;
+    if (clamped > prev && this.running && !this._closing) {
+      this.poll();
+    }
+  }
+
+  /** Promise that resolves when close() finishes (BullMQ v5 compatible) */
+  get closing(): Promise<void> | null {
+    return this._closingPromise;
   }
 
   async waitUntilReady(): Promise<void> {
@@ -431,7 +473,13 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   async close(force = false): Promise<void> {
     if (this.closed) return;
-    this.closing = true;
+    if (this._closingPromise) return this._closingPromise;
+    this._closingPromise = this._doClose(force);
+    return this._closingPromise;
+  }
+
+  private async _doClose(force: boolean): Promise<void> {
+    this._closing = true;
     this.running = false;
     this.paused = false;
     if (this.pollTimer) {
@@ -485,14 +533,14 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
     if (this.tcpPool) this.tcpPool.close();
     this.closed = true;
-    this.closing = false;
+    this._closing = false;
     this.emit('closed');
   }
 
   // ============ Processing Pipeline ============
 
   private poll(): void {
-    if (!this.running || this.closing) return;
+    if (!this.running || this._closing) return;
 
     if (this.activeJobs >= this.opts.concurrency) {
       this.pollTimer = setTimeout(() => {
@@ -517,7 +565,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   }
 
   private async tryProcess(): Promise<void> {
-    if (!this.running || this.closing) return;
+    if (!this.running || this._closing) return;
 
     try {
       let item = this.getNextEligibleJob();
@@ -526,7 +574,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         const items = await this.doPullBatch();
         // Re-check state after async operation (can be modified during await)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (!this.running || this.closing) return;
+        if (!this.running || this._closing) return;
         if (items.length > 0) {
           this.registerPulledJobs(items);
           // Add all items to buffer, then find eligible one
@@ -559,7 +607,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
           this.lastDrainedEmit = now;
           this.emit('drained');
         }
-        const waitTime = this.opts.pollTimeout > 0 ? 10 : 50;
+        const waitTime = this.opts.pollTimeout > 0 ? 10 : this.opts.drainDelay;
         this.pollTimer = setTimeout(() => {
           this.poll();
         }, waitTime);
@@ -632,7 +680,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     const config = this.getPullConfig();
     return this.embedded
       ? pullEmbedded(config, batchSize)
-      : pullTcp(config, this.tcp as NonNullable<typeof this.tcp>, batchSize, this.closing);
+      : pullTcp(config, this.tcp as NonNullable<typeof this.tcp>, batchSize, this._closing);
   }
 
   private startJob(job: InternalJob, token: string | null): void {
@@ -648,6 +696,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
     this.activeJobs++;
     this.activeJobIds.add(jobIdStr);
+
+    // Apply worker-level removeOnComplete/removeOnFail defaults to the job
+    this.applyRemoveDefaults(job);
 
     // Track group concurrency
     if (this.groupLimiter) {
@@ -686,10 +737,10 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         this.groupLimiter.decrement(job);
       }
       this.rateLimiter.recordJobForLimiter();
-      if (this.running && !this.closing) this.poll();
+      if (this.running && !this._closing) this.poll();
     });
 
-    if (this.activeJobs < this.opts.concurrency && !this.closing && !this.processingScheduled) {
+    if (this.activeJobs < this.opts.concurrency && !this._closing && !this.processingScheduled) {
       this.processingScheduled = true;
       setImmediate(() => {
         this.processingScheduled = false;
@@ -781,5 +832,17 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
       useLocks: this.opts.useLocks,
       pollTimeout: this.opts.pollTimeout,
     };
+  }
+
+  /** Apply worker-level removeOnComplete/removeOnFail defaults to a job */
+  private applyRemoveDefaults(job: InternalJob): void {
+    if (this.opts.removeOnComplete !== undefined && !job.removeOnComplete) {
+      const val = this.opts.removeOnComplete;
+      (job as { removeOnComplete: boolean }).removeOnComplete = val === true;
+    }
+    if (this.opts.removeOnFail !== undefined && !job.removeOnFail) {
+      const val = this.opts.removeOnFail;
+      (job as { removeOnFail: boolean }).removeOnFail = val === true;
+    }
   }
 }

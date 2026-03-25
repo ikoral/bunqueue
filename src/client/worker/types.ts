@@ -23,6 +23,13 @@ export interface ExtendedWorkerOptions {
   pollTimeout: number;
   embedded: boolean;
   useLocks: boolean;
+  skipLockRenewal: boolean;
+  skipStalledCheck: boolean;
+  drainDelay: number;
+  lockDuration: number;
+  maxStalledCount: number;
+  removeOnComplete?: boolean | number | { age?: number; count?: number };
+  removeOnFail?: boolean | number | { age?: number; count?: number };
   connection?: ConnectionOptions;
 }
 

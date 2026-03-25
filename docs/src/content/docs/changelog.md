@@ -10,6 +10,28 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.81] - 2026-03-26
+
+### Added
+- **Worker API enhancements** (BullMQ v5 compatibility):
+  - `concurrency` getter/setter — change concurrency at runtime without restarting the worker
+  - `closing` property — Promise that resolves when `close()` finishes
+  - `off()` typed overloads — remove event listeners with full TypeScript support
+  - `name` and `opts` are now public readonly properties
+- **Worker options now fully wired**:
+  - `skipLockRenewal` — disables heartbeat timer when `true`
+  - `skipStalledCheck` — disables stalled event subscription when `true`
+  - `drainDelay` — configurable delay between polls when queue is drained (default: 50ms, was hardcoded)
+  - `lockDuration` — stored in opts with default 30000ms
+  - `maxStalledCount` — stored in opts with default 1
+  - `removeOnComplete` / `removeOnFail` — worker-level defaults applied to all processed jobs
+
+### Fixed
+- `drainDelay` default corrected from 5000ms to 50ms in documentation
+
+### Removed
+- Cleaned up 7 unimplemented WorkerOptions stubs that were type-only (now all options are wired to actual behavior)
+
 ## [2.6.80] - 2026-03-25
 
 ### Fixed
