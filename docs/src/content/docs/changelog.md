@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.80] - 2026-03-25
+
+### Fixed
+- **Issue #64 follow-up**: Jobs no longer lost from in-memory queue when `markActive()` fails during pull. Previously, if SQLite threw a disk I/O error during `moveToProcessing()`, the job was already popped from the priority queue but never delivered to the worker — silently stuck in "waiting" state forever. `markActive()` is now non-fatal (persistence failure doesn't block processing), and a safety-net `requeueJob()` restores jobs to the queue if `moveToProcessing()` fails for any reason
+
 ## [2.6.79] - 2026-03-25
 
 ### Fixed

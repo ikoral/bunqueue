@@ -109,7 +109,12 @@ async function moveToProcessing(job: Job, queue: string, ctx: PullContext): Prom
   });
 
   ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
-  ctx.storage?.markActive(job.id, job.startedAt ?? now, job.timeline);
+  try {
+    ctx.storage?.markActive(job.id, job.startedAt ?? now, job.timeline);
+  } catch {
+    // Non-fatal: job is already in processingShards (in-memory source of truth).
+    // On crash, SQLite recovery will handle the stale state.
+  }
   ctx.totalPulled.value++;
   throughputTracker.pullRate.increment();
   ctx.broadcast({
@@ -151,7 +156,11 @@ async function moveToProcessingBatch(jobs: Job[], queue: string, ctx: PullContex
   for (const job of jobs) {
     const procIdx = processingShardIndex(job.id);
     ctx.jobIndex.set(job.id, { type: 'processing', shardIdx: procIdx });
-    ctx.storage?.markActive(job.id, job.startedAt ?? now, job.timeline);
+    try {
+      ctx.storage?.markActive(job.id, job.startedAt ?? now, job.timeline);
+    } catch {
+      // Non-fatal: job is already in processingShards (in-memory source of truth).
+    }
     ctx.totalPulled.value++;
     throughputTracker.pullRate.increment();
     ctx.broadcast({
@@ -161,6 +170,33 @@ async function moveToProcessingBatch(jobs: Job[], queue: string, ctx: PullContex
       timestamp: now,
     });
   }
+}
+
+/**
+ * Requeue a job that was popped from the priority queue but failed to move to processing.
+ * Restores the job to the shard queue, removes it from processingShards, and notifies waiters.
+ */
+async function requeueJob(job: Job, queue: string, idx: number, ctx: PullContext): Promise<void> {
+  // Remove from processingShards (may have been added before the failure)
+  const procIdx = processingShardIndex(job.id);
+  await withWriteLock(ctx.processingLocks[procIdx], () => {
+    ctx.processingShards[procIdx].delete(job.id);
+  });
+
+  // Reset job state (was modified in tryDequeueNextJob)
+  job.startedAt = null;
+
+  // Push back to queue
+  await withWriteLock(ctx.shardLocks[idx], () => {
+    const shard = ctx.shards[idx];
+    if (job.groupId) shard.releaseGroup(queue, job.groupId);
+    shard.releaseConcurrency(queue);
+    shard.getQueue(queue).push(job);
+    shard.incrementQueued(job.id, false, job.createdAt, queue, job.runAt);
+    shard.notify();
+  });
+
+  ctx.jobIndex.set(job.id, { type: 'queue', shardIdx: idx, queueName: queue });
 }
 
 /**
@@ -179,7 +215,13 @@ export async function pullJob(
     const job = await tryPullFromShard(queue, idx, ctx);
 
     if (job) {
-      await moveToProcessing(job, queue, ctx);
+      try {
+        await moveToProcessing(job, queue, ctx);
+      } catch {
+        // Safety net: if moveToProcessing fails, push job back to prevent loss
+        await requeueJob(job, queue, idx, ctx);
+        return null;
+      }
       latencyTracker.pull.observe((Bun.nanoseconds() - startNs) / 1e6);
       return job;
     }
@@ -251,7 +293,15 @@ export async function pullJobBatch(
     const jobs = await tryPullBatchFromShard(queue, idx, count, ctx);
 
     if (jobs.length > 0) {
-      await moveToProcessingBatch(jobs, queue, ctx);
+      try {
+        await moveToProcessingBatch(jobs, queue, ctx);
+      } catch {
+        // Safety net: push all jobs back to prevent loss
+        for (const job of jobs) {
+          await requeueJob(job, queue, idx, ctx);
+        }
+        return [];
+      }
       if (jobs.length > 1) {
         ctx.dashboardEmit?.('batch:pulled', { queue, count: jobs.length });
       }
