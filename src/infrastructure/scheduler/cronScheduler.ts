@@ -59,6 +59,7 @@ export class CronScheduler {
   private started = false;
   private pushJob: PushJobCallback | null = null;
   private persistCron: PersistCronCallback | null = null;
+  private hasWorkers: ((queue: string) => boolean) | null = null;
   private dashboardEmit: ((event: string, data: Record<string, unknown>) => void) | null = null;
   /** Track last fire time per cron for overlap detection */
   private readonly lastFiredAt = new Map<string, number>();
@@ -81,6 +82,13 @@ export class CronScheduler {
    */
   setPersistCallback(callback: PersistCronCallback): void {
     this.persistCron = callback;
+  }
+
+  /**
+   * Set the worker check callback for skipIfNoWorker
+   */
+  setWorkerCheckCallback(callback: (queue: string) => boolean): void {
+    this.hasWorkers = callback;
   }
 
   /**
@@ -382,8 +390,18 @@ export class CronScheduler {
     this.scheduleNext();
   }
 
-  /** Fire a cron job with overlap detection */
+  /** Fire a cron job with overlap and worker detection */
   private async fireCronJob(cron: CronJob, now: number): Promise<void> {
+    // skipIfNoWorker: skip if no workers registered for this queue
+    if (cron.skipIfNoWorker && this.hasWorkers && !this.hasWorkers(cron.queue)) {
+      this.dashboardEmit?.('cron:skipped', {
+        name: cron.name,
+        queue: cron.queue,
+        reason: 'no-worker',
+      });
+      return;
+    }
+
     // Overlap detection: skip if last fire was within repeatEvery window
     const lastFire = this.lastFiredAt.get(cron.name);
     const interval = cron.repeatEvery ?? 60000;

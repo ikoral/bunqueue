@@ -455,7 +455,8 @@ export class SqliteStorage {
           cron.timezone,
           cron.uniqueKey,
           cron.dedup ? pack(cron.dedup) : null,
-          cron.skipMissedOnRestart ? 1 : 0
+          cron.skipMissedOnRestart ? 1 : 0,
+          cron.skipIfNoWorker ? 1 : 0
         );
     });
   }
@@ -478,6 +479,7 @@ export class SqliteStorage {
         ? (unpack(row.dedup, null, `loadCronDedup:${row.name}`) as CronJob['dedup'])
         : null,
       skipMissedOnRestart: row.skip_missed_on_restart === 1,
+      skipIfNoWorker: row.skip_if_no_worker === 1,
     }));
   }
 

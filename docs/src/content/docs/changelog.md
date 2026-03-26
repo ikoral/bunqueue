@@ -10,6 +10,12 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.85] - 2026-03-26
+
+### Added
+- **`skipIfNoWorker`** option for cron jobs ([#65](https://github.com/egeominotti/bunqueue/issues/65)) — when enabled, the cron scheduler skips job creation if no workers are registered for the target queue. Prevents job accumulation when clients go offline while the server keeps running. Works in both embedded and TCP modes.
+- Schema migration v9: `skip_if_no_worker` column on `cron_jobs` table
+
 ## [2.6.84] - 2026-03-26
 
 ### Fixed

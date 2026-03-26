@@ -124,6 +124,26 @@ await queue.upsertJobScheduler('limited-task', {
 });
 ```
 
+## Restart & Offline Behavior
+
+Control what happens when the server restarts or workers go offline:
+
+```typescript
+await queue.upsertJobScheduler('sync-data', {
+  pattern: '* * * * *',
+  timezone: 'America/New_York',
+  // Skip missed runs when the SERVER restarts (don't catch up)
+  skipMissedOnRestart: true,
+  // Skip job creation when no WORKER is connected to the queue
+  skipIfNoWorker: true,
+}, {
+  data: { task: 'sync' },
+});
+```
+
+- **`skipMissedOnRestart`**: When the server restarts after downtime, cron jobs that were missed are skipped. The scheduler recalculates the next run time to the future instead of executing all missed runs.
+- **`skipIfNoWorker`**: When the cron fires but no worker is registered for the queue, the job is not created. This prevents job accumulation when workers go offline while the server keeps running. The cron continues to advance its schedule normally.
+
 ## Managing Scheduled Jobs
 
 List, inspect, and remove schedulers:

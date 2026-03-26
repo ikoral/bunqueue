@@ -108,7 +108,8 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     timezone TEXT,
     unique_key TEXT,
     dedup BLOB,
-    skip_missed_on_restart INTEGER NOT NULL DEFAULT 0
+    skip_missed_on_restart INTEGER NOT NULL DEFAULT 0,
+    skip_if_no_worker INTEGER NOT NULL DEFAULT 0
 );
 
 -- Queue state persistence (optional)
@@ -129,7 +130,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {
@@ -163,5 +164,9 @@ ALTER TABLE jobs ADD COLUMN timeline BLOB;
   // Migration 8: Add skipMissedOnRestart to cron_jobs
   8: `
 ALTER TABLE cron_jobs ADD COLUMN skip_missed_on_restart INTEGER NOT NULL DEFAULT 0;
+`,
+  // Migration 9: Add skipIfNoWorker to cron_jobs
+  9: `
+ALTER TABLE cron_jobs ADD COLUMN skip_if_no_worker INTEGER NOT NULL DEFAULT 0;
 `,
 };

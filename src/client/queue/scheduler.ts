@@ -25,6 +25,8 @@ export interface RepeatOpts {
   timezone?: string;
   /** Skip missed runs on restart instead of executing them (default: false) */
   skipMissedOnRestart?: boolean;
+  /** Skip job push if no worker is registered for the queue (default: false) */
+  skipIfNoWorker?: boolean;
 }
 
 export interface JobTemplate<T = unknown> {
@@ -82,6 +84,7 @@ export async function upsertJobScheduler(
       timezone: repeatOpts.timezone ?? 'UTC',
       skipMissedOnRestart: repeatOpts.skipMissedOnRestart,
       immediately: repeatOpts.immediately,
+      skipIfNoWorker: repeatOpts.skipIfNoWorker,
       ...dedupFields,
     });
     return {
@@ -101,6 +104,7 @@ export async function upsertJobScheduler(
     timezone: repeatOpts.timezone,
     skipMissedOnRestart: repeatOpts.skipMissedOnRestart,
     immediately: repeatOpts.immediately,
+    skipIfNoWorker: repeatOpts.skipIfNoWorker,
     ...dedupFields,
   });
 

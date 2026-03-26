@@ -165,6 +165,10 @@ export class QueueManager {
     // Initialize managers
     this.webhookManager = new WebhookManager({ validateUrls: config.validateWebhookUrls });
     this.workerManager = new WorkerManager();
+    // Wire worker check for skipIfNoWorker crons
+    this.cronScheduler.setWorkerCheckCallback((queue) => {
+      return this.workerManager.getForQueue(queue).length > 0;
+    });
     this.eventsManager = new EventsManager(this.webhookManager);
 
     // Initialize context factory
