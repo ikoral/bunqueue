@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.89] - 2026-03-30
+
+### Fixed
+- **`getPrioritized()` returning empty array** — `end=-1` (default) was not normalized in the embedded path of `getJobsAsync`, causing `maxPerSource=0` and zero results. Now handles `end=-1` consistently with the TCP path.
+
 ## [2.6.88] - 2026-03-30
 
 ### Fixed

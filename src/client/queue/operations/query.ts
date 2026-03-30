@@ -157,7 +157,7 @@ export function getJobs<T>(ctx: QueryContext, options: GetJobsOptions = {}): Job
   const jobs = manager.getJobs(ctx.name, {
     state: options.state,
     start: options.start ?? 0,
-    end: options.end ?? 100,
+    end: options.end !== undefined && options.end >= 0 ? options.end : 100,
   });
 
   return jobs.map((j) => {
