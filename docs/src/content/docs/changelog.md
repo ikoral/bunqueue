@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.94] - 2026-03-31
+
+### Added
+- **Claude Code plugin & skills** — AI-native integration for bunqueue (closes #71):
+  - `.claude-plugin/plugin.json` — distributable plugin manifest, installable via `/plugin marketplace add egeominotti/bunqueue`
+  - `skills/bunqueue/SKILL.md` — public skill with Simple Mode (all 12 features), Queue+Worker, auto-batching, QueueGroup, webhooks, S3 backup, MCP server, BullMQ migration guide
+  - `skills/bunqueue/reference.md` — full API reference (Queue, Worker, Bunqueue, FlowProducer, QueueGroup, all options)
+  - `skills/bunqueue/examples.md` — 10 real-world patterns (email service, API gateway, ETL pipeline, webhook processor, image processing, batch DB, multi-queue, cron reports, distributed TCP, search debounce, OTP with TTL) + BullMQ migration checklist
+  - `skills/bunqueue/mcp.md` — MCP server documentation (73 tools, 5 resources, 3 diagnostic prompts, setup for embedded & TCP)
+  - `.claude/skills/bunqueue-dev/SKILL.md` — internal contributor skill (architecture, conventions, testing workflow)
+
 ## [2.6.93] - 2026-03-31
 
 ### Fixed

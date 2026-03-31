@@ -1,0 +1,11 @@
+{
+  "name": "bunqueue",
+  "description": "Claude Code skill for bunqueue - high-performance job queue for Bun with SQLite persistence, cron scheduling, priorities, retries, DLQ, and MCP server",
+  "version": "1.0.0",
+  "author": {
+    "name": "egeominotti"
+  },
+  "homepage": "https://github.com/egeominotti/bunqueue",
+  "repository": "https://github.com/egeominotti/bunqueue",
+  "license": "MIT"
+}
