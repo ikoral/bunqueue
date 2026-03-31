@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.93] - 2026-03-31
+
+### Fixed
+- **Deduplication bypass while job is active** — `handleDeduplication` now checks `jobIndex` for active/processing jobs, not just the priority queue. Previously, pushing a job with the same `uniqueKey` while the original was still being processed would create a duplicate. Also fixed `pushJob` fall-through when dedup returned `skip: true` but the job wasn't in the queue (active). Fixes #69.
+
 ## [2.6.92] - 2026-03-31
 
 ### Added
