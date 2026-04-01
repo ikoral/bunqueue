@@ -187,6 +187,48 @@ const worker = new Worker('tasks', processor, { embedded: true });
 Without `DATA_PATH`, bunqueue runs in-memory (no persistence).
 :::
 
+## Simple Mode (All-in-One)
+
+Want less boilerplate? `Bunqueue` wraps Queue + Worker in a single object with routes, middleware, cron, and more:
+
+```typescript
+import { Bunqueue } from 'bunqueue/client';
+
+const app = new Bunqueue('notifications', {
+  embedded: true,
+  routes: {
+    'send-email': async (job) => {
+      await sendEmail(job.data.to);
+      return { sent: true };
+    },
+    'send-sms': async (job) => {
+      await sendSMS(job.data.to);
+      return { sent: true };
+    },
+  },
+  concurrency: 10,
+});
+
+// Middleware (wraps every job)
+app.use(async (job, next) => {
+  const start = Date.now();
+  const result = await next();
+  console.log(`${job.name}: ${Date.now() - start}ms`);
+  return result;
+});
+
+// Cron jobs
+await app.cron('daily-report', '0 9 * * *', { type: 'summary' });
+
+// Add jobs
+await app.add('send-email', { to: 'alice@example.com' });
+
+// Graceful shutdown
+await app.close();
+```
+
+Simple Mode also includes circuit breaker, batch processing, TTL, priority aging, deduplication, and debouncing. See [Simple Mode guide](/guide/simple-mode/) for the full reference.
+
 ## Connect AI Agents (MCP)
 
 bunqueue includes a native MCP server with 73 tools. AI agents can schedule tasks, manage pipelines, and monitor queues via natural language — no code needed.
@@ -212,9 +254,9 @@ Once connected, agents can add jobs, manage crons, retry failures, set rate limi
 
 ## Next Steps
 
+- [Simple Mode](/guide/simple-mode/) - All-in-one Queue + Worker with routes, middleware, cron
 - [Queue API](/guide/queue/) - Full queue operations
 - [Worker API](/guide/worker/) - Worker configuration
 - [MCP Server](/guide/mcp/) - Connect AI agents (Claude, Cursor, Windsurf)
 - [Server Mode](/guide/server/) - Run bunqueue as a standalone server
 - [Code Examples & Recipes](/examples/) - More complete examples
-- [Production Use Cases](/guide/use-cases/) - Real-world patterns
