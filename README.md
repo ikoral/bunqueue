@@ -40,18 +40,67 @@ https://github.com/user-attachments/assets/e8a8d38e-b4a6-4dc8-8360-876c0f24d116
 
 ## Why bunqueue?
 
-| Library      | Requires    |
-| ------------ | ----------- |
-| BullMQ       | Redis       |
-| Agenda       | MongoDB     |
-| pg-boss      | PostgreSQL  |
-| **bunqueue** | **Nothing** |
+| Library      | Requires    | AI-native |
+| ------------ | ----------- | --------- |
+| BullMQ       | Redis       | No        |
+| Agenda       | MongoDB     | No        |
+| pg-boss      | PostgreSQL  | No        |
+| **bunqueue** | **Nothing** | **Yes**   |
 
+- **MCP server included** — 73 tools, 5 resources, 3 prompts. AI agents get full control out of the box
 - **BullMQ-compatible API** — Same `Queue`, `Worker`, `QueueEvents`
 - **Zero dependencies** — No Redis, no MongoDB
 - **SQLite persistence** — Survives restarts, WAL mode for concurrent access
 - **Up to 286K ops/sec** — [Verified benchmarks](https://bunqueue.dev/guide/benchmarks/)
-- **MCP server included** — AI agents get full control: scheduling, monitoring, DLQ, cron, rate limits
+
+## Built for AI Agents (MCP Server)
+
+<p align="center">
+  <img src=".github/mcp-flow.svg" alt="HTTP Handler Flow: Cron/Add Job → Queue → Embedded Worker → HTTP API → Job Result" width="700" />
+</p>
+
+bunqueue is the **first job queue with native MCP support**. AI agents get a full-featured scheduler, task queue, and monitoring system — no glue code needed.
+
+**HTTP Handlers** solve a fundamental problem: an AI agent can schedule jobs and manage queues, but it cannot run a persistent worker. When the agent registers an HTTP handler, bunqueue spawns an embedded Worker that continuously pulls jobs and calls your HTTP endpoint. Responses are saved as results. Failed calls retry automatically via DLQ.
+
+**What AI agents can do with bunqueue:**
+
+- **Schedule tasks** — cron jobs, delayed execution, recurring workflows
+- **Manage job pipelines** — push jobs, monitor progress, retry failures
+- **Full pull/ack/fail cycle** — agents can consume and process jobs directly
+- **Monitor everything** — stats, memory, Prometheus metrics, logs, DLQ
+- **Control flow** — pause/resume queues, set rate limits, manage concurrency
+- **73 MCP tools + 5 resources + 3 prompts** — complete control over every feature
+- **HTTP handlers** — register a URL, bunqueue auto-processes jobs via HTTP calls
+
+```bash
+# One command to connect Claude Code
+claude mcp add bunqueue -- bunx bunqueue-mcp
+```
+
+```json
+// Claude Desktop / Cursor / Windsurf — add to MCP config
+{
+  "mcpServers": {
+    "bunqueue": {
+      "command": "bunx",
+      "args": ["bunqueue-mcp"]
+    }
+  }
+}
+```
+
+**Example agent interactions:**
+
+- *"Schedule a cleanup job every day at 3 AM"*
+- *"Add 500 email jobs to the queue with priority 10"*
+- *"Show me all failed jobs and retry them"*
+- *"Set rate limit to 50/sec on the api-calls queue"*
+- *"What's the memory usage and queue throughput?"*
+
+**Plugin ecosystem** — bunqueue ships with auto-discovery (`.mcp.json`), a custom Claude Code agent for bunqueue tasks, and installable skills for setup, API reference, and real-world patterns. Drop bunqueue into any project and your AI tools discover it automatically.
+
+Supports **embedded** (local SQLite) and **TCP** (remote server) modes. [Full MCP documentation →](https://bunqueue.dev/guide/mcp/)
 
 ## When to use bunqueue
 
@@ -208,53 +257,6 @@ SQLite handles surprisingly high throughput for single-node deployments:
 
 > Run `bun run bench` to verify on your hardware. [Full benchmark methodology →](https://bunqueue.dev/guide/benchmarks/)
 
-## Built for AI Agents (MCP Server)
-
-<p align="center">
-  <img src=".github/mcp-flow.svg" alt="HTTP Handler Flow: Cron/Add Job → Queue → Embedded Worker → HTTP API → Job Result" width="700" />
-</p>
-
-bunqueue is the **first job queue with native MCP support**. AI agents get a full-featured scheduler, task queue, and monitoring system — no glue code needed.
-
-**HTTP Handlers** solve a fundamental problem: an AI agent can schedule jobs and manage queues, but it cannot run a persistent worker. When the agent registers an HTTP handler, bunqueue spawns an embedded Worker that continuously pulls jobs and calls your HTTP endpoint. Responses are saved as results. Failed calls retry automatically via DLQ.
-
-**What AI agents can do with bunqueue:**
-
-- **Schedule tasks** — cron jobs, delayed execution, recurring workflows
-- **Manage job pipelines** — push jobs, monitor progress, retry failures
-- **Full pull/ack/fail cycle** — agents can consume and process jobs directly
-- **Monitor everything** — stats, memory, Prometheus metrics, logs, DLQ
-- **Control flow** — pause/resume queues, set rate limits, manage concurrency
-- **73 MCP tools + 5 resources + 3 prompts** — complete control over every feature
-- **HTTP handlers** — register a URL, bunqueue auto-processes jobs via HTTP calls
-
-```bash
-# One command to connect Claude Code
-claude mcp add bunqueue -- bunx bunqueue-mcp
-```
-
-```json
-// Claude Desktop / Cursor / Windsurf — add to MCP config
-{
-  "mcpServers": {
-    "bunqueue": {
-      "command": "bunx",
-      "args": ["bunqueue-mcp"]
-    }
-  }
-}
-```
-
-**Example agent interactions:**
-
-- *"Schedule a cleanup job every day at 3 AM"*
-- *"Add 500 email jobs to the queue with priority 10"*
-- *"Show me all failed jobs and retry them"*
-- *"Set rate limit to 50/sec on the api-calls queue"*
-- *"What's the memory usage and queue throughput?"*
-
-Supports **embedded** (local SQLite) and **TCP** (remote server) modes. [Full MCP documentation →](https://bunqueue.dev/guide/mcp/)
-
 ## Monitoring
 
 ```bash
@@ -270,11 +272,11 @@ docker compose --profile monitoring up -d
 **[Read the full documentation →](https://bunqueue.dev/)**
 
 - [Quick Start](https://bunqueue.dev/guide/quickstart/)
+- [MCP Server (AI Agents)](https://bunqueue.dev/guide/mcp/)
 - [Simple Mode](https://bunqueue.dev/guide/simple-mode/)
 - [Queue API](https://bunqueue.dev/guide/queue/)
 - [Worker API](https://bunqueue.dev/guide/worker/)
 - [Server Mode](https://bunqueue.dev/guide/server/)
-- [MCP Server (AI Agents)](https://bunqueue.dev/guide/mcp/)
 - [Benchmarks](https://bunqueue.dev/guide/benchmarks/)
 - [CLI Reference](https://bunqueue.dev/guide/cli/)
 

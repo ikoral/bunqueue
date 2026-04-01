@@ -98,7 +98,14 @@
     "dlq",
     "webhooks",
     "prometheus",
-    "typescript"
+    "typescript",
+    "ai",
+    "ai-agent",
+    "ai-native",
+    "mcp",
+    "model-context-protocol",
+    "agentic",
+    "automation"
   ],
   "author": "egeominotti",
   "license": "MIT",
