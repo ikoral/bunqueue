@@ -227,6 +227,7 @@ describe('Cron Timezone & DST Edge Cases', () => {
       name: 'overdue', queue: 'overdue-q', data: { restored: true },
       schedule: '* * * * *', repeatEvery: null, priority: 0,
       timezone: 'UTC', nextRun: Date.now() - 60000, executions: 5, maxLimit: null,
+      skipMissedOnRestart: false, skipIfNoWorker: false, uniqueKey: null, dedup: null,
     }]);
     await tickScheduler(newMgr);
     expect(newMgr.count('overdue-q')).toBe(1);

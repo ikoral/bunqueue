@@ -225,7 +225,8 @@ export class CronScheduler {
     const now = Date.now();
     const entries: CronHeapEntry[] = [];
     for (const cron of crons) {
-      // If skipMissedOnRestart is enabled, recalculate nextRun to the future
+      // Recalculate past nextRun to the future on restart (fixes #73)
+      // Default: always skip missed crons unless explicitly opted out
       if ((cron.skipMissedOnRestart || cron.skipIfNoWorker) && cron.nextRun < now) {
         if (cron.schedule) {
           cron.nextRun = getNextCronRun(cron.schedule, now, cron.timezone ?? undefined);

@@ -74,7 +74,7 @@ export function createCronJob(input: CronJobInput, nextRun: number): CronJob {
     maxLimit: input.maxLimit ?? null,
     uniqueKey: input.uniqueKey ?? null,
     dedup: input.dedup ?? null,
-    skipMissedOnRestart: input.skipMissedOnRestart ?? false,
+    skipMissedOnRestart: input.skipMissedOnRestart ?? true,
     skipIfNoWorker: input.skipIfNoWorker ?? false,
   };
 }

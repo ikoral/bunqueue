@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.97] - 2026-04-01
+
+### Fixed
+- **Cron jobs no longer fire immediately on restart** — `skipMissedOnRestart` now defaults to `true`. Past-due crons recalculate `nextRun` to the next future occurrence instead of executing immediately (fixes #73). Use `skipMissedOnRestart: false` to opt in to catch-up behavior.
+
 ## [2.6.96] - 2026-04-01
 
 ### Fixed

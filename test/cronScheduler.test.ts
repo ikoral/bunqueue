@@ -530,7 +530,7 @@ describe('CronScheduler Execution Logic', () => {
     });
 
     test('should make loaded crons executable via tick()', async () => {
-      // Load a cron that is already past due
+      // Load a cron that is already past due (explicitly opt in to catch-up)
       scheduler.load([
         makeCronJob({
           name: 'past-due',
@@ -538,6 +538,7 @@ describe('CronScheduler Execution Logic', () => {
           nextRun: Date.now() - 1000,
           repeatEvery: 60000,
           schedule: null,
+          skipMissedOnRestart: false,
         }),
       ]);
 
@@ -734,7 +735,7 @@ describe('CronScheduler Execution Logic', () => {
 
   describe('schedule-based cron execution', () => {
     test('should execute a schedule-based cron when due', async () => {
-      // Load a schedule-based cron that is already past due
+      // Load a schedule-based cron that is already past due (explicitly opt in to catch-up)
       scheduler.load([
         makeCronJob({
           name: 'schedule-due',
@@ -742,6 +743,7 @@ describe('CronScheduler Execution Logic', () => {
           schedule: '* * * * *',
           repeatEvery: null,
           nextRun: Date.now() - 5000,
+          skipMissedOnRestart: false,
         }),
       ]);
 
