@@ -69,7 +69,7 @@ export async function processJob<T, R>(
         await manager.ack(internalJob.id, result, token ?? undefined);
       } else {
         // Queue with token for batch ACK
-        void ackBatcher.queue(jobIdStr, result, token ?? undefined);
+        await ackBatcher.queue(jobIdStr, result, token ?? undefined);
       }
     } catch (ackErr) {
       // If stall detection already removed the job from processing,

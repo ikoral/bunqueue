@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.96] - 2026-04-01
+
+### Fixed
+- **Job state race condition in TCP mode** — `getJobState()` inside the `completed` event callback now correctly returns `completed` instead of `active` (fixes #72). Root cause: ACK was fire-and-forget (`void`), so the event was emitted before the server processed the acknowledgment.
+
 ## [2.6.95] - 2026-03-31
 
 ### Added
