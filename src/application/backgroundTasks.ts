@@ -207,6 +207,15 @@ export function recover(ctx: BackgroundContext): void {
       const shard = ctx.shards[idx];
       const stallConfig = shard.getStallConfig(job.queue);
 
+      // Skip recovery for cron jobs with preventOverlap (uniqueKey='cron:*').
+      // These jobs will be re-created by the cron scheduler at the next tick.
+      // Re-queuing them would cause the "starts right away" bug (#73).
+      if (job.uniqueKey?.startsWith('cron:')) {
+        ctx.storage.deleteJob(job.id);
+        ctx.registerQueueName(job.queue);
+        continue;
+      }
+
       // Increment stall count (job was interrupted)
       job.stallCount = (job.stallCount || 0) + 1;
       job.attempts++;

@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.99] - 2026-04-02
+
+### Fixed
+- **Cron jobs no longer re-queue on restart** — active cron jobs with `preventOverlap` (default) are now discarded during stall recovery instead of being re-queued. Previously, if a cron job was processing when the server crashed, the recovery mechanism would re-queue it with ~1-3s backoff, causing it to fire immediately on restart. The cron scheduler now handles the next execution at the correct scheduled time (fixes #73).
+
 ## [2.6.98] - 2026-04-01
 
 ### Fixed
