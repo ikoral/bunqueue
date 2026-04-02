@@ -13,7 +13,6 @@ import type { QueueManager } from '../../application/queueManager';
 import type { JobEvent } from '../../domain/types/queue';
 import type { CloudConfig, CloudEvent } from './types';
 import { loadCloudConfig } from './config';
-import { getInstanceId } from './instanceId';
 import { collectSnapshot, type ServerHandles } from './snapshotCollector';
 import { HttpSender } from './httpSender';
 import { WsSender } from './wsSender';
@@ -43,7 +42,7 @@ export class CloudAgent {
     config: CloudConfig
   ) {
     this.config = config;
-    this.instanceId = getInstanceId(config.dataPath);
+    this.instanceId = config.instanceId;
     this.httpSender = new HttpSender(config);
     this.wsSender = config.useWebSocket ? new WsSender(config, this.instanceId) : null;
   }

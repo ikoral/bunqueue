@@ -7,12 +7,8 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { CircuitBreaker } from '../src/infrastructure/cloud/circuitBreaker';
 import { SnapshotBuffer } from '../src/infrastructure/cloud/buffer';
-import { getInstanceId } from '../src/infrastructure/cloud/instanceId';
 import { loadCloudConfig } from '../src/infrastructure/cloud/config';
 import type { CloudSnapshot } from '../src/infrastructure/cloud/types';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 // ─── Config ───────────────────────────────────────────────────────
 
@@ -55,19 +51,28 @@ describe('loadCloudConfig', () => {
     expect(loadCloudConfig()).toBeNull();
   });
 
-  test('returns config when both URL and API key are set', () => {
+  test('returns null when instance ID is missing', () => {
     Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
+    expect(loadCloudConfig()).toBeNull();
+  });
+
+  test('returns config when URL, API key and instance ID are set', () => {
+    Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
+    Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
+    Bun.env.BUNQUEUE_CLOUD_INSTANCE_ID = 'inst-001';
 
     const config = loadCloudConfig();
     expect(config).not.toBeNull();
     expect(config!.url).toBe('https://cloud.bunqueue.io');
     expect(config!.apiKey).toBe('dk_test_123');
+    expect(config!.instanceId).toBe('inst-001');
   });
 
   test('strips trailing slashes from URL', () => {
     Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io///';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
+    Bun.env.BUNQUEUE_CLOUD_INSTANCE_ID = 'inst-001';
 
     const config = loadCloudConfig()!;
     expect(config.url).toBe('https://cloud.bunqueue.io');
@@ -76,8 +81,10 @@ describe('loadCloudConfig', () => {
   test('parses all optional config with defaults', () => {
     Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
+    Bun.env.BUNQUEUE_CLOUD_INSTANCE_ID = 'inst-001';
 
     const config = loadCloudConfig()!;
+    expect(config.instanceId).toBe('inst-001');
     expect(config.signingSecret).toBeNull();
     expect(config.intervalMs).toBe(15000);
     expect(config.includeJobData).toBe(false);
@@ -94,6 +101,7 @@ describe('loadCloudConfig', () => {
   test('parses custom values', () => {
     Bun.env.BUNQUEUE_CLOUD_URL = 'https://cloud.bunqueue.io';
     Bun.env.BUNQUEUE_CLOUD_API_KEY = 'dk_test_123';
+    Bun.env.BUNQUEUE_CLOUD_INSTANCE_ID = 'inst-prod';
     Bun.env.BUNQUEUE_CLOUD_SIGNING_SECRET = 'my-secret';
     Bun.env.BUNQUEUE_CLOUD_INSTANCE_NAME = 'prod-1';
     Bun.env.BUNQUEUE_CLOUD_INTERVAL_MS = '10000';
@@ -104,6 +112,7 @@ describe('loadCloudConfig', () => {
     Bun.env.BUNQUEUE_CLOUD_USE_WEBSOCKET = 'false';
 
     const config = loadCloudConfig('/data/db')!;
+    expect(config.instanceId).toBe('inst-prod');
     expect(config.signingSecret).toBe('my-secret');
     expect(config.instanceName).toBe('prod-1');
     expect(config.intervalMs).toBe(10000);
@@ -113,37 +122,6 @@ describe('loadCloudConfig', () => {
     expect(config.bufferSize).toBe(100);
     expect(config.useWebSocket).toBe(false);
     expect(config.dataPath).toBe('/data/db');
-  });
-});
-
-// ─── Instance ID ──────────────────────────────────────────────────
-
-describe('getInstanceId', () => {
-  test('returns UUID when no dataPath', () => {
-    const id = getInstanceId(null);
-    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/);
-  });
-
-  test('generates and persists ID to disk', () => {
-    const dir = join(tmpdir(), `bq-cloud-test-${Date.now()}`);
-    mkdirSync(dir, { recursive: true });
-    const dataPath = join(dir, 'db.sqlite');
-
-    try {
-      const id1 = getInstanceId(dataPath);
-      expect(id1).toMatch(/^[0-9a-f]{8}-/);
-
-      // Second call returns same ID
-      const id2 = getInstanceId(dataPath);
-      expect(id2).toBe(id1);
-
-      // Verify file exists
-      const filePath = join(dir, 'cloud-instance-id');
-      expect(existsSync(filePath)).toBe(true);
-      expect(readFileSync(filePath, 'utf-8').trim()).toBe(id1);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
   });
 });
 
@@ -318,6 +296,7 @@ describe('HttpSender', () => {
       url: `http://localhost:${server!.port}`,
       apiKey: 'dk_test_123',
       signingSecret: null,
+      instanceId: 'test-inst',
       instanceName: 'test',
       intervalMs: 15000,
       includeJobData: false,
@@ -349,6 +328,7 @@ describe('HttpSender', () => {
       url: `http://localhost:${server!.port}`,
       apiKey: 'dk_test_123',
       signingSecret: null,
+      instanceId: 'test-inst',
       instanceName: 'test',
       intervalMs: 15000,
       includeJobData: false,
@@ -384,6 +364,7 @@ describe('HttpSender', () => {
       url: `http://localhost:${server!.port}`,
       apiKey: 'dk_test_123',
       signingSecret: 'test-secret-key',
+      instanceId: 'test-inst',
       instanceName: 'test',
       intervalMs: 15000,
       includeJobData: false,
@@ -411,6 +392,7 @@ describe('HttpSender', () => {
       url: `http://localhost:${server!.port}`,
       apiKey: 'dk_test_123',
       signingSecret: null,
+      instanceId: 'test-inst',
       instanceName: 'test',
       intervalMs: 15000,
       includeJobData: false,

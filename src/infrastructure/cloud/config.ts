@@ -14,13 +14,20 @@ export function loadCloudConfig(dataPath?: string): CloudConfig | null {
   // Both URL and API key required to enable
   if (!url || !apiKey) return null;
 
+  const instanceId = Bun.env.BUNQUEUE_CLOUD_INSTANCE_ID;
+  if (!instanceId) {
+    console.error('[Cloud] BUNQUEUE_CLOUD_INSTANCE_ID is required for cloud mode.');
+    return null;
+  }
+
   return {
     url: url.replace(/\/+$/, ''), // Strip trailing slashes
     apiKey,
+    instanceId,
     signingSecret: Bun.env.BUNQUEUE_CLOUD_SIGNING_SECRET ?? null,
     instanceName: Bun.env.BUNQUEUE_CLOUD_INSTANCE_NAME ?? hostname(),
     intervalMs: parseInt(Bun.env.BUNQUEUE_CLOUD_INTERVAL_MS ?? '15000', 10),
-    includeJobData: Bun.env.BUNQUEUE_CLOUD_INCLUDE_JOB_DATA === 'true',
+    includeJobData: Bun.env.BUNQUEUE_CLOUD_INCLUDE_JOB_DATA !== 'false',
     redactFields: Bun.env.BUNQUEUE_CLOUD_REDACT_FIELDS?.split(',').filter(Boolean) ?? [],
     eventFilter: Bun.env.BUNQUEUE_CLOUD_EVENTS?.split(',').filter(Boolean) ?? [],
     bufferSize: parseInt(Bun.env.BUNQUEUE_CLOUD_BUFFER_SIZE ?? '720', 10),
@@ -29,6 +36,6 @@ export function loadCloudConfig(dataPath?: string): CloudConfig | null {
     useWebSocket: Bun.env.BUNQUEUE_CLOUD_USE_WEBSOCKET !== 'false',
     useHttp: Bun.env.BUNQUEUE_CLOUD_USE_HTTP !== 'false',
     dataPath: dataPath ?? null,
-    remoteCommands: Bun.env.BUNQUEUE_CLOUD_REMOTE_COMMANDS === 'true',
+    remoteCommands: Bun.env.BUNQUEUE_CLOUD_REMOTE_COMMANDS !== 'false',
   };
 }

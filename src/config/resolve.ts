@@ -65,27 +65,29 @@ export function resolveCloudConfig(
 
   if (!url || !apiKey) return null;
 
+  const instanceId = fc?.instanceId ?? Bun.env.BUNQUEUE_CLOUD_INSTANCE_ID;
+  if (!instanceId) {
+    console.error('[Cloud] BUNQUEUE_CLOUD_INSTANCE_ID is required for cloud mode.');
+    return null;
+  }
+
   return {
     url: url.replace(/\/+$/, ''),
     apiKey,
-    signingSecret: fc?.signingSecret ?? Bun.env.BUNQUEUE_CLOUD_SIGNING_SECRET ?? null,
-    instanceName: fc?.instanceName ?? Bun.env.BUNQUEUE_CLOUD_INSTANCE_NAME ?? hostname(),
-    intervalMs: fc?.intervalMs ?? parseInt(Bun.env.BUNQUEUE_CLOUD_INTERVAL_MS ?? '15000', 10),
-    includeJobData: fc?.includeJobData ?? Bun.env.BUNQUEUE_CLOUD_INCLUDE_JOB_DATA === 'true',
-    redactFields:
-      fc?.redactFields ?? Bun.env.BUNQUEUE_CLOUD_REDACT_FIELDS?.split(',').filter(Boolean) ?? [],
-    eventFilter: fc?.eventFilter ?? Bun.env.BUNQUEUE_CLOUD_EVENTS?.split(',').filter(Boolean) ?? [],
-    bufferSize: fc?.bufferSize ?? parseInt(Bun.env.BUNQUEUE_CLOUD_BUFFER_SIZE ?? '720', 10),
-    circuitBreakerThreshold:
-      fc?.circuitBreakerThreshold ??
-      parseInt(Bun.env.BUNQUEUE_CLOUD_CIRCUIT_BREAKER_THRESHOLD ?? '5', 10),
-    circuitBreakerResetMs:
-      fc?.circuitBreakerResetMs ??
-      parseInt(Bun.env.BUNQUEUE_CLOUD_CIRCUIT_BREAKER_RESET_MS ?? '60000', 10),
-    useWebSocket: fc?.useWebSocket ?? Bun.env.BUNQUEUE_CLOUD_USE_WEBSOCKET !== 'false',
-    useHttp: fc?.useHttp ?? Bun.env.BUNQUEUE_CLOUD_USE_HTTP !== 'false',
+    instanceId,
+    signingSecret: Bun.env.BUNQUEUE_CLOUD_SIGNING_SECRET ?? null,
+    instanceName: Bun.env.BUNQUEUE_CLOUD_INSTANCE_NAME ?? hostname(),
+    intervalMs: parseInt(Bun.env.BUNQUEUE_CLOUD_INTERVAL_MS ?? '15000', 10),
+    includeJobData: Bun.env.BUNQUEUE_CLOUD_INCLUDE_JOB_DATA !== 'false',
+    redactFields: Bun.env.BUNQUEUE_CLOUD_REDACT_FIELDS?.split(',').filter(Boolean) ?? [],
+    eventFilter: Bun.env.BUNQUEUE_CLOUD_EVENTS?.split(',').filter(Boolean) ?? [],
+    bufferSize: parseInt(Bun.env.BUNQUEUE_CLOUD_BUFFER_SIZE ?? '720', 10),
+    circuitBreakerThreshold: parseInt(Bun.env.BUNQUEUE_CLOUD_CIRCUIT_BREAKER_THRESHOLD ?? '5', 10),
+    circuitBreakerResetMs: parseInt(Bun.env.BUNQUEUE_CLOUD_CIRCUIT_BREAKER_RESET_MS ?? '60000', 10),
+    useWebSocket: Bun.env.BUNQUEUE_CLOUD_USE_WEBSOCKET !== 'false',
+    useHttp: Bun.env.BUNQUEUE_CLOUD_USE_HTTP !== 'false',
     dataPath: dataPath ?? null,
-    remoteCommands: fc?.remoteCommands ?? Bun.env.BUNQUEUE_CLOUD_REMOTE_COMMANDS === 'true',
+    remoteCommands: Bun.env.BUNQUEUE_CLOUD_REMOTE_COMMANDS !== 'false',
   };
 }
 

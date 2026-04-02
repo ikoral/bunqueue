@@ -25,18 +25,7 @@ export interface BunqueueConfig {
   cloud?: {
     url?: string;
     apiKey?: string;
-    signingSecret?: string;
-    instanceName?: string;
-    intervalMs?: number;
-    includeJobData?: boolean;
-    redactFields?: string[];
-    eventFilter?: string[];
-    bufferSize?: number;
-    circuitBreakerThreshold?: number;
-    circuitBreakerResetMs?: number;
-    useWebSocket?: boolean;
-    useHttp?: boolean;
-    remoteCommands?: boolean;
+    instanceId?: string;
   };
   backup?: {
     enabled?: boolean;

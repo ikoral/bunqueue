@@ -9,6 +9,8 @@ export interface CloudConfig {
   readonly url: string;
   /** API key for authentication */
   readonly apiKey: string;
+  /** Instance ID from cloud dashboard (required) */
+  readonly instanceId: string;
   /** HMAC signing secret (optional) */
   readonly signingSecret: string | null;
   /** Human-readable instance name */
@@ -31,7 +33,7 @@ export interface CloudConfig {
   readonly useWebSocket: boolean;
   /** Enable HTTP snapshot posting (default: true) */
   readonly useHttp: boolean;
-  /** Data directory for persisting instance ID */
+  /** Data directory (used for local state) */
   readonly dataPath: string | null;
   /** Enable remote commands from dashboard (default: false) */
   readonly remoteCommands: boolean;
