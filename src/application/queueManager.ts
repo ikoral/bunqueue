@@ -1009,9 +1009,40 @@ export class QueueManager {
   // ============ Cron Operations ============
 
   addCron(input: CronJobInput): CronJob {
+    // On upsert with preventOverlap, remove any orphaned queued job (#73).
+    // Between disconnect and reconnect, a cron tick may push a job that no
+    // worker consumes.  When the client re-upserts, that stale job would be
+    // picked up immediately by the new worker.  Remove it so the cron
+    // scheduler creates a fresh job at the correct next-run time.
+    if (input.preventOverlap) {
+      const uniqueKey = input.uniqueKey ?? `cron:${input.name}`;
+      this.removeOrphanedCronJob(input.queue, uniqueKey);
+    }
+
     const cron = this.cronScheduler.add(input);
     this.storage?.saveCron(cron);
     return cron;
+  }
+
+  /** Remove an orphaned cron job from the queue by its uniqueKey */
+  private removeOrphanedCronJob(queue: string, uniqueKey: string): void {
+    const idx = shardIndex(queue);
+    const shard = this.shards[idx];
+    const entry = shard.getUniqueKeyEntry(queue, uniqueKey);
+    if (!entry) return;
+
+    const jobId = entry.jobId;
+    const location = this.jobIndex.get(jobId);
+    // Only remove waiting/queued jobs, never processing jobs
+    if (location?.type !== 'queue') return;
+
+    const job = shard.getQueue(queue).remove(jobId);
+    if (job) {
+      shard.decrementQueued(jobId);
+      shard.releaseUniqueKey(queue, uniqueKey);
+      this.jobIndex.delete(jobId);
+      this.storage?.deleteJob(jobId);
+    }
   }
 
   removeCron(name: string): boolean {

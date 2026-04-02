@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.106] - 2026-04-02
+
+### Fixed
+- **Cron upsert now removes orphaned queued jobs** — between client disconnect and reconnect, a cron tick could push a job while a stale worker was still within the heartbeat timeout window. This orphaned job would sit in the queue and be pulled immediately when a new worker connected. Now, `upsertJobScheduler` with `preventOverlap` removes any existing queued job with the cron's uniqueKey before re-registering the cron, ensuring a clean slate (fixes #73, code path 6/6).
+
 ## [2.6.105] - 2026-04-02
 
 ### Fixed

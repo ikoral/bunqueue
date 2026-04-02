@@ -130,6 +130,65 @@ describe('Issue #73: cron job re-queued on client disconnect', () => {
     manager.shutdown();
   });
 
+  test('upsert removes orphaned cron job from queue (#73 code path 6)', async () => {
+    const manager = new QueueManager({ dataPath: TEST_DB_PATH });
+    const queueName = 'testing';
+
+    // Add cron with preventOverlap
+    manager.addCron({
+      name: 'start-new-test-job',
+      queue: queueName,
+      data: { type: 'test' },
+      schedule: '* * * * *',
+      preventOverlap: true,
+      skipIfNoWorker: true,
+    });
+
+    // Force the cron to fire (simulates tick between disconnect and reconnect)
+    const scheduler = (manager as any).cronScheduler;
+    const cronEntry = scheduler.cronJobs.get('start-new-test-job');
+    cronEntry.cron.nextRun = Date.now() - 1000;
+    scheduler.cronHeap.buildFrom(
+      Array.from(scheduler.cronJobs.values()).map((e: any) => ({
+        cron: e.cron,
+        generation: e.generation,
+      }))
+    );
+    (scheduler as any).lastFiredAt.clear();
+
+    // Temporarily make hasWorkers return true (simulates stale worker within 30s timeout)
+    const origHasWorkers = scheduler.hasWorkers;
+    scheduler.hasWorkers = () => true;
+    await (scheduler as any).tick();
+    scheduler.hasWorkers = origHasWorkers;
+    flushStorage(manager);
+
+    // Job is now sitting in queue with uniqueKey 'cron:start-new-test-job'
+    const countsBefore = manager.getQueueJobCounts(queueName);
+    expect(countsBefore.waiting).toBe(1);
+
+    // Client reconnects and calls upsertJobScheduler (addCron) again
+    // This should remove the orphaned job before creating the cron
+    manager.addCron({
+      name: 'start-new-test-job',
+      queue: queueName,
+      data: { type: 'test' },
+      schedule: '* * * * *',
+      preventOverlap: true,
+      skipIfNoWorker: true,
+    });
+
+    // Queue should be EMPTY — orphaned job removed by upsert
+    const countsAfter = manager.getQueueJobCounts(queueName);
+    expect(countsAfter.waiting).toBe(0);
+
+    // A worker connecting should NOT find any job
+    const pulled = await manager.pull(queueName);
+    expect(pulled).toBeNull();
+
+    manager.shutdown();
+  });
+
   test('releaseClientJobs re-queues cron jobs WITHOUT preventOverlap', async () => {
     const manager = new QueueManager({ dataPath: TEST_DB_PATH });
     const queueName = 'cron-no-overlap';
