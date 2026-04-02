@@ -10,6 +10,15 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.109] - 2026-04-03
+
+### Changed
+- **Cloud instance ID required** — `BUNQUEUE_CLOUD_INSTANCE_ID` env var is now required for cloud mode (no more auto-generated UUIDs). If missing, cloud agent logs error and doesn't start; rest of bunqueue runs normally.
+- **Simplified cloud config** — Config file `cloud` section only exposes `url`, `apiKey`, and `instanceId`. All other cloud settings are internal (env vars only).
+- **Default changes** — `remoteCommands` defaults to `true` (was `false`), `includeJobData` defaults to `true` (was `false`).
+- **Removed `instanceId.ts`** — Deleted auto-generation/persistence of instance IDs.
+- **Updated docs** — Cloud section moved to end of configuration guide with beta notice.
+
 ## [2.6.108] - 2026-04-02
 
 ### Added
