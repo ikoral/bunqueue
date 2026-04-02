@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.101] - 2026-04-02
+
+### Fixed
+- **WebSocket rate limiter leak** — WebSocket disconnect handler was not calling `removeClient()` on the rate limiter, causing per-client rate limiter state to accumulate indefinitely. TCP already did this correctly; now WebSocket matches.
+
 ## [2.6.100] - 2026-04-02
 
 ### Fixed

@@ -215,6 +215,7 @@ export function createHttpServer(queueManager: QueueManager, config: HttpServerC
     close(ws: ServerWebSocket<WsData>) {
       const clientId = ws.data.id;
       wsHandler.onClose(ws);
+      getRateLimiter().removeClient(clientId);
       queueManager.unregisterWorkersByClientId(clientId);
       queueManager
         .releaseClientJobs(clientId)
