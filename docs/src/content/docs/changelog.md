@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.103] - 2026-04-02
+
+### Fixed
+- **Cron jobs no longer fire immediately on client reconnect** — when a TCP/WebSocket client disconnected while processing a cron job with `preventOverlap`, `releaseClientJobs` would re-queue the job as "waiting". On reconnect, the worker would pick it up immediately instead of waiting for the next scheduled time. Now, cron jobs with `preventOverlap` (uniqueKey `cron:*`) are discarded on disconnect — the cron scheduler re-creates them at the next scheduled tick (fixes #73).
+
 ## [2.6.102] - 2026-04-02
 
 ### Fixed

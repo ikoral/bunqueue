@@ -102,6 +102,7 @@ export interface LockContext {
   shardLocks: RWLock[];
   eventsManager: EventsManager;
   dashboardEmit?: (event: string, data: Record<string, unknown>) => void;
+  storage?: SqliteStorage | null;
 }
 
 /** Context for background tasks */

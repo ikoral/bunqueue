@@ -91,6 +91,7 @@ export class ContextFactory {
       shards: this.deps.shards,
       shardLocks: this.deps.shardLocks,
       eventsManager: this.deps.eventsManager,
+      storage: this.deps.storage,
     };
   }
 

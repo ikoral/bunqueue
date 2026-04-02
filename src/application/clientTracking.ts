@@ -150,6 +150,15 @@ function releaseJobToQueue(opts: ReleaseJobOptions): number {
   // Release all job resources (concurrency, uniqueKey, groupId)
   shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
 
+  // Discard cron jobs with preventOverlap instead of re-queuing (#73).
+  // The cron scheduler will re-create them at the next scheduled tick.
+  // Re-queuing them causes the "starts right away on reconnect" bug.
+  if (job.uniqueKey?.startsWith('cron:')) {
+    ctx.jobIndex.delete(jobId);
+    ctx.storage?.deleteJob(jobId);
+    return 1;
+  }
+
   // Reset job state for retry
   job.startedAt = null;
   job.lastHeartbeat = now;
