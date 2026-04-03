@@ -371,6 +371,14 @@ export class QueueManager {
         const t = tokens[i];
         if (t && !lockMgr.verifyLock(jobIds[i], t, lockCtx)) {
           this.throwIfOwnershipConflict(jobIds[i], lockCtx);
+          // Recover stall-retried job (#75): lock expired and job was
+          // re-queued by lock expiration or stall detection. Complete it
+          // from the queue to prevent duplicate execution.
+          const loc = this.jobIndex.get(jobIds[i]);
+          if (loc?.type === 'queue') {
+            await this.completeStallRetriedJob(jobIds[i], undefined);
+            lockMgr.releaseLock(jobIds[i], lockCtx, t);
+          }
           continue;
         }
         validJobIds.push(jobIds[i]);
@@ -401,6 +409,14 @@ export class QueueManager {
     for (const item of items) {
       if (item.token && !lockMgr.verifyLock(item.id, item.token, lockCtx)) {
         this.throwIfOwnershipConflict(item.id, lockCtx);
+        // Recover stall-retried job (#75): lock expired and job was
+        // re-queued by lock expiration or stall detection. Complete it
+        // from the queue to prevent duplicate execution.
+        const loc = this.jobIndex.get(item.id);
+        if (loc?.type === 'queue') {
+          await this.completeStallRetriedJob(item.id, item.result);
+          lockMgr.releaseLock(item.id, lockCtx, item.token);
+        }
         continue;
       }
       validItems.push(item);

@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.113] - 2026-04-03
+
+### Fixed
+- **Cron job with `preventOverlap` fires immediately on reconnect** — Lock expiration was re-queuing cron jobs instead of discarding them, and batch ACK (`ackBatchWithResults`) silently skipped stall-retried jobs without recovery. Now cron jobs are discarded on lock expiry (the scheduler re-creates them at the next tick), and batch ACK properly recovers stall-retried jobs like single ACK does. Fixes [#75](https://github.com/egeominotti/bunqueue/discussions/75).
+
 ## [2.6.112] - 2026-04-03
 
 ### Added

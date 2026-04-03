@@ -112,6 +112,18 @@ function processExpiredLockInner(
   // Remove from processing
   ctx.processingShards[procIdx].delete(jobId);
 
+  // Discard cron jobs with preventOverlap instead of re-queuing (#75).
+  // During graceful shutdown, heartbeats stop and the lock expires before
+  // the job finishes. Re-queuing would cause "starts right away on reconnect".
+  // The cron scheduler will re-create the job at the next scheduled tick.
+  if (job.uniqueKey?.startsWith('cron:')) {
+    shard.releaseJobResources(job.queue, job.uniqueKey, job.groupId);
+    ctx.jobIndex.delete(jobId);
+    ctx.storage?.deleteJob(jobId);
+    ctx.jobLocks.delete(jobId);
+    return;
+  }
+
   // Increment attempts and reset state
   job.attempts++;
   job.startedAt = null;
