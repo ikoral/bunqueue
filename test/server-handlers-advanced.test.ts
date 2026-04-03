@@ -460,8 +460,8 @@ describe('Monitoring Handlers', () => {
       expect(res.ok).toBe(true);
       const stats = (res as any).stats;
       expect(stats).toBeDefined();
-      expect(typeof stats.queued).toBe('number');
-      expect(typeof stats.processing).toBe('number');
+      expect(typeof stats.waiting).toBe('number');
+      expect(typeof stats.active).toBe('number');
       expect(typeof stats.delayed).toBe('number');
       expect(typeof stats.dlq).toBe('number');
       expect(typeof stats.completed).toBe('number');
@@ -477,7 +477,7 @@ describe('Monitoring Handlers', () => {
 
       const res = await send(ctx, { cmd: 'Stats' });
       const stats = (res as any).stats;
-      expect(stats.queued).toBeGreaterThanOrEqual(1);
+      expect(stats.waiting).toBeGreaterThanOrEqual(1);
     });
 
     test('should include reqId in response', async () => {

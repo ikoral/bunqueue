@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.111] - 2026-04-03
+
+### Fixed
+- **`bunqueue stats` showing zeros for waiting/active** — TCP Stats command was returning fields named `queued`/`processing` while the CLI expected `waiting`/`active`. Aligned TCP response to use standard field names (`waiting`, `active`, `failed`) consistent with HTTP `/health` endpoint.
+
 ## [2.6.110] - 2026-04-03
 
 ### Fixed

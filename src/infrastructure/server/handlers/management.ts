@@ -85,11 +85,12 @@ export function handleStats(ctx: HandlerContext, reqId?: string): Response {
   const rates = throughputTracker.getRates();
   return resp.stats(
     {
-      queued: s.waiting,
-      processing: s.active,
+      waiting: s.waiting,
+      active: s.active,
       delayed: s.delayed,
       dlq: s.dlq,
       completed: s.completed,
+      failed: Number(s.totalFailed),
       uptime: s.uptime,
       pushPerSec: rates.pushPerSec,
       pullPerSec: rates.pullPerSec,

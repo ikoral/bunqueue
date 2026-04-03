@@ -123,11 +123,12 @@ export interface CountResponse extends BaseResponse {
 
 /** Stats response */
 export interface StatsData {
-  readonly queued: number;
-  readonly processing: number;
+  readonly waiting: number;
+  readonly active: number;
   readonly delayed: number;
   readonly dlq: number;
   readonly completed: number;
+  readonly failed: number;
   readonly uptime: number;
   readonly pushPerSec: number;
   readonly pullPerSec: number;

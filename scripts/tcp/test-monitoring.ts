@@ -126,16 +126,16 @@ async function main() {
     if (
       response.ok === true &&
       stats &&
-      typeof stats.queued === 'number' &&
-      typeof stats.processing === 'number' &&
+      typeof stats.waiting === 'number' &&
+      typeof stats.active === 'number' &&
       typeof stats.delayed === 'number' &&
       typeof stats.dlq === 'number' &&
       typeof stats.completed === 'number' &&
       typeof stats.uptime === 'number'
     ) {
       console.log(`   PASS Stats structure valid:`);
-      console.log(`     - queued: ${stats.queued}`);
-      console.log(`     - processing: ${stats.processing}`);
+      console.log(`     - waiting: ${stats.waiting}`);
+      console.log(`     - processing: ${stats.active}`);
       console.log(`     - delayed: ${stats.delayed}`);
       console.log(`     - dlq: ${stats.dlq}`);
       console.log(`     - completed: ${stats.completed}`);
@@ -222,7 +222,7 @@ async function main() {
   try {
     const statsBefore = await tcp.send({ cmd: 'Stats' });
     const statsDataBefore = statsBefore.stats as Record<string, unknown>;
-    const queuedBefore = (statsDataBefore?.queued as number) ?? 0;
+    const queuedBefore = (statsDataBefore?.waiting as number) ?? 0;
 
     // Add some jobs
     await queue.add('job-1', { value: 1 });
@@ -232,15 +232,15 @@ async function main() {
 
     const statsAfter = await tcp.send({ cmd: 'Stats' });
     const statsDataAfter = statsAfter.stats as Record<string, unknown>;
-    const queuedAfter = (statsDataAfter?.queued as number) ?? 0;
+    const queuedAfter = (statsDataAfter?.waiting as number) ?? 0;
 
     if (queuedAfter >= queuedBefore + 3) {
       console.log(`   PASS Stats updated after adding jobs:`);
-      console.log(`     - queued: ${queuedBefore} -> ${queuedAfter}`);
+      console.log(`     - waiting: ${queuedBefore} -> ${queuedAfter}`);
       passed++;
     } else {
       console.log(`   FAIL Stats not updated correctly after adding jobs`);
-      console.log(`     - queued: ${queuedBefore} -> ${queuedAfter} (expected >= ${queuedBefore + 3})`);
+      console.log(`     - waiting: ${queuedBefore} -> ${queuedAfter} (expected >= ${queuedBefore + 3})`);
       failed++;
     }
   } catch (e) {
@@ -253,7 +253,7 @@ async function main() {
   try {
     const statsBefore = await tcp.send({ cmd: 'Stats' });
     const statsDataBefore = statsBefore.stats as Record<string, unknown>;
-    const queuedBefore = (statsDataBefore?.queued as number) ?? 0;
+    const queuedBefore = (statsDataBefore?.waiting as number) ?? 0;
     const completedBefore = (statsDataBefore?.completed as number) ?? 0;
 
     // Process jobs
@@ -266,17 +266,17 @@ async function main() {
 
     const statsAfter = await tcp.send({ cmd: 'Stats' });
     const statsDataAfter = statsAfter.stats as Record<string, unknown>;
-    const queuedAfter = (statsDataAfter?.queued as number) ?? 0;
+    const queuedAfter = (statsDataAfter?.waiting as number) ?? 0;
     const completedAfter = (statsDataAfter?.completed as number) ?? 0;
 
     if (queuedAfter < queuedBefore) {
       console.log(`   PASS Stats updated after processing:`);
-      console.log(`     - queued: ${queuedBefore} -> ${queuedAfter}`);
+      console.log(`     - waiting: ${queuedBefore} -> ${queuedAfter}`);
       console.log(`     - completed: ${completedBefore} -> ${completedAfter}`);
       passed++;
     } else {
       console.log('   FAIL Stats not updated correctly after processing');
-      console.log(`     - queued: ${queuedBefore} -> ${queuedAfter} (expected decrease)`);
+      console.log(`     - waiting: ${queuedBefore} -> ${queuedAfter} (expected decrease)`);
       failed++;
     }
   } catch (e) {

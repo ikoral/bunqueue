@@ -1164,8 +1164,8 @@ describe('Management Handlers', () => {
       expect(res.ok).toBe(true);
       const stats = (res as any).stats;
       expect(stats).toBeDefined();
-      expect(typeof stats.queued).toBe('number');
-      expect(typeof stats.processing).toBe('number');
+      expect(typeof stats.waiting).toBe('number');
+      expect(typeof stats.active).toBe('number');
       expect(typeof stats.delayed).toBe('number');
       expect(typeof stats.completed).toBe('number');
       expect(typeof stats.uptime).toBe('number');
@@ -1176,7 +1176,7 @@ describe('Management Handlers', () => {
         await handlePush({ cmd: 'PUSH', queue: 'emails', data: { id: i } }, ctx);
       }
       const res = handleStats(ctx);
-      expect((res as any).stats.queued).toBe(3);
+      expect((res as any).stats.waiting).toBe(3);
     });
 
     test('should propagate reqId', () => {
