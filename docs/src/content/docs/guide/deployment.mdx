@@ -310,6 +310,31 @@ sudo systemctl status bunqueue
 sudo journalctl -u bunqueue -f
 ```
 
+### Updating bunqueue
+
+To update bunqueue on a systemd-managed server:
+
+```bash
+# 1. Stop the service
+sudo systemctl stop bunqueue
+
+# 2. Update the package
+bun install -g bunqueue@latest
+
+# 3. Verify the new version
+bunqueue --version
+
+# 4. Restart the service
+sudo systemctl start bunqueue
+
+# 5. Confirm the running version
+curl http://localhost:6790/health | jq .version
+```
+
+:::caution
+Always verify the running version with `curl /health` after restart. Simply running `bun update` does **not** restart the service — you must explicitly stop and start it with `systemctl`.
+:::
+
 ## Building from Source
 
 Compile bunqueue into a standalone executable for production deployment.
