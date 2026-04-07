@@ -192,7 +192,14 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     this.paused = false;
     this._closing = false;
     this._closingPromise = null;
-    this.emit('ready');
+    // Defer the 'ready' emit so listeners attached synchronously after
+    // construction (e.g. `new Worker(...).on('ready', ...)`) still receive it.
+    // run() is called from the constructor when autorun is true (the default),
+    // at which point chained or post-construction listeners haven't been
+    // registered yet. See issue #76.
+    queueMicrotask(() => {
+      if (!this.closed) this.emit('ready');
+    });
 
     // Subscribe to stalled events in embedded mode (BullMQ v5)
     if (this.embedded && !this.stalledUnsubscribe && !this.opts.skipStalledCheck) {

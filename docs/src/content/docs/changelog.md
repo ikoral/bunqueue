@@ -10,6 +10,11 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.114] - 2026-04-07
+
+### Fixed
+- **Worker `'ready'` event never fires with chained listener** — `Worker.run()` was emitting `'ready'` synchronously inside the constructor (when `autorun: true`, the default), so listeners attached via the chained pattern `new Worker(...).on('ready', ...)` were registered too late and missed the event. The emit is now deferred via `queueMicrotask`, so listeners attached synchronously after construction still receive `'ready'`. Fixes [#76](https://github.com/egeominotti/bunqueue/issues/76).
+
 ## [2.6.113] - 2026-04-03
 
 ### Fixed
