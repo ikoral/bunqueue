@@ -63,6 +63,12 @@ function createTcpPool(opts: WorkerOptions, concurrency: number): TcpConnectionP
  */
 export class Worker<T = unknown, R = unknown> extends EventEmitter {
   readonly name: string;
+  /**
+   * Server-side queue key. Equals `name` unless `prefixKey` is set, in which
+   * case it is `prefixKey + name`. All broker pulls/registrations route
+   * through this key so a Worker only sees jobs from its own namespace.
+   */
+  private readonly queueKey: string;
   readonly opts: ExtendedWorkerOptions;
   private readonly processor: Processor<T, R>;
   private readonly embedded: boolean;
@@ -157,10 +163,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
   constructor(name: string, processor: Processor<T, R>, opts: WorkerOptions = {}) {
     super();
     this.name = name;
+    this.queueKey = (opts.prefixKey ?? '') + name;
     this.processor = processor;
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
     this.startedAt = Date.now();
-    this.workerId = `worker-${name}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    this.workerId = `worker-${this.queueKey}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     this.opts = resolveWorkerOptions(opts, this.embedded);
     this.rateLimiter = new WorkerRateLimiter(
       opts.limiter?.groupKey ? null : (opts.limiter ?? null)
@@ -236,7 +243,9 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
     const manager = getSharedManager();
     this.stalledUnsubscribe = manager.subscribe((event) => {
-      if (event.queue !== this.name) return;
+      // Events carry the prefixed server-side queue key, so we must compare
+      // against `queueKey` (not the logical `name`) to scope correctly.
+      if (event.queue !== this.queueKey) return;
       if (event.eventType === EventType.Stalled) {
         this.emit('stalled', event.jobId, 'active');
       }
@@ -363,7 +372,11 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     if (this.embedded) {
       const manager = getSharedManager();
       if (this.opts.useLocks) {
-        const { job, token: lockToken } = await manager.pullWithLock(this.name, this.workerId, 0);
+        const { job, token: lockToken } = await manager.pullWithLock(
+          this.queueKey,
+          this.workerId,
+          0
+        );
         if (job && lockToken) {
           const jobIdStr = String(job.id);
           this.pulledJobIds.add(jobIdStr);
@@ -371,7 +384,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
         }
         return job ?? undefined;
       }
-      const job = await manager.pull(this.name, 0);
+      const job = await manager.pull(this.queueKey, 0);
       if (job) {
         this.pulledJobIds.add(String(job.id));
       }
@@ -383,7 +396,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
     const cmd: Record<string, unknown> = {
       cmd: 'PULL',
-      queue: this.name,
+      queue: this.queueKey,
       timeout: 0,
     };
     if (this.opts.useLocks) {
@@ -394,7 +407,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     const response = await this.tcp.send(cmd);
     if (!response.ok || !response.job) return undefined;
 
-    const job = parseJobFromResponse(response.job as Record<string, unknown>, this.name);
+    const job = parseJobFromResponse(response.job as Record<string, unknown>, this.queueKey);
     const jobIdStr = String(job.id);
     this.pulledJobIds.add(jobIdStr);
 
@@ -423,7 +436,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
     try {
       await processJob(job, {
-        name: this.name,
+        name: this.queueKey,
         processor: this.processor,
         embedded: this.embedded,
         tcp: this.tcp,
@@ -720,7 +733,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     const tokenForProcess = this.opts.useLocks ? token : undefined;
 
     void processJob(job, {
-      name: this.name,
+      name: this.queueKey,
       processor: this.processor,
       embedded: this.embedded,
       tcp: this.tcp,
@@ -785,8 +798,8 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
     void this.tcp
       .send({
         cmd: 'RegisterWorker',
-        name: this.name,
-        queues: [this.name],
+        name: this.queueKey,
+        queues: [this.queueKey],
         concurrency: this.opts.concurrency,
         workerId: this.workerId,
         hostname: hostname(),
@@ -834,7 +847,7 @@ export class Worker<T = unknown, R = unknown> extends EventEmitter {
 
   private getPullConfig(): PullConfig {
     return {
-      name: this.name,
+      name: this.queueKey,
       workerId: this.workerId,
       useLocks: this.opts.useLocks,
       pollTimeout: this.opts.pollTimeout,

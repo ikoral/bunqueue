@@ -123,6 +123,7 @@ export class Bunqueue<T = unknown, R = unknown> {
       dataPath: opts.dataPath,
       defaultJobOptions: opts.defaultJobOptions,
       autoBatch: opts.autoBatch,
+      prefixKey: opts.prefixKey,
     };
   }
 
@@ -139,6 +140,7 @@ export class Bunqueue<T = unknown, R = unknown> {
       limiter: opts.rateLimit ?? opts.limiter,
       removeOnComplete: opts.removeOnComplete,
       removeOnFail: opts.removeOnFail,
+      prefixKey: opts.prefixKey,
     };
   }
 

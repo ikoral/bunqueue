@@ -80,6 +80,9 @@ const worker = new Worker('queue', processor, {
     token: 'secret',
     poolSize: 4,
   },
+
+  // Namespace isolation — must match the producing Queue's prefixKey
+  prefixKey: 'prod:',
 });
 ```
 
@@ -104,6 +107,7 @@ const worker = new Worker('queue', processor, {
 | `drainDelay` | `number` | `50` | Delay between polls when queue is drained (ms) |
 | `removeOnComplete` | `boolean \| number \| KeepJobs` | `false` | Auto-remove completed jobs. `true` = immediate, `number` = max count, `{ age?, count? }` = by age/count |
 | `removeOnFail` | `boolean \| number \| KeepJobs` | `false` | Auto-remove failed jobs. Same format as `removeOnComplete` |
+| `prefixKey` | `string` | — | Namespace prefix; must match the producing `Queue.prefixKey` to consume its jobs. See [Namespace Isolation](/guide/queue/#namespace-isolation-prefixkey) |
 
 ## Job Object
 

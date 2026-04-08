@@ -62,6 +62,55 @@ const queue = new Queue('tasks', {
 });
 ```
 
+### Namespace Isolation (`prefixKey`)
+
+`prefixKey` lets multiple environments, tenants, or services share the **same broker** without their jobs, workers, cron schedulers, stats, pause state, DLQ, or rate limits overlapping. The prefix is prepended to the queue name on the server side; `Queue.name` keeps reporting the logical name.
+
+```typescript
+// Same broker, totally isolated namespaces
+const devQueue  = new Queue('emails', { prefixKey: 'dev:' });
+const prodQueue = new Queue('emails', { prefixKey: 'prod:' });
+
+await devQueue.add('send', { to: 'tester@example.com' });
+await prodQueue.add('send', { to: 'user@example.com' });
+
+await devQueue.getJobCountsAsync();   // { waiting: 1, ... }
+await prodQueue.getJobCountsAsync();  // { waiting: 1, ... } — never sees dev jobs
+```
+
+A `Worker` must use the **same** `prefixKey` to consume jobs from the prefixed queue:
+
+```typescript
+const devWorker = new Worker('emails', processor, {
+  prefixKey: 'dev:',
+  connection: { port: 6789 },
+});
+// devWorker only processes jobs added via devQueue, never prodQueue.
+```
+
+**What gets isolated:**
+
+- Jobs (push / pull / ack / fail / DLQ)
+- Worker registration and lock-based ownership
+- Counts, stats, and `isPaused`
+- `pause()` / `resume()` / `drain()` / `obliterate()`
+- Rate limits and global concurrency
+- **Cron schedulers** — two prefixes can use the same `schedulerId` without colliding on the global cron PRIMARY KEY (this fixes [#77](https://github.com/egeominotti/bunqueue/issues/77))
+
+**Use cases:**
+
+- **Multi-environment** — `dev:` / `staging:` / `prod:` on a single broker, no port juggling
+- **Multi-tenant SaaS** — `tenant-${tenantId}:` per customer, queue names can be reused
+- **Monorepo** — each service prefixes its queues so two `process` queues from `service-a` and `service-b` don't collide
+- **Test isolation** — `test-${runId}:` to avoid `obliterate()` between parallel test runs
+
+**Notes:**
+
+- Backward compatible — without `prefixKey` behavior is identical to previous releases.
+- `Queue.name` always returns the **logical** name. The server-side key (`prefixKey + name`) is internal.
+- `Job.queueName` returned to processors will reflect the prefixed key (e.g. `dev:emails`). This is the only user-visible side effect.
+- Works in both embedded and TCP modes.
+
 ## Adding Jobs
 
 ### Single Job

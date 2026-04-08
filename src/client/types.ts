@@ -436,6 +436,16 @@ export interface QueueOptions {
    * Default: enabled for TCP mode, disabled for embedded mode.
    */
   autoBatch?: AutoBatchOptions;
+  /**
+   * Namespace prefix prepended to the queue name on the server.
+   * Lets multiple environments (e.g. `dev:`, `prod:`) share the same broker
+   * without their jobs, workers, cron schedulers, stats, or DLQ overlapping.
+   *
+   * The user-facing `queue.name` stays the logical name; only the server-side
+   * key and the cron scheduler IDs are prefixed. A Worker that wants to consume
+   * from the namespaced queue must use the same `prefixKey`.
+   */
+  prefixKey?: string;
 }
 
 /** Rate limiter configuration for Worker (BullMQ v5 compatible) */
@@ -490,6 +500,12 @@ export interface WorkerOptions {
   removeOnComplete?: boolean | number | { age?: number; count?: number };
   /** Remove jobs on fail — applied as default for all jobs processed by this worker */
   removeOnFail?: boolean | number | { age?: number; count?: number };
+  /**
+   * Namespace prefix prepended to the queue name on the server.
+   * Must match the `prefixKey` used by the producing `Queue` for the worker
+   * to consume the same namespaced queue. See `QueueOptions.prefixKey`.
+   */
+  prefixKey?: string;
 }
 
 /** Stall configuration for a queue */

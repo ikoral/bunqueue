@@ -8,9 +8,29 @@ import type { TcpConnectionPool } from '../tcpPool';
 import type { JobOptions } from '../types';
 
 interface SchedulerContext {
+  /** Server-side queue key (already prefixed with `prefixKey` if set). */
   name: string;
   embedded: boolean;
   tcp: TcpConnectionPool | null;
+  /**
+   * Namespace prefix from QueueOptions. When set, scheduler IDs are stored
+   * under `${prefixKey}${schedulerId}` so two queues with different prefixes
+   * cannot collide on the global cron-name PRIMARY KEY.
+   */
+  prefixKey?: string;
+}
+
+/** Apply the namespace prefix to a user-facing scheduler ID. */
+function toCronName(ctx: SchedulerContext, schedulerId: string): string {
+  return ctx.prefixKey ? `${ctx.prefixKey}${schedulerId}` : schedulerId;
+}
+
+/** Strip the namespace prefix from a stored cron name. */
+function fromCronName(ctx: SchedulerContext, cronName: string): string {
+  if (ctx.prefixKey && cronName.startsWith(ctx.prefixKey)) {
+    return cronName.slice(ctx.prefixKey.length);
+  }
+  return cronName;
 }
 
 export interface RepeatOpts {
@@ -74,11 +94,12 @@ export async function upsertJobScheduler(
   const repeatEvery = repeatOpts.every;
   const data = buildCronData(jobTemplate);
   const dedupFields = buildCronDedup(jobTemplate);
+  const cronName = toCronName(ctx, schedulerId);
 
   if (ctx.embedded) {
     const manager = getSharedManager();
     manager.addCron({
-      name: schedulerId,
+      name: cronName,
       queue: ctx.name,
       data,
       schedule: cronPattern,
@@ -99,7 +120,7 @@ export async function upsertJobScheduler(
 
   const response = await ctx.tcp!.send({
     cmd: 'Cron',
-    name: schedulerId,
+    name: cronName,
     queue: ctx.name,
     data,
     schedule: cronPattern,
@@ -125,11 +146,12 @@ export async function removeJobScheduler(
   ctx: SchedulerContext,
   schedulerId: string
 ): Promise<boolean> {
+  const cronName = toCronName(ctx, schedulerId);
   if (ctx.embedded) {
-    getSharedManager().removeCron(schedulerId);
+    getSharedManager().removeCron(cronName);
     return true;
   }
-  const response = await ctx.tcp!.send({ cmd: 'CronDelete', name: schedulerId });
+  const response = await ctx.tcp!.send({ cmd: 'CronDelete', name: cronName });
   return response.ok === true;
 }
 
@@ -138,13 +160,14 @@ export async function getJobScheduler(
   ctx: SchedulerContext,
   schedulerId: string
 ): Promise<SchedulerInfo | null> {
+  const cronName = toCronName(ctx, schedulerId);
   if (ctx.embedded) {
     const crons = getSharedManager().listCrons();
-    const cron = crons.find((c) => c.name === schedulerId);
+    const cron = crons.find((c) => c.name === cronName && c.queue === ctx.name);
     if (!cron) return null;
     return {
-      id: cron.name,
-      name: cron.name,
+      id: fromCronName(ctx, cron.name),
+      name: fromCronName(ctx, cron.name),
       next: cron.nextRun,
       pattern: cron.schedule ?? undefined,
       every: cron.repeatEvery ?? undefined,
@@ -154,14 +177,22 @@ export async function getJobScheduler(
   const response = await ctx.tcp!.send({ cmd: 'CronList' });
   if (!response.ok) return null;
 
-  type CronEntry = { name: string; nextRun: number; schedule?: string; repeatEvery?: number };
+  type CronEntry = {
+    name: string;
+    queue?: string;
+    nextRun: number;
+    schedule?: string;
+    repeatEvery?: number;
+  };
   const crons = (response as { crons?: CronEntry[] }).crons;
-  const cron = crons?.find((c) => c.name === schedulerId);
+  const cron = crons?.find(
+    (c) => c.name === cronName && (c.queue === undefined || c.queue === ctx.name)
+  );
   if (!cron) return null;
 
   return {
-    id: cron.name,
-    name: cron.name,
+    id: fromCronName(ctx, cron.name),
+    name: fromCronName(ctx, cron.name),
     next: cron.nextRun,
     pattern: cron.schedule ?? undefined,
     every: cron.repeatEvery ?? undefined,
@@ -180,8 +211,8 @@ export async function getJobSchedulers(
       .listCrons()
       .filter((c) => c.queue === ctx.name)
       .map((c) => ({
-        id: c.name,
-        name: c.name,
+        id: fromCronName(ctx, c.name),
+        name: fromCronName(ctx, c.name),
         next: c.nextRun,
         pattern: c.schedule ?? undefined,
         every: c.repeatEvery ?? undefined,
@@ -203,8 +234,8 @@ export async function getJobSchedulers(
   return crons
     .filter((c) => c.queue === ctx.name)
     .map((c) => ({
-      id: c.name,
-      name: c.name,
+      id: fromCronName(ctx, c.name),
+      name: fromCronName(ctx, c.name),
       next: c.nextRun,
       pattern: c.schedule ?? undefined,
       every: c.repeatEvery ?? undefined,

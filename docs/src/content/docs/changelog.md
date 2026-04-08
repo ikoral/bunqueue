@@ -10,6 +10,18 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.6.115] - 2026-04-08
+
+### Added
+- **`prefixKey` — namespace isolation for `Queue` and `Worker`** — New option lets multiple environments, tenants, or services share the same broker without their jobs, workers, cron schedulers, stats, pause state, DLQ, or rate limits overlapping. `Queue.name` still reports the logical name; the prefix is applied internally to the server-side key. Backward compatible — without `prefixKey`, behavior is identical. Resolves the cron `name` PRIMARY KEY collision in [#77](https://github.com/egeominotti/bunqueue/issues/77). Example:
+  ```typescript
+  const dev  = new Queue('emails', { prefixKey: 'dev:' });
+  const prod = new Queue('emails', { prefixKey: 'prod:' });
+  // Workers must match the prefix to consume jobs from the producing queue
+  new Worker('emails', processor, { prefixKey: 'dev:' });
+  ```
+  See the [Namespace Isolation guide](/guide/queue/#namespace-isolation-prefixkey).
+
 ## [2.6.114] - 2026-04-07
 
 ### Fixed

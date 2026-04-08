@@ -163,4 +163,11 @@ export interface BunqueueOptions<T = unknown, R = unknown> {
   rateLimit?: RateLimiterOptions;
   /** Dead letter queue auto-management */
   dlq?: BunqueueDlqConfig;
+  /**
+   * Namespace prefix prepended to the queue name on the server. Lets multiple
+   * environments (e.g. `dev:`, `prod:`) share the same broker without their
+   * jobs, workers, cron schedulers, stats, or DLQ overlapping. Forwarded to
+   * both the internal Queue and Worker. See `QueueOptions.prefixKey`.
+   */
+  prefixKey?: string;
 }

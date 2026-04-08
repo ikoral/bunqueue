@@ -46,6 +46,14 @@ import * as bullmqCompatOps from './bullmqCompat';
  */
 export class Queue<T = unknown> {
   readonly name: string;
+  /**
+   * Server-side queue key. Equals `name` unless `prefixKey` is set, in which
+   * case it is `prefixKey + name`. All TCP/embedded operations route through
+   * this key so that two queues with the same logical name but different
+   * `prefixKey` values are fully isolated on the broker.
+   */
+  private readonly queueKey: string;
+  private readonly prefixKey: string;
   private readonly opts: QueueOptions;
   private readonly embedded: boolean;
   private readonly tcpPool: TcpConnectionPool | null;
@@ -54,6 +62,8 @@ export class Queue<T = unknown> {
 
   constructor(name: string, opts: QueueOptions = {}) {
     this.name = name;
+    this.prefixKey = opts.prefixKey ?? '';
+    this.queueKey = this.prefixKey + name;
     this.opts = opts;
     this.embedded = opts.embedded ?? FORCE_EMBEDDED;
 
@@ -109,9 +119,17 @@ export class Queue<T = unknown> {
     }
   }
 
-  // Context builders for modules
+  // Context builders for modules.
+  // `name` here is the **server-side** queue key (already includes prefixKey),
+  // so every operation that forwards `ctx.name` to the broker is automatically
+  // namespaced. The user-facing logical name lives on `this.name`.
   private get ctx() {
-    return { name: this.name, embedded: this.embedded, tcp: this.tcpPool };
+    return {
+      name: this.queueKey,
+      embedded: this.embedded,
+      tcp: this.tcpPool,
+      prefixKey: this.prefixKey,
+    };
   }
 
   private get addCtx() {
