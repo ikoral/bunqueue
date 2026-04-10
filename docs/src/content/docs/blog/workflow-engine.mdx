@@ -157,7 +157,7 @@ Compose workflows by nesting them with `.subWorkflow()`:
 const parent = new Workflow('order')
   .step('create', async () => ({ total: 99 }))
   .subWorkflow('payment', (ctx) => ({
-    amount: ctx.steps['create'].total,
+    amount: (ctx.steps['create'] as { total: number }).total,
   }))
   .step('confirm', async (ctx) => {
     const result = ctx.steps['sub:payment'];

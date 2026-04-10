@@ -275,7 +275,10 @@ Multi-step orchestration with saga compensation, branching, parallel steps, retr
 import { Workflow, Engine } from 'bunqueue/workflow';
 
 const flow = new Workflow('order')
-  .step('validate', async (ctx) => { return { orderId: ctx.input.orderId }; })
+  .step('validate', async (ctx) => {
+    const { orderId } = ctx.input as { orderId: string };
+    return { orderId };
+  })
   .step('charge', async (ctx) => {
     return { txId: 'tx_123' };
   }, { compensate: async () => { /* auto-rollback on failure */ }, retry: 3 })
@@ -283,11 +286,11 @@ const flow = new Workflow('order')
     .step('notify-warehouse', async () => ({ notified: true }))
     .step('notify-email', async () => ({ sent: true }))
   )
-  .branch((ctx) => ctx.steps['classify'].tier)
+  .branch((ctx) => (ctx.steps['classify'] as { tier: string }).tier)
   .path('vip', (w) => w.step('vip-handler', async () => ({ discount: 20 })))
   .path('basic', (w) => w.step('basic-handler', async () => ({ discount: 0 })))
   .forEach(                                        // iterate over items
-    (ctx) => ctx.input.items,
+    (ctx) => (ctx.input as { items: unknown[] }).items,
     'process-item', async (ctx) => { return { item: ctx.steps.__item }; },
   )
   .map('summary', (ctx) => ({ total: 42 }))       // synchronous transform

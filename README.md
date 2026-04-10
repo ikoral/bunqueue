@@ -548,15 +548,21 @@ await engine.start('order-pipeline', { orderId: 'ORD-1', amount: 99.99 });
 ```typescript
 // Branching
 const flow = new Workflow('tiered')
-  .step('classify', async (ctx) => ({ tier: ctx.input.amount > 1000 ? 'vip' : 'basic' }))
-  .branch((ctx) => ctx.steps['classify'].tier)
+  .step('classify', async (ctx) => {
+    const { amount } = ctx.input as { amount: number };
+    return { tier: amount > 1000 ? 'vip' : 'basic' };
+  })
+  .branch((ctx) => (ctx.steps['classify'] as { tier: string }).tier)
   .path('vip', (w) => w.step('vip-handler', async () => ({ discount: 20 })))
   .path('basic', (w) => w.step('basic-handler', async () => ({ discount: 0 })))
   .step('done', async () => ({ processed: true }));
 
 // Human-in-the-loop
 const approvalFlow = new Workflow('expense')
-  .step('submit', async (ctx) => ({ amount: ctx.input.amount }))
+  .step('submit', async (ctx) => {
+    const { amount } = ctx.input as { amount: number };
+    return { amount };
+  })
   .waitFor('manager-approval')
   .step('reimburse', async (ctx) => {
     const decision = ctx.signals['manager-approval'] as { approved: boolean };

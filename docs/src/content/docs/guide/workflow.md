@@ -76,7 +76,8 @@ const orderFlow = new Workflow('order-pipeline')
   })
   .step('charge', async (ctx) => {
     const { orderId } = ctx.steps['validate'] as { orderId: string };
-    const txId = await payments.charge(orderId, ctx.input.amount);
+    const { amount } = ctx.input as { amount: number };
+    const txId = await payments.charge(orderId, amount);
     return { transactionId: txId };
   }, {
     compensate: async () => {
@@ -157,8 +158,9 @@ const flow = new Workflow('money-transfer')
     await accounts.debit(from, amount);
     return { debited: true, account: from, amount };
   }, {
-    compensate: async () => {
+    compensate: async (ctx) => {
       // Undo: credit back the source account
+      const { from, amount } = ctx.input as { from: string; to: string; amount: number };
       await accounts.credit(from, amount);
       console.log('Rolled back: source account credited');
     },
@@ -168,8 +170,9 @@ const flow = new Workflow('money-transfer')
     await accounts.credit(to, amount);
     return { credited: true, account: to, amount };
   }, {
-    compensate: async () => {
+    compensate: async (ctx) => {
       // Undo: debit back the target account
+      const { to, amount } = ctx.input as { from: string; to: string; amount: number };
       await accounts.debit(to, amount);
       console.log('Rolled back: target account debited');
     },
@@ -261,12 +264,14 @@ const flow = new Workflow('content-publishing')
       notes?: string;
     };
 
+    const { draftId } = ctx.steps['draft'] as { draftId: string };
+
     if (!review.approved) {
-      await cms.reject(ctx.steps['draft'].draftId, review.notes);
+      await cms.reject(draftId, review.notes);
       return { status: 'rejected', editor: review.editor };
     }
 
-    const published = await cms.publish(ctx.steps['draft'].draftId);
+    const published = await cms.publish(draftId);
     return { status: 'published', url: published.url, editor: review.editor };
   });
 
@@ -354,17 +359,21 @@ Run multiple steps concurrently with `.parallel()`:
 ```typescript
 const flow = new Workflow('data-enrichment')
   .step('fetch-user', async (ctx) => {
-    return await db.users.find(ctx.input.userId);
+    const { userId } = ctx.input as { userId: string };
+    return await db.users.find(userId);
   })
   .parallel((w) => w
     .step('fetch-orders', async (ctx) => {
-      return await db.orders.findByUser(ctx.input.userId);
+      const { userId } = ctx.input as { userId: string };
+      return await db.orders.findByUser(userId);
     })
     .step('fetch-preferences', async (ctx) => {
-      return await db.preferences.get(ctx.input.userId);
+      const { userId } = ctx.input as { userId: string };
+      return await db.preferences.get(userId);
     })
     .step('fetch-activity', async (ctx) => {
-      return await analytics.getRecent(ctx.input.userId);
+      const { userId } = ctx.input as { userId: string };
+      return await analytics.getRecent(userId);
     })
   )
   .step('merge', async (ctx) => {
@@ -390,7 +399,8 @@ Add a timeout to `waitFor` so workflows don't hang indefinitely:
 ```typescript
 const flow = new Workflow('time-limited-approval')
   .step('submit', async (ctx) => {
-    await slack.notify('#approvals', `Expense $${ctx.input.amount} needs review`);
+    const { amount } = ctx.input as { amount: number };
+    await slack.notify('#approvals', `Expense $${amount} needs review`);
     return { submitted: true };
   })
   .waitFor('manager-approval', { timeout: 86400000 }) // 24 hours
@@ -425,11 +435,12 @@ const paymentFlow = new Workflow('payment')
 
 const orderFlow = new Workflow('order')
   .step('create-order', async (ctx) => {
-    return { orderId: `ORD-${Date.now()}`, total: ctx.input.amount };
+    const { amount } = ctx.input as { amount: number; cardToken: string };
+    return { orderId: `ORD-${Date.now()}`, total: amount };
   })
   .subWorkflow('payment', (ctx) => ({
     // Map parent context to child input
-    cardToken: ctx.input.cardToken,
+    cardToken: (ctx.input as { cardToken: string }).cardToken,
     amount: (ctx.steps['create-order'] as { total: number }).total,
   }))
   .step('confirm', async (ctx) => {
@@ -465,7 +476,8 @@ engine.on('workflow:started', (event) => {
 });
 
 engine.on('step:completed', (event) => {
-  console.log(`Step ${event.step} completed in ${event.executionId}`);
+  const { stepName } = event as StepEvent;
+  console.log(`Step ${stepName} completed in ${event.executionId}`);
 });
 
 engine.on('workflow:failed', (event) => {
@@ -647,7 +659,8 @@ const ChargeResult = z.object({
 
 const flow = new Workflow('validated-order')
   .step('validate', async (ctx) => {
-    return { orderId: ctx.input.orderId, validated: true };
+    const { orderId } = ctx.input as { orderId: string; amount: number };
+    return { orderId, validated: true };
   }, {
     inputSchema: OrderInput,   // validates ctx.input before handler runs
   })
@@ -798,8 +811,9 @@ const orderFlow = new Workflow<{ orderId: string; items: Item[]; amount: number 
     return { reservationId };
   }, {
     retry: 3, // Retry on transient inventory service errors
-    compensate: async () => {
-      await inventory.releaseBatch(ctx.steps['reserve-inventory'].reservationId);
+    compensate: async (ctx) => {
+      const { reservationId } = ctx.steps['reserve-inventory'] as { reservationId: string };
+      await inventory.releaseBatch(reservationId);
     },
   })
   .step('process-payment', async (ctx) => {
@@ -813,8 +827,9 @@ const orderFlow = new Workflow<{ orderId: string; items: Item[]; amount: number 
   }, {
     retry: 5,     // Payment gateway can be flaky
     timeout: 15000, // 15s timeout per attempt
-    compensate: async () => {
-      await stripe.refunds.create({ charge: ctx.steps['process-payment'].chargeId });
+    compensate: async (ctx) => {
+      const { chargeId } = ctx.steps['process-payment'] as { chargeId: string };
+      await stripe.refunds.create({ charge: chargeId });
     },
   })
   .step('create-shipment', async (ctx) => {
@@ -827,8 +842,9 @@ const orderFlow = new Workflow<{ orderId: string; items: Item[]; amount: number 
     .step('send-confirmation', async (ctx) => {
       const payment = ctx.steps['process-payment'] as { chargeId: string; receiptUrl: string };
       const shipment = ctx.steps['create-shipment'] as { trackingNumber: string; carrier: string };
+      const { email } = ctx.input as { email: string };
       await mailer.send('order-confirmation', {
-        to: ctx.input.email,
+        to: email,
         receiptUrl: payment.receiptUrl,
         tracking: shipment.trackingNumber,
       });
@@ -952,14 +968,15 @@ const kycFlow = new Workflow('kyc-onboarding')
     const user = await db.users.create({ email, name, country, status: 'pending' });
     return { userId: user.id };
   }, {
-    compensate: async () => {
+    compensate: async (ctx) => {
       // Delete the account if verification fails
-      await db.users.delete(ctx.steps['create-account'].userId);
+      const { userId } = ctx.steps['create-account'] as { userId: string };
+      await db.users.delete(userId);
     },
   })
   .step('risk-assessment', async (ctx) => {
-    const { country, email } = ctx.input as OnboardingInput;
-    const score = await riskEngine.assess({ country, email, ip: ctx.input.ip });
+    const { country, email, ip } = ctx.input as OnboardingInput;
+    const score = await riskEngine.assess({ country, email, ip });
 
     return {
       score,
@@ -1061,7 +1078,7 @@ const etlFlow = new Workflow('daily-etl')
 
     return {
       pipeline: 'daily-etl',
-      date: ctx.input.date,
+      date: (ctx.input as { date: string }).date,
       metrics: {
         sourcesProcessed: extract.sources,
         rawRecords: extract.totalRecords,
@@ -1082,14 +1099,17 @@ const engine = new Engine({ embedded: true, dataPath: './data/etl.db' });
 
 // Observability: track step durations and failures
 engine.on('step:started', (e) => {
-  metrics.startTimer(`etl.${e.step}.duration`);
+  const { stepName } = e as StepEvent;
+  metrics.startTimer(`etl.${stepName}.duration`);
 });
 engine.on('step:completed', (e) => {
-  metrics.stopTimer(`etl.${e.step}.duration`);
+  const { stepName } = e as StepEvent;
+  metrics.stopTimer(`etl.${stepName}.duration`);
   metrics.increment('etl.steps.completed');
 });
 engine.on('step:retry', (e) => {
-  logger.warn(`Retrying ${e.step}, attempt ${e.attempt}: ${e.error}`);
+  const { stepName, attempt, error } = e as StepEvent;
+  logger.warn(`Retrying ${stepName}, attempt ${attempt}: ${error}`);
 });
 engine.on('workflow:failed', (e) => {
   alerting.pagerduty(`ETL pipeline failed: ${e.executionId}`);

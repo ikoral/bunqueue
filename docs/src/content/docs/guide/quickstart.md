@@ -259,7 +259,8 @@ import { Workflow, Engine } from 'bunqueue/workflow';
 
 const flow = new Workflow('order-pipeline')
   .step('validate', async (ctx) => {
-    return { orderId: ctx.input.orderId };
+    const { orderId } = ctx.input as { orderId: string };
+    return { orderId };
   })
   .step('charge', async (ctx) => {
     return { txId: 'tx_123' };

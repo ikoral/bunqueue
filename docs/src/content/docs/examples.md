@@ -639,7 +639,8 @@ const orderFlow = new Workflow('order-pipeline')
     },
   })
   .step('charge-payment', async (ctx) => {
-    const txId = await stripe.charge(ctx.input.amount);
+    const { amount } = ctx.input as { amount: number };
+    const txId = await stripe.charge(amount);
     return { txId };
   }, {
     compensate: async () => {
@@ -674,7 +675,8 @@ const expenseFlow = new Workflow('expense-approval')
   .step('process', async (ctx) => {
     const decision = ctx.signals['manager-decision'] as { approved: boolean };
     if (!decision.approved) return { status: 'rejected' };
-    await accounting.reimburse(ctx.input.amount);
+    const { amount } = ctx.input as { amount: number };
+    await accounting.reimburse(amount);
     return { status: 'paid' };
   });
 
@@ -776,7 +778,8 @@ const paymentFlow = new Workflow('payment')
 // Parent order workflow calls payment as sub-workflow
 const orderFlow = new Workflow('order')
   .step('create', async (ctx) => {
-    return { orderId: `ORD-${Date.now()}`, total: ctx.input.amount };
+    const { amount } = ctx.input as { amount: number };
+    return { orderId: `ORD-${Date.now()}`, total: amount };
   })
   .subWorkflow('payment', (ctx) => ({
     amount: (ctx.steps['create'] as { total: number }).total,
@@ -815,7 +818,8 @@ const engine = new Engine({ embedded: true });
 
 // Monitor retries and failures
 engine.on('step:retry', (e) => {
-  console.warn(`Retrying ${e.step} (attempt ${e.attempt}): ${e.error}`);
+  const { stepName, attempt, error } = e as StepEvent;
+  console.warn(`Retrying ${stepName} (attempt ${attempt}): ${error}`);
 });
 engine.on('workflow:failed', (e) => {
   alerting.send(`Workflow ${e.workflowName} failed: ${e.executionId}`);
