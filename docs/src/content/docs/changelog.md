@@ -10,7 +10,7 @@ head:
 
 All notable changes to bunqueue are documented here.
 
-## [2.8.0] - 2026-04-10
+## [2.7.2] - 2026-04-10
 
 ### Added
 - **Loop control flow** — New `.doUntil(condition, builder, opts?)` and `.doWhile(condition, builder, opts?)` DSL methods for conditional iteration. `doUntil` runs steps then checks condition (do...until), `doWhile` checks condition first (while...do). Both support `maxIterations` safety limit (default: 100).
