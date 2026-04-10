@@ -1,6 +1,6 @@
 ---
 title: "Workflow Engine — Multi-Step Orchestration for Bun"
-description: "Orchestrate multi-step workflows with saga compensation, conditional branching, human-in-the-loop signals, and step timeouts. Zero infrastructure — no Redis, no Temporal, no cloud service. TypeScript DSL built on bunqueue."
+description: "Orchestrate multi-step workflows with saga compensation, step retry, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, observability events, and cleanup/archival. Zero infrastructure — no Redis, no Temporal, no cloud service. TypeScript DSL built on bunqueue."
 head:
   - tag: meta
     attrs:
@@ -9,10 +9,10 @@ head:
   - tag: meta
     attrs:
       name: keywords
-      content: "workflow engine, orchestration, saga pattern, compensation, branching, human in the loop, step functions, temporal alternative, inngest alternative, bun workflow, typescript workflow, multi-step process, approval workflow, pipeline orchestration"
+      content: "workflow engine, orchestration, saga pattern, compensation, branching, parallel steps, step retry, exponential backoff, nested workflow, sub-workflow, signal timeout, observability, cleanup, archival, human in the loop, step functions, temporal alternative, inngest alternative, bun workflow, typescript workflow, multi-step process, approval workflow, pipeline orchestration"
 ---
 
-Orchestrate multi-step business processes with a fluent, chainable DSL. Saga compensation, conditional branching, human-in-the-loop signals, step timeouts — all built on top of bunqueue's Queue and Worker. No new infrastructure, no external services, no YAML.
+Orchestrate multi-step business processes with a fluent, chainable DSL. Saga compensation, step retry with exponential backoff, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, typed observability events, and cleanup/archival — all built on top of bunqueue's Queue and Worker. No new infrastructure, no external services, no YAML.
 
 ```
 validate ──→ reserve stock ──→ charge payment ──→ send confirmation
@@ -96,7 +96,7 @@ const run = await engine.start('order-pipeline', {
 
 // Check status
 const exec = engine.getExecution(run.id);
-console.log(exec.state);  // 'completed' | 'running' | 'failed' | 'waiting'
+console.log(exec.state);  // 'running' | 'completed' | 'failed' | 'waiting' | 'compensating'
 ```
 
 :::tip
@@ -582,7 +582,7 @@ const exec = engine.getExecution(run.id);
 
 exec.id;            // 'wf_abc123' — unique execution ID
 exec.workflowName;  // 'order-pipeline'
-exec.state;         // 'running' | 'completed' | 'failed' | 'waiting'
+exec.state;         // 'running' | 'completed' | 'failed' | 'waiting' | 'compensating'
 exec.input;         // { orderId: 'ORD-1', amount: 99.99 }
 exec.steps;         // Step-by-step status and results:
 // {
@@ -632,8 +632,8 @@ const orderFlow = new Workflow<{ orderId: string; items: Item[]; amount: number 
     const reservationId = await inventory.reserveBatch(items);
     return { reservationId };
   }, {
+    retry: 3, // Retry on transient inventory service errors
     compensate: async () => {
-      // Release all reserved items if payment or shipping fails
       await inventory.releaseBatch(ctx.steps['reserve-inventory'].reservationId);
     },
   })
@@ -646,8 +646,9 @@ const orderFlow = new Workflow<{ orderId: string; items: Item[]; amount: number 
     });
     return { chargeId: charge.id, receiptUrl: charge.receipt_url };
   }, {
+    retry: 5,     // Payment gateway can be flaky
+    timeout: 15000, // 15s timeout per attempt
     compensate: async () => {
-      // Full refund if shipping step fails
       await stripe.refunds.create({ charge: ctx.steps['process-payment'].chargeId });
     },
   })
@@ -657,27 +658,36 @@ const orderFlow = new Workflow<{ orderId: string; items: Item[]; amount: number 
     const shipment = await shipping.create({ orderId, items, reservationId });
     return { trackingNumber: shipment.tracking, carrier: shipment.carrier };
   })
-  .step('send-confirmation', async (ctx) => {
-    const payment = ctx.steps['process-payment'] as { chargeId: string; receiptUrl: string };
-    const shipment = ctx.steps['create-shipment'] as { trackingNumber: string; carrier: string };
-
-    await mailer.send('order-confirmation', {
-      to: ctx.input.email,
-      orderId: ctx.input.orderId,
-      receiptUrl: payment.receiptUrl,
-      tracking: shipment.trackingNumber,
-      carrier: shipment.carrier,
-    });
-
-    return { notified: true };
-  });
+  .parallel((w) => w
+    .step('send-confirmation', async (ctx) => {
+      const payment = ctx.steps['process-payment'] as { chargeId: string; receiptUrl: string };
+      const shipment = ctx.steps['create-shipment'] as { trackingNumber: string; carrier: string };
+      await mailer.send('order-confirmation', {
+        to: ctx.input.email,
+        receiptUrl: payment.receiptUrl,
+        tracking: shipment.trackingNumber,
+      });
+      return { emailSent: true };
+    })
+    .step('notify-warehouse', async (ctx) => {
+      const { reservationId } = ctx.steps['reserve-inventory'] as { reservationId: string };
+      await warehouse.notifyShipment(reservationId);
+      return { warehouseNotified: true };
+    })
+    .step('update-analytics', async (ctx) => {
+      const { amount, orderId } = ctx.steps['validate-order'] as ValidatedOrder;
+      await analytics.trackPurchase({ orderId, amount });
+      return { tracked: true };
+    })
+  );
 ```
 
 **What happens on failure:**
 
-- If `process-payment` fails → `reserve-inventory` compensation runs (items released)
+- If `process-payment` fails after 5 retries → `reserve-inventory` compensation runs (items released)
 - If `create-shipment` fails → `process-payment` compensation runs (refund), then `reserve-inventory` compensation runs (items released)
-- If `send-confirmation` fails → full rollback: refund payment, release inventory
+- If any parallel notification step fails → full rollback: refund payment, release inventory
+- The `parallel()` block sends email, notifies warehouse, and tracks analytics concurrently — much faster than sequential
 
 ### CI/CD Deployment Pipeline with Approval Gate
 
@@ -722,7 +732,7 @@ const deployFlow = new Workflow('deploy-pipeline')
       await k8s.rollback('staging');
     },
   })
-  .waitFor('production-approval')
+  .waitFor('production-approval', { timeout: 48 * 60 * 60 * 1000 }) // 48h timeout
   .step('deploy-production', async (ctx) => {
     const approval = ctx.signals['production-approval'] as {
       approver: string;
@@ -896,6 +906,38 @@ const etlFlow = new Workflow('daily-etl')
       },
     };
   });
+```
+
+### Putting It Together: ETL with Observability
+
+Wire up the ETL pipeline with monitoring and cleanup:
+
+```typescript
+const engine = new Engine({ embedded: true, dataPath: './data/etl.db' });
+
+// Observability: track step durations and failures
+engine.on('step:started', (e) => {
+  metrics.startTimer(`etl.${e.step}.duration`);
+});
+engine.on('step:completed', (e) => {
+  metrics.stopTimer(`etl.${e.step}.duration`);
+  metrics.increment('etl.steps.completed');
+});
+engine.on('step:retry', (e) => {
+  logger.warn(`Retrying ${e.step}, attempt ${e.attempt}: ${e.error}`);
+});
+engine.on('workflow:failed', (e) => {
+  alerting.pagerduty(`ETL pipeline failed: ${e.executionId}`);
+});
+
+engine.register(etlFlow);
+
+// Run daily via cron
+await engine.start('daily-etl', { date: '2026-04-10', sources: ['clickstream', 'transactions'] });
+
+// Cleanup: archive completed runs older than 30 days, delete archived after 90 days
+engine.archive(30 * 24 * 60 * 60 * 1000, ['completed']);
+engine.cleanup(90 * 24 * 60 * 60 * 1000);
 ```
 
 ## How It Works Internally
