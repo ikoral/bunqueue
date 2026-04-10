@@ -9,7 +9,9 @@ import type {
   CompensateHandler,
   StepOptions,
   StepDefinition,
+  StepContext,
   BranchCondition,
+  SubWorkflowInputMapper,
 } from './types';
 
 export class Workflow<TInput = unknown> {
@@ -59,6 +61,30 @@ export class Workflow<TInput = unknown> {
     return this;
   }
 
+  /** Run multiple steps in parallel */
+  parallel(builder: (w: Workflow<TInput>) => Workflow<TInput>): this {
+    const sub = new Workflow<TInput>(`${this.name}:parallel`);
+    builder(sub);
+    const steps: StepDefinition[] = sub.nodes
+      .filter((n): n is { type: 'step'; def: StepDefinition } => n.type === 'step')
+      .map((n) => n.def);
+    if (steps.length === 0) {
+      throw new Error('parallel() requires at least one step');
+    }
+    this.nodes.push({ type: 'parallel', def: { steps } });
+    return this;
+  }
+
+  /** Call another registered workflow as a step */
+  subWorkflow(name: string, inputMapper: (ctx: StepContext<TInput>) => unknown): this {
+    this.nodes.push({
+      type: 'subWorkflow',
+      name,
+      inputMapper: inputMapper as SubWorkflowInputMapper,
+    });
+    return this;
+  }
+
   /** Wait for an external signal before continuing */
   waitFor(event: string, options?: { timeout?: number }): this {
     this.nodes.push({
@@ -79,6 +105,10 @@ export class Workflow<TInput = unknown> {
         for (const steps of node.def.paths.values()) {
           for (const s of steps) names.push(s.name);
         }
+      } else if (node.type === 'parallel') {
+        for (const s of node.def.steps) names.push(s.name);
+      } else if (node.type === 'subWorkflow') {
+        names.push(`sub:${node.name}`);
       }
     }
     return names;

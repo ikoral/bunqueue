@@ -130,6 +130,62 @@ await engine.signal(runId, 'qa-approval', { approvedBy: 'qa-lead' });
 
 The workflow resumes exactly where it left off. Execution state is persisted in SQLite, so it survives process restarts.
 
+## Step Retry, Parallel Steps & Sub-Workflows
+
+Steps retry automatically with exponential backoff:
+
+```typescript
+.step('call-api', async () => {
+  const res = await fetch('https://api.flaky.com/data');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.json();
+}, { retry: 5, timeout: 10000 })
+```
+
+Run independent steps concurrently with `.parallel()`:
+
+```typescript
+.parallel((w) => w
+  .step('fetch-orders', async () => await db.orders.list())
+  .step('fetch-prefs', async () => await db.preferences.get())
+  .step('fetch-activity', async () => await analytics.recent())
+)
+```
+
+Compose workflows by nesting them with `.subWorkflow()`:
+
+```typescript
+const parent = new Workflow('order')
+  .step('create', async () => ({ total: 99 }))
+  .subWorkflow('payment', (ctx) => ({
+    amount: ctx.steps['create'].total,
+  }))
+  .step('confirm', async (ctx) => {
+    const result = ctx.steps['sub:payment'];
+    return { done: true };
+  });
+```
+
+## Observability & Lifecycle Events
+
+Subscribe to typed events for monitoring:
+
+```typescript
+engine.on('step:failed', (e) => alerting.send(e));
+engine.onAny((e) => metrics.increment(`workflow.${e.type}`));
+```
+
+Eleven event types cover the full lifecycle: `workflow:started`, `step:completed`, `step:retry`, `signal:timeout`, and more.
+
+## Cleanup & Archival
+
+Archive old executions to keep your SQLite lean:
+
+```typescript
+engine.archive(30 * 24 * 60 * 60 * 1000); // Archive 30-day-old executions
+engine.cleanup(7 * 24 * 60 * 60 * 1000);  // Delete 7-day-old executions
+```
+
 ## How It Works Internally
 
 The workflow engine is built on top of bunqueue's existing Queue and Worker:
@@ -165,6 +221,6 @@ import { Workflow, Engine } from 'bunqueue/workflow';
 
 Read the full guide: [Workflow Engine Documentation](/guide/workflow/)
 
-<Aside type="tip" title="40+ workflow tests">
-The workflow engine ships with 40+ tests covering linear flows, branching, compensation, signals, timeouts, and concurrent execution — in both embedded and TCP modes.
+<Aside type="tip" title="60+ workflow tests">
+The workflow engine ships with 60+ tests covering linear flows, branching, compensation, signals, timeouts, retry, parallel steps, nested workflows, observability, and archival — in both embedded and TCP modes.
 </Aside>

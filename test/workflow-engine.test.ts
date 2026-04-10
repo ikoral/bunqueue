@@ -107,7 +107,7 @@ describe('Workflow Engine', () => {
       })
       .step('fail-step', async () => {
         throw new Error('boom');
-      });
+      }, { retry: 1 });
 
     engine = new Engine({ embedded: true });
     engine.register(flow);

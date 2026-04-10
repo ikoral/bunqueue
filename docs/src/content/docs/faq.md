@@ -83,7 +83,7 @@ head:
             "name": "What is the Workflow Engine?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "The Workflow Engine is a built-in multi-step orchestration system. It supports saga compensation (automatic rollback), conditional branching, human-in-the-loop signals, and step timeouts — all without external services like Temporal or Inngest."
+              "text": "The Workflow Engine is a built-in multi-step orchestration system. It supports saga compensation, conditional branching, parallel steps, step retry with exponential backoff, nested sub-workflows, signal timeouts, typed observability events, and cleanup/archival — all without external services like Temporal or Inngest."
             }
           },
           {
@@ -91,7 +91,7 @@ head:
             "name": "What's the difference between Flow and Workflow?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "FlowProducer creates parent-child job dependencies (fan-out/fan-in). The Workflow Engine orchestrates sequential multi-step processes with saga compensation, branching, and human approval gates. Use Flow for job DAGs, Workflow for business processes."
+              "text": "FlowProducer creates parent-child job dependencies (fan-out/fan-in). The Workflow Engine orchestrates multi-step processes with saga compensation, branching, parallel steps, retry, nested workflows, and human approval gates. Use Flow for job DAGs, Workflow for business processes."
             }
           }
         ]
@@ -415,7 +415,12 @@ await queue.addBulk(jobs.map(j => ({
 The Workflow Engine is a built-in multi-step orchestration system for defining sequential processes with:
 - **Saga compensation** — automatic rollback on failure
 - **Conditional branching** — route execution based on runtime data
-- **Human-in-the-loop** — pause and wait for external signals
+- **Parallel steps** — run independent steps concurrently via `.parallel()`
+- **Step retry** — automatic retry with exponential backoff and jitter
+- **Human-in-the-loop** — pause and wait for external signals, with optional timeout
+- **Nested workflows** — compose workflows with `.subWorkflow()`
+- **Observability** — typed event emitter with 11 event types
+- **Cleanup & archival** — manage execution history with cleanup/archive
 - **Step timeouts** — per-step timeout configuration
 
 No Temporal, no Inngest, no cloud service required.
@@ -426,11 +431,15 @@ They solve different problems:
 
 | | FlowProducer | Workflow Engine |
 |---|---|---|
-| **Pattern** | Parent-child job DAG | Sequential step pipeline |
+| **Pattern** | Parent-child job DAG | Sequential/parallel step pipeline |
 | **Use case** | Fan-out/fan-in, dependencies | Business processes, approvals |
 | **Rollback** | No | Saga compensation |
 | **Branching** | No | Conditional paths |
-| **Human input** | No | waitFor signals |
+| **Parallel** | Via job tree | `.parallel()` with `Promise.allSettled` |
+| **Retry** | Job-level | Step-level with exponential backoff |
+| **Human input** | No | `waitFor` signals with timeout |
+| **Composition** | Nested trees | `.subWorkflow()` |
+| **Observability** | Queue events | 11 typed workflow events |
 
 Use `FlowProducer` when you need parallel job trees with dependencies. Use `Workflow` when you need ordered steps with rollback, branching, or human decisions.
 

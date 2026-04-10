@@ -112,7 +112,7 @@ async function test3_compensation() {
       }, { compensate: async () => { log.push('refund'); } })
       .step('explode', async () => {
         throw new Error('Boom');
-      });
+      }, { retry: 1 });
 
     engine = new Engine({ embedded: true });
     engine.register(flow);
@@ -225,7 +225,7 @@ async function test6_stepTimeout() {
       .step('slow', async () => {
         await Bun.sleep(5000);
         return { done: true };
-      }, { timeout: 200 });
+      }, { timeout: 200, retry: 1 });
 
     engine = new Engine({ embedded: true });
     engine.register(flow);
@@ -298,6 +298,210 @@ async function test7_ecommerceFlow() {
   }
 }
 
+async function test8_stepRetry() {
+  console.log('\n8. Step retry with backoff...');
+  try {
+    let attempts = 0;
+
+    const flow = new Workflow('emb-retry')
+      .step('flaky', async () => {
+        attempts++;
+        if (attempts < 3) throw new Error(`fail #${attempts}`);
+        return { ok: true };
+      }, { retry: 3 });
+
+    engine = new Engine({ embedded: true });
+    engine.register(flow);
+
+    const run = await engine.start('emb-retry');
+    await Bun.sleep(8000);
+
+    const exec = engine.getExecution(run.id);
+    if (!exec || exec.state !== 'completed') { fail('Step retry', `state=${exec?.state}`); await cleanup(); return; }
+    if (attempts !== 3) { fail('Step retry', `attempts=${attempts}, expected 3`); await cleanup(); return; }
+    if (exec.steps['flaky'].attempts !== 3) { fail('Step retry', `recorded attempts=${exec.steps['flaky'].attempts}`); await cleanup(); return; }
+
+    pass('Step retry: succeeded on 3rd attempt after 2 failures');
+    await cleanup();
+  } catch (e) {
+    fail('Step retry', String(e));
+    await cleanup();
+  }
+}
+
+async function test9_parallelSteps() {
+  console.log('\n9. Parallel steps...');
+  try {
+    const startTimes: Record<string, number> = {};
+
+    const flow = new Workflow('emb-parallel')
+      .step('init', async () => ({ ready: true }))
+      .parallel((w) => w
+        .step('task-a', async () => { startTimes['a'] = Date.now(); await Bun.sleep(200); return { a: true }; })
+        .step('task-b', async () => { startTimes['b'] = Date.now(); await Bun.sleep(100); return { b: true }; })
+        .step('task-c', async () => { startTimes['c'] = Date.now(); await Bun.sleep(150); return { c: true }; })
+      )
+      .step('done', async () => ({ complete: true }));
+
+    engine = new Engine({ embedded: true });
+    engine.register(flow);
+
+    const run = await engine.start('emb-parallel');
+    await Bun.sleep(3000);
+
+    const exec = engine.getExecution(run.id);
+    if (!exec || exec.state !== 'completed') { fail('Parallel', `state=${exec?.state}`); await cleanup(); return; }
+    if (exec.steps['task-a']?.status !== 'completed') { fail('Parallel', 'task-a not completed'); await cleanup(); return; }
+    if (exec.steps['task-b']?.status !== 'completed') { fail('Parallel', 'task-b not completed'); await cleanup(); return; }
+    if (exec.steps['task-c']?.status !== 'completed') { fail('Parallel', 'task-c not completed'); await cleanup(); return; }
+    if (exec.steps['done']?.status !== 'completed') { fail('Parallel', 'done step not completed'); await cleanup(); return; }
+
+    // Check concurrency: start times should be within 50ms
+    const times = Object.values(startTimes);
+    const spread = Math.max(...times) - Math.min(...times);
+    if (spread > 50) { fail('Parallel', `steps not concurrent, spread=${spread}ms`); await cleanup(); return; }
+
+    pass('Parallel: 3 steps ran concurrently, then continued to next step');
+    await cleanup();
+  } catch (e) {
+    fail('Parallel', String(e));
+    await cleanup();
+  }
+}
+
+async function test10_signalTimeout() {
+  console.log('\n10. Signal timeout...');
+  try {
+    const compensations: string[] = [];
+
+    const flow = new Workflow('emb-sig-timeout')
+      .step('submit', async () => ({ ok: true }), {
+        compensate: async () => { compensations.push('undo-submit'); },
+      })
+      .waitFor('approval', { timeout: 1000 });
+
+    engine = new Engine({ embedded: true });
+    engine.register(flow);
+
+    const run = await engine.start('emb-sig-timeout');
+    await Bun.sleep(5000);
+
+    const exec = engine.getExecution(run.id);
+    if (!exec || exec.state !== 'failed') { fail('Signal timeout', `state=${exec?.state}`); await cleanup(); return; }
+    if (!exec.steps['__waitFor:approval']?.error?.includes('timed out')) {
+      fail('Signal timeout', `error=${exec.steps['__waitFor:approval']?.error}`); await cleanup(); return;
+    }
+    if (!compensations.includes('undo-submit')) { fail('Signal timeout', 'compensation not run'); await cleanup(); return; }
+
+    pass('Signal timeout: workflow failed and compensation ran after timeout');
+    await cleanup();
+  } catch (e) {
+    fail('Signal timeout', String(e));
+    await cleanup();
+  }
+}
+
+async function test11_cleanup() {
+  console.log('\n11. Cleanup / archival...');
+  try {
+    const flow = new Workflow('emb-cleanup').step('do', async () => ({ done: true }));
+
+    engine = new Engine({ embedded: true });
+    engine.register(flow);
+
+    await engine.start('emb-cleanup');
+    await engine.start('emb-cleanup');
+    await engine.start('emb-cleanup');
+    await Bun.sleep(1500);
+
+    const before = engine.listExecutions('emb-cleanup');
+    if (before.length !== 3) { fail('Cleanup', `expected 3 executions, got ${before.length}`); await cleanup(); return; }
+
+    const archived = engine.archive(0);
+    if (archived !== 3) { fail('Cleanup', `archived=${archived}, expected 3`); await cleanup(); return; }
+    if (engine.listExecutions('emb-cleanup').length !== 0) { fail('Cleanup', 'executions not moved'); await cleanup(); return; }
+    if (engine.getArchivedCount() !== 3) { fail('Cleanup', `archive count wrong`); await cleanup(); return; }
+
+    pass('Cleanup: 3 executions archived and removed from main table');
+    await cleanup();
+  } catch (e) {
+    fail('Cleanup', String(e));
+    await cleanup();
+  }
+}
+
+async function test12_observability() {
+  console.log('\n12. Observability (events)...');
+  try {
+    const events: string[] = [];
+
+    const flow = new Workflow('emb-events')
+      .step('a', async () => ({ x: 1 }))
+      .step('b', async () => ({ y: 2 }));
+
+    engine = new Engine({ embedded: true });
+    engine.onAny((e) => events.push(e.type));
+    engine.register(flow);
+
+    await engine.start('emb-events');
+    await Bun.sleep(2000);
+
+    if (!events.includes('workflow:started')) { fail('Observability', 'missing workflow:started'); await cleanup(); return; }
+    if (!events.includes('step:started')) { fail('Observability', 'missing step:started'); await cleanup(); return; }
+    if (!events.includes('step:completed')) { fail('Observability', 'missing step:completed'); await cleanup(); return; }
+    if (!events.includes('workflow:completed')) { fail('Observability', 'missing workflow:completed'); await cleanup(); return; }
+
+    pass('Observability: lifecycle events emitted correctly');
+    await cleanup();
+  } catch (e) {
+    fail('Observability', String(e));
+    await cleanup();
+  }
+}
+
+async function test13_nestedWorkflow() {
+  console.log('\n13. Nested workflows (sub-workflow)...');
+  try {
+    const child = new Workflow('emb-child')
+      .step('validate', async (ctx) => {
+        const input = ctx.input as { amount: number };
+        return { valid: input.amount > 0 };
+      })
+      .step('process', async () => ({ txId: 'tx_nested' }));
+
+    const parent = new Workflow('emb-parent')
+      .step('create', async () => ({ orderId: 'ORD-N', total: 50 }))
+      .subWorkflow('emb-child', (ctx) => ({
+        amount: (ctx.steps['create'] as { total: number }).total,
+      }))
+      .step('confirm', async (ctx) => {
+        const sub = ctx.steps['sub:emb-child'] as Record<string, unknown>;
+        return { confirmed: true, childResult: sub };
+      });
+
+    engine = new Engine({ embedded: true });
+    engine.register(child);
+    engine.register(parent);
+
+    const run = await engine.start('emb-parent');
+    await Bun.sleep(10_000);
+
+    const exec = engine.getExecution(run.id);
+    if (!exec || exec.state !== 'completed') { fail('Nested', `state=${exec?.state}`); await cleanup(); return; }
+    if (exec.steps['sub:emb-child']?.status !== 'completed') { fail('Nested', 'sub-workflow not completed'); await cleanup(); return; }
+    if (exec.steps['confirm']?.status !== 'completed') { fail('Nested', 'confirm not completed'); await cleanup(); return; }
+
+    const subResult = exec.steps['sub:emb-child'].result as Record<string, unknown>;
+    if (!(subResult['validate'] as { valid: boolean }).valid) { fail('Nested', 'child validate wrong'); await cleanup(); return; }
+
+    pass('Nested: parent called child workflow, results passed back');
+    await cleanup();
+  } catch (e) {
+    fail('Nested', String(e));
+    await cleanup();
+  }
+}
+
 async function main() {
   console.log('=== Test Workflow Engine (Embedded) ===');
 
@@ -308,6 +512,12 @@ async function main() {
   await test5_concurrentExecutions();
   await test6_stepTimeout();
   await test7_ecommerceFlow();
+  await test8_stepRetry();
+  await test9_parallelSteps();
+  await test10_signalTimeout();
+  await test11_cleanup();
+  await test12_observability();
+  await test13_nestedWorkflow();
 
   // Summary
   console.log('\n=== Summary ===');

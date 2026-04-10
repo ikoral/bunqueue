@@ -313,7 +313,7 @@ describe('Workflow Engine - Realistic Scenarios', () => {
       .step('slow', async () => {
         await new Promise((r) => setTimeout(r, 5000));
         return { done: true };
-      }, { timeout: 200 });
+      }, { timeout: 200, retry: 1 });
 
     engine = new Engine({ embedded: true });
     engine.register(flow);

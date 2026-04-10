@@ -30,6 +30,12 @@ validate ──→ reserve stock ──→ charge payment ──→ send confirm
 | **Saga compensation** | Built-in | Manual | Manual | Manual | Manual |
 | **Human-in-the-loop** | `.waitFor()` + `signal()` | Signals API | `step.waitForEvent()` | Callback tasks | Waitpoint tokens |
 | **Branching** | `.branch().path()` | Code-level if/else | Code-level if/else | Choice state (JSON) | Code-level if/else |
+| **Parallel steps** | `.parallel()` | `Promise.all` | `step.run()` in parallel | Parallel state | Manual |
+| **Step retry** | Built-in (exponential backoff) | Built-in | Built-in | Built-in | Built-in |
+| **Signal timeout** | `.waitFor(event, { timeout })` | `Workflow.await` | `step.waitForEvent` timeout | Heartbeat timeout | Manual |
+| **Nested workflows** | `.subWorkflow()` | Child workflows | `step.invoke()` | Nested state machines | Manual |
+| **Observability** | Typed event emitter | Temporal UI | Inngest dashboard | CloudWatch | Dashboard |
+| **Cleanup/archival** | Built-in SQLite archive | Manual | Auto (cloud) | Auto (cloud) | Manual |
 | **Self-hosted** | Yes (zero-config) | Yes (complex) | No | No | Yes (complex) |
 | **Pricing** | Free (MIT) | Free self-hosted / Cloud $$ | Free tier, then per-execution | Per state transition | Free tier, then $50/mo+ |
 | **Setup time** | `bun add bunqueue` | Hours to days | Minutes (cloud) | Minutes (if on AWS) | 30min+ self-hosted |
@@ -308,6 +314,219 @@ const flow = new Workflow('api-aggregation')
 
 If a step exceeds its timeout, it fails with a `"timed out"` error. If the step has a compensate handler, compensation runs for all previously completed steps.
 
+### Step Retry with Backoff
+
+Steps can retry automatically with exponential backoff and jitter:
+
+```typescript
+const flow = new Workflow('resilient-pipeline')
+  .step('call-api', async () => {
+    const res = await fetch('https://api.external.com/data');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  }, {
+    retry: 5,       // Max 5 attempts (default: 3)
+    timeout: 10000,  // 10s per attempt
+  })
+  .step('process', async (ctx) => {
+    const data = ctx.steps['call-api'] as ApiResponse;
+    return { processed: true };
+  });
+```
+
+**Backoff formula:** `min(500ms * 2^attempt + jitter, 30s)`. The first retry waits ~500ms, the second ~1s, the third ~2s, capping at 30 seconds. Jitter prevents thundering herds.
+
+The execution tracks attempt count in `exec.steps['step-name'].attempts`. If all retries are exhausted, the step fails and compensation runs.
+
+:::tip
+Set `retry: 1` on steps that intentionally throw errors (like validation) to avoid unnecessary retries.
+:::
+
+### Parallel Steps
+
+Run multiple steps concurrently with `.parallel()`:
+
+```typescript
+const flow = new Workflow('data-enrichment')
+  .step('fetch-user', async (ctx) => {
+    return await db.users.find(ctx.input.userId);
+  })
+  .parallel((w) => w
+    .step('fetch-orders', async (ctx) => {
+      return await db.orders.findByUser(ctx.input.userId);
+    })
+    .step('fetch-preferences', async (ctx) => {
+      return await db.preferences.get(ctx.input.userId);
+    })
+    .step('fetch-activity', async (ctx) => {
+      return await analytics.getRecent(ctx.input.userId);
+    })
+  )
+  .step('merge', async (ctx) => {
+    // All parallel step results are available
+    const orders = ctx.steps['fetch-orders'];
+    const prefs = ctx.steps['fetch-preferences'];
+    const activity = ctx.steps['fetch-activity'];
+    return { profile: { orders, prefs, activity } };
+  });
+```
+
+**How it works:**
+
+- All steps inside `.parallel()` run via `Promise.allSettled`
+- Results from each parallel step are saved to `exec.steps` like normal steps
+- If any parallel step fails, the entire parallel group fails and compensation runs
+- Steps after the parallel block wait for all parallel steps to finish
+
+### Signal Timeout
+
+Add a timeout to `waitFor` so workflows don't hang indefinitely:
+
+```typescript
+const flow = new Workflow('time-limited-approval')
+  .step('submit', async (ctx) => {
+    await slack.notify('#approvals', `Expense $${ctx.input.amount} needs review`);
+    return { submitted: true };
+  })
+  .waitFor('manager-approval', { timeout: 86400000 }) // 24 hours
+  .step('process', async (ctx) => {
+    const decision = ctx.signals['manager-approval'] as { approved: boolean };
+    return { status: decision.approved ? 'paid' : 'rejected' };
+  });
+```
+
+If the signal doesn't arrive within the timeout:
+
+1. The execution state becomes `'failed'`
+2. The error is stored in `exec.steps['__waitFor:manager-approval'].error`
+3. Compensation runs for all previously completed steps
+4. A `signal:timeout` event is emitted
+
+### Nested Workflows (Sub-Workflows)
+
+Compose workflows by calling child workflows from a parent:
+
+```typescript
+const paymentFlow = new Workflow('payment')
+  .step('validate-card', async (ctx) => {
+    const { cardToken, amount } = ctx.input as { cardToken: string; amount: number };
+    return { valid: true, amount };
+  })
+  .step('charge', async (ctx) => {
+    return { txId: `tx_${Date.now()}` };
+  }, {
+    compensate: async () => { await payments.refund(); },
+  });
+
+const orderFlow = new Workflow('order')
+  .step('create-order', async (ctx) => {
+    return { orderId: `ORD-${Date.now()}`, total: ctx.input.amount };
+  })
+  .subWorkflow('payment', (ctx) => ({
+    // Map parent context to child input
+    cardToken: ctx.input.cardToken,
+    amount: (ctx.steps['create-order'] as { total: number }).total,
+  }))
+  .step('confirm', async (ctx) => {
+    // Child results available under 'sub:<workflow-name>'
+    const paymentResult = ctx.steps['sub:payment'] as Record<string, unknown>;
+    return { confirmed: true, payment: paymentResult };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(paymentFlow); // Register child first
+engine.register(orderFlow);
+
+await engine.start('order', { amount: 99, cardToken: 'tok_abc' });
+```
+
+**Key behaviors:**
+
+- The parent workflow pauses while the child executes
+- Child workflow results are stored under `ctx.steps['sub:<child-name>']`
+- If the child fails, the parent fails too (and parent compensation runs)
+- The input mapper function receives the parent's context, allowing you to pass any data from parent steps to the child
+
+### Observability (Events)
+
+Subscribe to typed workflow events for monitoring, logging, and debugging:
+
+```typescript
+const engine = new Engine({ embedded: true });
+
+// Listen to specific event types
+engine.on('workflow:started', (event) => {
+  console.log(`Workflow ${event.workflowName} started: ${event.executionId}`);
+});
+
+engine.on('step:completed', (event) => {
+  console.log(`Step ${event.step} completed in ${event.executionId}`);
+});
+
+engine.on('workflow:failed', (event) => {
+  alerting.send(`Workflow ${event.workflowName} failed: ${event.executionId}`);
+});
+
+// Listen to ALL events
+engine.onAny((event) => {
+  metrics.increment(`workflow.${event.type}`, {
+    workflow: event.workflowName,
+  });
+});
+
+// Or pass onEvent in constructor
+const engine2 = new Engine({
+  embedded: true,
+  onEvent: (event) => logger.info(event),
+});
+```
+
+**Available event types:**
+
+| Event | When |
+|---|---|
+| `workflow:started` | `engine.start()` is called |
+| `workflow:completed` | All steps finished successfully |
+| `workflow:failed` | A step threw after retries exhausted |
+| `workflow:waiting` | Execution paused at a `waitFor` |
+| `workflow:compensating` | Compensation is running |
+| `step:started` | A step begins executing |
+| `step:completed` | A step finished successfully |
+| `step:failed` | A step threw an error |
+| `step:retry` | A step is about to retry after failure |
+| `signal:received` | `engine.signal()` delivered a signal |
+| `signal:timeout` | A `waitFor` timed out |
+
+Use `engine.off(type, listener)` and `engine.offAny(listener)` to unsubscribe.
+
+### Cleanup & Archival
+
+Manage execution history with built-in cleanup and archival:
+
+```typescript
+const engine = new Engine({ embedded: true });
+
+// Delete old completed/failed executions (older than 7 days)
+const deleted = engine.cleanup(7 * 24 * 60 * 60 * 1000);
+console.log(`Deleted ${deleted} executions`);
+
+// Or selectively clean only completed executions
+engine.cleanup(7 * 24 * 60 * 60 * 1000, ['completed']);
+
+// Archive instead of delete (moves to archive table)
+const archived = engine.archive(30 * 24 * 60 * 60 * 1000); // 30 days
+console.log(`Archived ${archived} executions`);
+
+// Check archive count
+console.log(`Total archived: ${engine.getArchivedCount()}`);
+```
+
+**Cleanup vs Archive:**
+
+- `cleanup(maxAgeMs, states?)` — **Permanently deletes** executions older than `maxAgeMs`
+- `archive(maxAgeMs, states?)` — **Moves** executions to a separate `workflow_executions_archive` table (transactional, up to 1000 per call)
+- Both accept an optional `states` filter: `['completed']`, `['failed']`, `['completed', 'failed']`, etc.
+
 ## Engine API
 
 ### Constructor
@@ -334,6 +553,7 @@ const engine = new Engine({
   dataPath: './data/wf.db',    // SQLite persistence path
   concurrency: 10,             // Max parallel step executions (default: 5)
   queueName: '__wf:steps',     // Internal queue name (default: '__wf:steps')
+  onEvent: (event) => {},      // Global event listener (optional)
 });
 ```
 
@@ -346,6 +566,13 @@ const engine = new Engine({
 | `engine.getExecution(id)` | `Execution \| null` | Get full execution state by ID. |
 | `engine.listExecutions(name?, state?)` | `Execution[]` | List executions with optional filters. |
 | `engine.signal(id, event, payload?)` | `Promise<void>` | Send a signal to resume a waiting execution. |
+| `engine.on(type, listener)` | `void` | Subscribe to a specific event type. |
+| `engine.onAny(listener)` | `void` | Subscribe to all events. |
+| `engine.off(type, listener)` | `void` | Unsubscribe from a specific event type. |
+| `engine.offAny(listener)` | `void` | Unsubscribe from all events. |
+| `engine.cleanup(maxAgeMs, states?)` | `number` | Delete executions older than `maxAgeMs`. Returns count. |
+| `engine.archive(maxAgeMs, states?)` | `number` | Move old executions to archive table. Returns count. |
+| `engine.getArchivedCount()` | `number` | Count of archived executions. |
 | `engine.close(force?)` | `Promise<void>` | Shut down engine, queue, and worker. |
 
 ### Execution State
@@ -376,6 +603,7 @@ exec.updatedAt;     // 1712700005000
 | `completed` | All steps finished successfully |
 | `failed` | A step threw an error (compensation has run) |
 | `waiting` | Paused at a `waitFor`, waiting for a signal |
+| `compensating` | Compensation handlers are running |
 
 ## Real-World Examples
 
@@ -683,10 +911,12 @@ Workflow DSL (.step / .branch / .waitFor)
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │  Executor                                                │    │
-│  │  • Resolves current node (step / branch / waitFor)       │    │
-│  │  • Runs step handler with timeout                        │    │
+│  │  • Resolves current node (step/branch/parallel/waitFor)  │    │
+│  │  • Runs step handler with timeout + retry (backoff)      │    │
 │  │  • Evaluates branch condition, picks path                │    │
-│  │  • Checks signal availability for waitFor                │    │
+│  │  • Runs parallel steps via Promise.allSettled             │    │
+│  │  • Checks signal availability + timeout for waitFor      │    │
+│  │  • Dispatches sub-workflows, polls until complete         │    │
 │  │  • Runs compensation in reverse on failure               │    │
 │  └──────────────────┬──────────────────────────────────────┘    │
 │                      │                                           │
@@ -707,11 +937,13 @@ Workflow DSL (.step / .branch / .waitFor)
 
 1. **`engine.start()`** creates an `Execution` record in SQLite and enqueues the first step as a job on the internal `__wf:steps` queue
 2. **Worker picks up** the step job. The Executor loads the execution state, resolves the current node
-3. **Step node**: runs the handler (with optional timeout), saves result, enqueues next node
+3. **Step node**: runs the handler with retry + timeout, saves result, enqueues next node
 4. **Branch node**: evaluates the condition function, runs the matching path's steps inline
-5. **WaitFor node**: checks if the signal exists. If not, sets state to `'waiting'` and stops
-6. **`engine.signal()`** stores the signal payload in the execution record and re-enqueues the next step
-7. **On failure**: the Executor walks completed steps in reverse, calling each compensate handler
+5. **Parallel node**: runs all steps via `Promise.allSettled`, saves all results, then advances
+6. **WaitFor node**: checks if the signal exists. If not, sets state to `'waiting'` and schedules a timeout check if configured
+7. **SubWorkflow node**: starts a child execution, polls until it reaches a terminal state, saves child results under `sub:<name>`
+8. **`engine.signal()`** stores the signal payload and re-enqueues the current node
+9. **On failure**: the Executor walks completed steps in reverse, calling each compensate handler
 
 Each workflow step is a regular bunqueue job. You get all of bunqueue's features for free: SQLite persistence, concurrency control, and monitoring via the dashboard.
 

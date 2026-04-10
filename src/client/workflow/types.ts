@@ -51,11 +51,21 @@ export interface BranchDefinition {
   paths: Map<string, StepDefinition[]>;
 }
 
+/** Definition of a parallel step group */
+export interface ParallelDefinition {
+  steps: StepDefinition[];
+}
+
+/** Input mapper for sub-workflows */
+export type SubWorkflowInputMapper = (ctx: StepContext) => unknown;
+
 /** Workflow node (discriminated union) */
 export type WorkflowNode =
   | { type: 'step'; def: StepDefinition }
   | { type: 'branch'; def: BranchDefinition }
-  | { type: 'waitFor'; event: string; timeout?: number };
+  | { type: 'waitFor'; event: string; timeout?: number }
+  | { type: 'parallel'; def: ParallelDefinition }
+  | { type: 'subWorkflow'; name: string; inputMapper: SubWorkflowInputMapper };
 
 /** Execution state */
 export type ExecutionState = 'running' | 'waiting' | 'completed' | 'failed' | 'compensating';
@@ -70,6 +80,7 @@ export interface StepRecord {
   error?: string;
   startedAt?: number;
   completedAt?: number;
+  attempts?: number;
 }
 
 /** Full execution state */
@@ -87,6 +98,54 @@ export interface Execution {
   updatedAt: number;
 }
 
+/** All workflow event types */
+export type WorkflowEventType =
+  | 'step:started'
+  | 'step:completed'
+  | 'step:failed'
+  | 'step:retry'
+  | 'workflow:started'
+  | 'workflow:completed'
+  | 'workflow:failed'
+  | 'workflow:compensating'
+  | 'workflow:waiting'
+  | 'signal:received'
+  | 'signal:timeout';
+
+/** Base event payload */
+export interface WorkflowEvent {
+  type: WorkflowEventType;
+  executionId: string;
+  workflowName: string;
+  timestamp: number;
+}
+
+/** Step-level event payload */
+export interface StepEvent extends WorkflowEvent {
+  stepName: string;
+  result?: unknown;
+  error?: string;
+  attempt?: number;
+  maxAttempts?: number;
+}
+
+/** Workflow lifecycle event payload */
+export interface WorkflowLifecycleEvent extends WorkflowEvent {
+  state: ExecutionState;
+  input?: unknown;
+}
+
+/** Signal event payload */
+export interface SignalEvent extends WorkflowEvent {
+  event: string;
+  payload?: unknown;
+}
+
+/** Event listener function */
+export type WorkflowEventListener = (
+  event: WorkflowEvent | StepEvent | WorkflowLifecycleEvent | SignalEvent
+) => void;
+
 /** Engine configuration */
 export interface EngineOptions {
   embedded?: boolean;
@@ -96,6 +155,8 @@ export interface EngineOptions {
   queueName?: string;
   /** Worker concurrency (default: 5) */
   concurrency?: number;
+  /** Global event listener for observability */
+  onEvent?: WorkflowEventListener;
 }
 
 /** Handle returned from engine.start() */
@@ -109,4 +170,10 @@ export interface StepJobData {
   executionId: string;
   workflowName: string;
   nodeIndex: number;
+}
+
+/** Options for cleanup */
+export interface CleanupOptions {
+  maxAge: number;
+  states?: ExecutionState[];
 }

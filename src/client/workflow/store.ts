@@ -32,6 +32,21 @@ CREATE TABLE IF NOT EXISTS workflow_executions (
   updated_at INTEGER NOT NULL
 )`;
 
+const CREATE_ARCHIVE_TABLE = `
+CREATE TABLE IF NOT EXISTS workflow_executions_archive (
+  id TEXT PRIMARY KEY,
+  workflow_name TEXT NOT NULL,
+  state TEXT NOT NULL,
+  input BLOB,
+  steps BLOB,
+  current_node_index INTEGER NOT NULL DEFAULT 0,
+  resolved_steps BLOB,
+  signals BLOB,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  archived_at INTEGER NOT NULL
+)`;
+
 const CREATE_IDX_NAME = `CREATE INDEX IF NOT EXISTS idx_wf_name ON workflow_executions(workflow_name)`;
 const CREATE_IDX_STATE = `CREATE INDEX IF NOT EXISTS idx_wf_state ON workflow_executions(state)`;
 
@@ -51,6 +66,7 @@ export class WorkflowStore {
     this.db = new Database(dbPath ?? ':memory:', { create: true });
     this.db.run('PRAGMA journal_mode = WAL');
     this.db.run(CREATE_TABLE);
+    this.db.run(CREATE_ARCHIVE_TABLE);
     this.db.run(CREATE_IDX_NAME);
     this.db.run(CREATE_IDX_STATE);
 
@@ -124,6 +140,67 @@ export class WorkflowStore {
       rows = this.stmts.list.all() as Record<string, unknown>[];
     }
     return rows.map((r) => this.rowToExecution(r));
+  }
+
+  /** Delete executions older than maxAge in terminal states */
+  cleanup(maxAgeMs: number, states: string[] = ['completed', 'failed']): number {
+    const cutoff = Date.now() - maxAgeMs;
+    const placeholders = states.map(() => '?').join(',');
+    const stmt = this.db.prepare(
+      `DELETE FROM workflow_executions WHERE updated_at < ? AND state IN (${placeholders})`
+    );
+    const result = stmt.run(cutoff, ...states) as { changes: number };
+    return result.changes;
+  }
+
+  /** Archive executions older than maxAge to the archive table */
+  archive(maxAgeMs: number, states: string[] = ['completed', 'failed']): number {
+    const cutoff = Date.now() - maxAgeMs;
+    const now = Date.now();
+    const placeholders = states.map(() => '?').join(',');
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM workflow_executions WHERE updated_at < ? AND state IN (${placeholders}) LIMIT 1000`
+      )
+      .all(cutoff, ...states) as Record<string, unknown>[];
+
+    if (rows.length === 0) return 0;
+
+    const insertArchive = this.db.prepare(`
+      INSERT OR REPLACE INTO workflow_executions_archive
+      (id, workflow_name, state, input, steps, current_node_index, resolved_steps, signals, created_at, updated_at, archived_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const deleteOriginal = this.db.prepare(`DELETE FROM workflow_executions WHERE id = ?`);
+
+    const tx = this.db.transaction(() => {
+      for (const row of rows) {
+        insertArchive.run(
+          row.id as string,
+          row.workflow_name as string,
+          row.state as string,
+          row.input as Uint8Array,
+          row.steps as Uint8Array,
+          row.current_node_index as number,
+          row.resolved_steps as Uint8Array | null,
+          row.signals as Uint8Array,
+          row.created_at as number,
+          row.updated_at as number,
+          now
+        );
+        deleteOriginal.run(row.id as string);
+      }
+    });
+    tx();
+    return rows.length;
+  }
+
+  /** Get archived execution count */
+  getArchivedCount(): number {
+    const row = this.db
+      .prepare(`SELECT COUNT(*) as cnt FROM workflow_executions_archive`)
+      .get() as { cnt: number };
+    return row.cnt;
   }
 
   close(): void {

@@ -519,7 +519,13 @@ await engine.start('order-pipeline', { orderId: 'ORD-1', amount: 99.99 });
 
 - **Saga pattern** — Compensation handlers run in reverse when a step fails
 - **Branching** — Route to different paths based on runtime conditions
+- **Parallel steps** — Run independent steps concurrently with `.parallel()`
 - **Human-in-the-loop** — `waitFor('event')` pauses execution, `engine.signal()` resumes it
+- **Signal timeout** — `waitFor('event', { timeout })` fails if signal doesn't arrive in time
+- **Step retry** — Automatic retry with exponential backoff and jitter
+- **Nested workflows** — Compose workflows with `.subWorkflow()`, child results passed back
+- **Observability** — Typed event emitter with 11 event types (`engine.on/onAny`)
+- **Cleanup & archival** — `engine.cleanup()` / `engine.archive()` for execution history management
 - **Step timeouts** — Prevent steps from running indefinitely
 - **Context passing** — Each step accesses input and all previous step results
 - **SQLite persistence** — Execution state survives restarts

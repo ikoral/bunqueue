@@ -19,6 +19,7 @@
 
 export { Workflow } from './workflow';
 export { Engine } from './engine';
+export { WorkflowEmitter } from './emitter';
 export type {
   StepContext,
   StepHandler,
@@ -30,4 +31,13 @@ export type {
   StepRecord,
   EngineOptions,
   RunHandle,
+  ParallelDefinition,
+  SubWorkflowInputMapper,
+  CleanupOptions,
+  WorkflowEventType,
+  WorkflowEvent,
+  StepEvent,
+  WorkflowLifecycleEvent,
+  SignalEvent,
+  WorkflowEventListener,
 } from './types';

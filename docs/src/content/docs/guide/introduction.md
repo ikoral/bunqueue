@@ -108,11 +108,11 @@ Best for:
 | Sandboxed workers | ✅ | ✅ |
 | Durable writes | ✅ | ✅ (Redis AOF) |
 | MCP server (AI agents) | ✅ (73 tools) | ❌ |
-| Workflow engine | ✅ (saga, branching, signals) | ❌ |
+| Workflow engine | ✅ (saga, branching, parallel, retry, signals, nested) | ❌ |
 
 ## Workflow Engine
 
-bunqueue includes a built-in workflow engine for multi-step orchestration. Define workflows with a fluent TypeScript DSL — saga compensation, conditional branching, and human-in-the-loop signals. No Temporal, no Inngest, no cloud service required.
+bunqueue includes a built-in workflow engine for multi-step orchestration. Define workflows with a fluent TypeScript DSL — saga compensation, conditional branching, parallel steps, step retry with backoff, nested sub-workflows, signal timeouts, typed observability events, and cleanup/archival. No Temporal, no Inngest, no cloud service required.
 
 ```typescript
 import { Workflow, Engine } from 'bunqueue/workflow';
@@ -121,11 +121,18 @@ const flow = new Workflow('order')
   .step('validate', async (ctx) => { /* ... */ })
   .step('charge', async (ctx) => { /* ... */ }, {
     compensate: async () => { /* auto-rollback on failure */ },
+    retry: 3,
   })
-  .waitFor('approval')
+  .parallel((w) => w
+    .step('notify-warehouse', async () => { /* ... */ })
+    .step('send-email', async () => { /* ... */ })
+  )
+  .waitFor('approval', { timeout: 86400000 })
+  .subWorkflow('payment', (ctx) => ({ amount: 99 }))
   .step('ship', async (ctx) => { /* ... */ });
 
 const engine = new Engine({ embedded: true });
+engine.on('step:retry', (e) => console.warn(e));
 engine.register(flow);
 await engine.start('order', { orderId: 'ORD-1' });
 ```

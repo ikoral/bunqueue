@@ -717,6 +717,114 @@ const kycFlow = new Workflow('kyc')
   .step('activate', async () => ({ active: true }));
 ```
 
+## Workflow: Parallel Data Enrichment
+
+Fetch data from multiple sources concurrently, then merge.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const enrichFlow = new Workflow('user-enrichment')
+  .step('lookup-user', async (ctx) => {
+    const { userId } = ctx.input as { userId: string };
+    return await db.users.find(userId);
+  })
+  .parallel((w) => w
+    .step('fetch-orders', async (ctx) => {
+      const user = ctx.steps['lookup-user'] as { id: string };
+      return await db.orders.findByUser(user.id);
+    })
+    .step('fetch-preferences', async (ctx) => {
+      const user = ctx.steps['lookup-user'] as { id: string };
+      return await db.preferences.get(user.id);
+    })
+    .step('fetch-analytics', async (ctx) => {
+      const user = ctx.steps['lookup-user'] as { id: string };
+      return await analytics.getRecent(user.id);
+    })
+  )
+  .step('build-profile', async (ctx) => {
+    return {
+      user: ctx.steps['lookup-user'],
+      orders: ctx.steps['fetch-orders'],
+      prefs: ctx.steps['fetch-preferences'],
+      activity: ctx.steps['fetch-analytics'],
+    };
+  });
+```
+
+## Workflow: Nested Sub-Workflow
+
+Compose workflows by calling child workflows from a parent.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+// Reusable payment workflow
+const paymentFlow = new Workflow('payment')
+  .step('validate', async (ctx) => {
+    const { amount } = ctx.input as { amount: number };
+    if (amount <= 0) throw new Error('Invalid amount');
+    return { valid: true };
+  })
+  .step('charge', async (ctx) => {
+    return { txId: `tx_${Date.now()}` };
+  }, {
+    compensate: async () => { await payments.refund(); },
+  });
+
+// Parent order workflow calls payment as sub-workflow
+const orderFlow = new Workflow('order')
+  .step('create', async (ctx) => {
+    return { orderId: `ORD-${Date.now()}`, total: ctx.input.amount };
+  })
+  .subWorkflow('payment', (ctx) => ({
+    amount: (ctx.steps['create'] as { total: number }).total,
+  }))
+  .step('confirm', async (ctx) => {
+    const payment = ctx.steps['sub:payment'] as Record<string, unknown>;
+    return { confirmed: true, payment };
+  });
+
+const engine = new Engine({ embedded: true });
+engine.register(paymentFlow);
+engine.register(orderFlow);
+await engine.start('order', { amount: 99.99 });
+```
+
+## Workflow: Retry with Observability
+
+Resilient API calls with monitoring.
+
+```typescript
+import { Workflow, Engine } from 'bunqueue/workflow';
+
+const apiFlow = new Workflow('api-sync')
+  .step('fetch-data', async () => {
+    const res = await fetch('https://api.external.com/data');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  }, { retry: 5, timeout: 10000 })
+  .step('process', async (ctx) => {
+    const data = ctx.steps['fetch-data'] as Record<string, unknown>;
+    await db.sync(data);
+    return { synced: true };
+  });
+
+const engine = new Engine({ embedded: true });
+
+// Monitor retries and failures
+engine.on('step:retry', (e) => {
+  console.warn(`Retrying ${e.step} (attempt ${e.attempt}): ${e.error}`);
+});
+engine.on('workflow:failed', (e) => {
+  alerting.send(`Workflow ${e.workflowName} failed: ${e.executionId}`);
+});
+
+engine.register(apiFlow);
+await engine.start('api-sync');
+```
+
 :::tip[Related]
 - [Workflow Engine Guide](/guide/workflow/) - Full API reference and competitor comparison
 - [Quick Start Tutorial](/guide/quickstart/) - Getting started basics

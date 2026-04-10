@@ -7,8 +7,17 @@ import { Queue } from '../queue/queue';
 import { Worker } from '../worker/worker';
 import { WorkflowStore } from './store';
 import { WorkflowExecutor } from './executor';
+import { WorkflowEmitter } from './emitter';
 import type { Workflow } from './workflow';
-import type { EngineOptions, RunHandle, Execution, ExecutionState, StepJobData } from './types';
+import type {
+  EngineOptions,
+  RunHandle,
+  Execution,
+  ExecutionState,
+  StepJobData,
+  WorkflowEventType,
+  WorkflowEventListener,
+} from './types';
 
 const DEFAULT_QUEUE_NAME = '__wf:steps';
 
@@ -17,6 +26,7 @@ export class Engine {
   private readonly worker: Worker;
   private readonly store: WorkflowStore;
   private readonly executor: WorkflowExecutor;
+  private readonly emitter: WorkflowEmitter;
 
   constructor(opts: EngineOptions = {}) {
     const queueName = opts.queueName ?? DEFAULT_QUEUE_NAME;
@@ -28,7 +38,13 @@ export class Engine {
     });
 
     this.store = new WorkflowStore(opts.dataPath);
-    this.executor = new WorkflowExecutor(this.store, this.queue);
+    this.emitter = new WorkflowEmitter();
+
+    if (opts.onEvent) {
+      this.emitter.onAny(opts.onEvent);
+    }
+
+    this.executor = new WorkflowExecutor(this.store, this.queue, this.emitter);
 
     this.worker = new Worker(
       queueName,
@@ -71,10 +87,54 @@ export class Engine {
     return this.executor.signal(executionId, event, payload);
   }
 
+  // ============ Observability ============
+
+  /** Subscribe to a specific workflow event type */
+  on(type: WorkflowEventType, listener: WorkflowEventListener): this {
+    this.emitter.on(type, listener);
+    return this;
+  }
+
+  /** Subscribe to all workflow events */
+  onAny(listener: WorkflowEventListener): this {
+    this.emitter.onAny(listener);
+    return this;
+  }
+
+  /** Unsubscribe from a specific event type */
+  off(type: WorkflowEventType, listener: WorkflowEventListener): this {
+    this.emitter.off(type, listener);
+    return this;
+  }
+
+  /** Unsubscribe a catch-all listener */
+  offAny(listener: WorkflowEventListener): this {
+    this.emitter.offAny(listener);
+    return this;
+  }
+
+  // ============ Cleanup ============
+
+  /** Remove old completed/failed executions */
+  cleanup(maxAgeMs: number, states?: ExecutionState[]): number {
+    return this.store.cleanup(maxAgeMs, states);
+  }
+
+  /** Archive old executions to a separate table */
+  archive(maxAgeMs: number, states?: ExecutionState[]): number {
+    return this.store.archive(maxAgeMs, states);
+  }
+
+  /** Get archived execution count */
+  getArchivedCount(): number {
+    return this.store.getArchivedCount();
+  }
+
   /** Shut down the engine */
   async close(force = false): Promise<void> {
     await this.worker.close(force);
     this.queue.close();
     this.store.close();
+    this.emitter.removeAllListeners();
   }
 }
