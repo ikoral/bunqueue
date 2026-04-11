@@ -42,7 +42,7 @@
   --sl-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
 
   /* Sizing */
-  --sl-content-width: 50rem;
+  --sl-content-width: 45rem;
   --sl-sidebar-width: 18rem;
 }
 
@@ -355,7 +355,7 @@ hr {
   }
 
   table {
-    min-width: 500px !important;
+    min-width: 600px !important;
     table-layout: auto !important;
   }
 
@@ -364,15 +364,27 @@ hr {
     font-size: 0.875rem;
   }
 
-  /* Mobile code blocks - prevent overflow */
+  /* Mobile: unpin th so headers can wrap, drop uppercase to save space */
+  th {
+    white-space: normal !important;
+    text-transform: none !important;
+    font-size: 0.7rem;
+  }
+
+  /* Scroll shadow hint on wide tables — visually signals more content to the right */
+  .sl-markdown-content > table {
+    box-shadow: inset -12px 0 10px -10px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Mobile code blocks - prevent overflow, readable font size */
   pre {
-    font-size: 0.8rem !important;
+    font-size: 0.85rem !important;
     max-width: 100vw;
     overflow-x: auto;
   }
 
   pre code {
-    font-size: 0.8rem !important;
+    font-size: 0.85rem !important;
   }
 
   /* Mobile content padding */
@@ -509,6 +521,16 @@ hr {
 .sl-markdown-content {
   font-size: 1rem;
   line-height: 1.75;
+}
+
+/* Prevent long URLs from breaking layout on narrow viewports */
+.sl-markdown-content p,
+.sl-markdown-content li {
+  overflow-wrap: break-word;
+}
+
+.sl-markdown-content a {
+  overflow-wrap: anywhere;
 }
 
 .sl-markdown-content > *:first-child {
@@ -1380,5 +1402,29 @@ svg.hp-feature-icon {
 @media (max-width: 420px) {
   .hp-features {
     grid-template-columns: 1fr;
+  }
+
+  /* Small phones (iPhone SE, Android compact): code font fallback */
+  pre,
+  pre code {
+    font-size: 0.8rem !important;
+  }
+}
+
+/* Respect users who prefer reduced motion (WCAG 2.1, iOS Reduce Motion) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .card:hover,
+  .sl-link-card:hover,
+  .sl-link-button[data-variant='primary']:hover {
+    transform: none !important;
   }
 }
