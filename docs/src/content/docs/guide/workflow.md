@@ -57,6 +57,7 @@ validate ──→ reserve stock ──→ charge payment ──→ send confirm
 - **Multi-region HA with automatic failover** — Use Temporal
 - **Serverless-first with zero ops** — Use Inngest
 - **Already running Redis with BullMQ** — Use BullMQ FlowProducer for simple parent-child chains
+- **Crash recovery with auto-resume** — bunqueue does not automatically resume workflows that were `running` when the process crashed. If you need guaranteed exactly-once execution across restarts, use Temporal
 
 ## Quick Start
 
@@ -194,6 +195,10 @@ const flow = new Workflow('money-transfer')
 
 Compensation is **best-effort** — if a compensate handler itself throws, the error is logged but the remaining compensations still run.
 
+:::caution[Make compensations idempotent]
+The engine does not track whether a compensation has already run. If the process crashes during compensation, restarting may re-run handlers that already completed. Always design compensate handlers to be idempotent — e.g., check if a refund already exists before issuing a new one.
+:::
+
 :::note
 Not every step needs a compensate handler. Only add them to steps that produce side effects you need to undo (database writes, API calls, reservations, charges).
 :::
@@ -296,7 +301,7 @@ await engine.signal(run.id, 'editorial-review', {
 **Key behaviors:**
 
 - `waitFor('event')` transitions the execution to `state: 'waiting'`
-- The execution is persisted to SQLite — it survives process restarts
+- The execution is persisted to SQLite — it survives process restarts. However, if the process crashes while a workflow is in `running` state, it will not auto-resume on restart. Only `waiting` workflows can be resumed via `signal()`
 - `engine.signal(id, event, payload)` stores the payload and resumes execution
 - The signal data is available in `ctx.signals['event-name']`
 - You can have multiple `waitFor` calls in a single workflow (e.g., multi-stage approvals)
@@ -389,7 +394,7 @@ const flow = new Workflow('data-enrichment')
 
 - All steps inside `.parallel()` run via `Promise.allSettled`
 - Results from each parallel step are saved to `exec.steps` like normal steps
-- If any parallel step fails, the entire parallel group fails and compensation runs
+- If any parallel step fails, the entire parallel group fails and compensation runs. The error thrown is an `AggregateError` containing all individual failure reasons
 - Steps after the parallel block wait for all parallel steps to finish
 
 ### Signal Timeout
@@ -416,6 +421,10 @@ If the signal doesn't arrive within the timeout:
 2. The error is stored in `exec.steps['__waitFor:manager-approval'].error`
 3. Compensation runs for all previously completed steps
 4. A `signal:timeout` event is emitted
+
+:::caution
+The timeout is implemented with `setTimeout` in-memory. If the process restarts while a workflow is waiting, the timeout is lost and the workflow will wait indefinitely until a signal arrives or a new timeout is set manually.
+:::
 
 ### Nested Workflows (Sub-Workflows)
 
@@ -458,10 +467,11 @@ await engine.start('order', { amount: 99, cardToken: 'tok_abc' });
 
 **Key behaviors:**
 
-- The parent workflow pauses while the child executes
+- The parent workflow pauses while the child executes (polling every 100ms)
 - Child workflow results are stored under `ctx.steps['sub:<child-name>']`
 - If the child fails, the parent fails too (and parent compensation runs)
 - The input mapper function receives the parent's context, allowing you to pass any data from parent steps to the child
+- Sub-workflows have a hardcoded 300-second (5-minute) timeout. If the child doesn't complete within that window, the parent step fails
 
 ### Observability (Events)
 
@@ -743,10 +753,10 @@ const engine = new Engine({
 | `engine.getExecution(id)` | `Execution \| null` | Get full execution state by ID. |
 | `engine.listExecutions(name?, state?)` | `Execution[]` | List executions with optional filters. |
 | `engine.signal(id, event, payload?)` | `Promise<void>` | Send a signal to resume a waiting execution. |
-| `engine.on(type, listener)` | `void` | Subscribe to a specific event type. |
-| `engine.onAny(listener)` | `void` | Subscribe to all events. |
-| `engine.off(type, listener)` | `void` | Unsubscribe from a specific event type. |
-| `engine.offAny(listener)` | `void` | Unsubscribe from all events. |
+| `engine.on(type, listener)` | `this` | Subscribe to a specific event type. Chainable. |
+| `engine.onAny(listener)` | `this` | Subscribe to all events. Chainable. |
+| `engine.off(type, listener)` | `this` | Unsubscribe from a specific event type. Chainable. |
+| `engine.offAny(listener)` | `this` | Unsubscribe from all events. Chainable. |
 | `engine.subscribe(id, callback)` | `() => void` | Subscribe to events for a specific execution. Returns unsubscribe function. |
 | `engine.cleanup(maxAgeMs, states?)` | `number` | Delete executions older than `maxAgeMs`. Returns count. |
 | `engine.archive(maxAgeMs, states?)` | `number` | Move old executions to archive table. Returns count. |
@@ -1264,6 +1274,20 @@ Workflow DSL (.step / .branch / .waitFor)
 12. **On failure**: the Executor walks completed steps in reverse, calling each compensate handler
 
 Each workflow step is a regular bunqueue job. You get all of bunqueue's features for free: SQLite persistence, concurrency control, and monitoring via the dashboard.
+
+## Limitations & Caveats
+
+Before using the workflow engine in production, be aware of these trade-offs:
+
+| Limitation | Details |
+|---|---|
+| **Single-instance only** | The workflow engine runs in-process. There is no distributed coordination — you cannot run multiple engine instances on the same database. |
+| **No auto-resume after crash** | If the process crashes while a workflow is in `running` state, that execution stays in `running` forever. Only `waiting` workflows can be resumed via `signal()`. You need application-level recovery (e.g., query for stale `running` executions on startup). |
+| **At-most-once execution** | Steps are not replayed on restart. If a step partially commits (e.g., writes to an external API) and the process crashes before saving the result, the side effect happened but the engine doesn't know. |
+| **Compensation is not idempotent** | The engine doesn't track which compensations have run. If the process crashes mid-compensation, restarting may re-run already-completed handlers. Design compensations to be idempotent. |
+| **waitFor timeout not persisted** | Signal timeouts use in-memory `setTimeout`. If the process restarts, the timeout is lost and the workflow waits indefinitely. |
+| **Sub-workflow 300s timeout** | Sub-workflows have a hardcoded 5-minute timeout (not configurable). Long-running child workflows will fail the parent. |
+| **listExecutions returns max 100** | `engine.listExecutions()` is capped at 100 results with no pagination support. For larger datasets, query the SQLite store directly. |
 
 ## Next Steps
 
