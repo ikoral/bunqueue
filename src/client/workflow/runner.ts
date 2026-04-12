@@ -138,9 +138,10 @@ export async function executeParallelSteps(
   );
   const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
   if (failed.length > 0) {
-    throw failed[0].reason instanceof Error
-      ? failed[0].reason
-      : new Error(String(failed[0].reason));
+    const errors = failed.map((r) =>
+      r.reason instanceof Error ? r.reason : new Error(String(r.reason))
+    );
+    throw new AggregateError(errors, errors[0].message);
   }
 }
 
@@ -191,7 +192,11 @@ export function findStepDef(wf: Workflow, name: string): StepDefinition | null {
       const found = node.def.steps.find((s) => s.name === name);
       if (found) return found;
     }
-    if (node.type === 'forEach' && node.def.step.name === name) return node.def.step;
+    if (node.type === 'forEach') {
+      if (node.def.step.name === name || name.startsWith(node.def.step.name + ':')) {
+        return node.def.step;
+      }
+    }
   }
   return null;
 }

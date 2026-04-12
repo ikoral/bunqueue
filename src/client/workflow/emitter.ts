@@ -112,8 +112,20 @@ export class WorkflowEmitter {
   private dispatch(type: WorkflowEventType, event: WorkflowEvent): void {
     const typed = this.listeners.get(type);
     if (typed) {
-      for (const fn of typed) fn(event);
+      for (const fn of typed) {
+        try {
+          fn(event);
+        } catch {
+          /* listener errors must not break dispatch */
+        }
+      }
     }
-    for (const fn of this.globalListeners) fn(event);
+    for (const fn of this.globalListeners) {
+      try {
+        fn(event);
+      } catch {
+        /* listener errors must not break dispatch */
+      }
+    }
   }
 }

@@ -262,7 +262,7 @@ export class WorkflowExecutor {
     idx: number,
     wf: Workflow
   ) {
-    await executeMap(node.def, exec, (e) => {
+    await executeMap(node.def, exec, this.emitter, (e) => {
       this.store.update(e);
     });
     await this.advance(exec, idx + 1, wf);

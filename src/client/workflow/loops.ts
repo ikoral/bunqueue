@@ -97,9 +97,11 @@ export async function executeForEach(
 export async function executeMap(
   def: MapDefinition,
   exec: Execution,
+  emitter: WorkflowEmitter | null,
   updateFn: (exec: Execution) => void
 ): Promise<void> {
   const ctx = buildContext(exec);
+  emitter?.emitStep('step:started', exec.id, exec.workflowName, def.name);
   const result = await def.transform(ctx);
   exec.steps[def.name] = {
     status: 'completed',
@@ -108,4 +110,5 @@ export async function executeMap(
     completedAt: Date.now(),
   };
   updateFn(exec);
+  emitter?.emitStep('step:completed', exec.id, exec.workflowName, def.name, { result });
 }

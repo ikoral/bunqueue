@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.7.3] - 2026-04-12
+
+### Fixed
+- **Workflow emitter resilience** — Event listeners that throw exceptions no longer break the dispatch chain. All registered listeners are now called regardless of individual failures.
+- **Parallel step error aggregation** — When multiple parallel steps fail, all errors are now reported via `AggregateError` instead of silently discarding all but the first.
+- **forEach saga compensation** — `findStepDef()` now correctly matches indexed forEach step names (e.g. `process:0`) back to their definition, enabling proper compensation rollback for forEach iterations.
+- **Map node observability** — `executeMap()` now emits `step:started` and `step:completed` events, making map nodes observable like all other node types.
+
+### Tests
+- Added 24 workflow engine issue reproduction tests (`test/workflow-issues.test.ts`)
+
 ## [2.7.2] - 2026-04-10
 
 ### Added
