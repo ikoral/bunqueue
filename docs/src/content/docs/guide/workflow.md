@@ -1,6 +1,6 @@
 ---
 title: "Workflow Engine — Multi-Step Orchestration for Bun"
-description: "Orchestrate multi-step workflows with saga compensation, step retry, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, loops (doUntil/doWhile), forEach iteration, map transforms, schema validation, per-execution subscribe, observability events, and cleanup/archival. Zero infrastructure — no Redis, no Temporal, no cloud service. TypeScript DSL built on bunqueue."
+description: "Orchestrate multi-step workflows with saga compensation, step retry, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, loops (doUntil/doWhile), forEach iteration, map transforms, schema validation, per-execution subscribe, crash recovery, type-safe step chaining, observability events, and cleanup/archival. Zero infrastructure — no Redis, no Temporal, no cloud service. TypeScript DSL built on bunqueue."
 head:
   - tag: meta
     attrs:
@@ -9,10 +9,10 @@ head:
   - tag: meta
     attrs:
       name: keywords
-      content: "workflow engine, orchestration, saga pattern, compensation, branching, parallel steps, step retry, exponential backoff, nested workflow, sub-workflow, signal timeout, observability, cleanup, archival, human in the loop, step functions, temporal alternative, inngest alternative, bun workflow, typescript workflow, multi-step process, approval workflow, pipeline orchestration, loops, doUntil, doWhile, forEach, map, schema validation, subscribe, zod"
+      content: "workflow engine, orchestration, saga pattern, compensation, branching, parallel steps, step retry, exponential backoff, nested workflow, sub-workflow, signal timeout, observability, cleanup, archival, human in the loop, step functions, temporal alternative, inngest alternative, bun workflow, typescript workflow, multi-step process, approval workflow, pipeline orchestration, loops, doUntil, doWhile, forEach, map, schema validation, subscribe, zod, crash recovery, type-safe"
 ---
 
-Orchestrate multi-step business processes with a fluent, chainable DSL. Saga compensation, step retry with exponential backoff, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, loop control flow (doUntil/doWhile), forEach iteration, map transforms, schema validation (Zod-compatible), per-execution subscribe, typed observability events, and cleanup/archival — all built on top of bunqueue's Queue and Worker. No new infrastructure, no external services, no YAML.
+Orchestrate multi-step business processes with a fluent, chainable DSL. Saga compensation, step retry with exponential backoff, parallel execution, conditional branching, nested sub-workflows, human-in-the-loop signals with timeout, loop control flow (doUntil/doWhile), forEach iteration, map transforms, schema validation (Zod-compatible), per-execution subscribe, crash recovery, type-safe step chaining, typed observability events, and cleanup/archival — all built on top of bunqueue's Queue and Worker. No new infrastructure, no external services, no YAML.
 
 ```
 validate ──→ reserve stock ──→ charge payment ──→ send confirmation
@@ -40,6 +40,8 @@ validate ──→ reserve stock ──→ charge payment ──→ send confirm
 | **Map transform** | `.map()` | Code-level | Manual | Manual |
 | **Schema validation** | Duck-typed `.parse()` (Zod, ArkType) | Manual | Built-in | Manual |
 | **Per-execution subscribe** | `engine.subscribe(id, cb)` | Manual | Webhook | Manual |
+| **Crash recovery** | `engine.recover()` | Built-in | Built-in | Built-in |
+| **Type-safe step chaining** | Generic accumulator | Manual casting | Manual casting | Manual casting |
 | **Cleanup/archival** | Built-in SQLite archive | Manual | Auto (cloud) | Manual |
 | **Self-hosted** | Yes (zero-config) | Yes (complex) | No | Yes (complex) |
 | **Pricing** | Free (MIT) | Free self-hosted / Cloud $$ | Free tier, then per-execution | Free tier, then $50/mo+ |
@@ -57,7 +59,7 @@ validate ──→ reserve stock ──→ charge payment ──→ send confirm
 - **Multi-region HA with automatic failover** — Use Temporal
 - **Serverless-first with zero ops** — Use Inngest
 - **Already running Redis with BullMQ** — Use BullMQ FlowProducer for simple parent-child chains
-- **Crash recovery with auto-resume** — bunqueue does not automatically resume workflows that were `running` when the process crashed. If you need guaranteed exactly-once execution across restarts, use Temporal
+- **Guaranteed exactly-once across restarts** — bunqueue's `engine.recover()` provides at-most-once crash recovery (re-enqueues orphaned executions, re-arms signal timeouts). For guaranteed exactly-once execution with distributed coordination, use Temporal
 
 ## Quick Start
 
@@ -68,17 +70,16 @@ bun add bunqueue
 ```typescript
 import { Workflow, Engine } from 'bunqueue/workflow';
 
-// Define a workflow
-const orderFlow = new Workflow('order-pipeline')
+// Define a type-safe workflow — each step's return type is tracked automatically
+const orderFlow = new Workflow<{ orderId: string; amount: number }>('order-pipeline')
   .step('validate', async (ctx) => {
-    const { orderId, amount } = ctx.input as { orderId: string; amount: number };
-    if (amount <= 0) throw new Error('Invalid amount');
-    return { orderId, validated: true };
+    // ctx.input is typed as { orderId: string; amount: number }
+    if (ctx.input.amount <= 0) throw new Error('Invalid amount');
+    return { orderId: ctx.input.orderId, validated: true };
   })
   .step('charge', async (ctx) => {
-    const { orderId } = ctx.steps['validate'] as { orderId: string };
-    const { amount } = ctx.input as { amount: number };
-    const txId = await payments.charge(orderId, amount);
+    // ctx.steps.validate is typed as { orderId: string; validated: boolean }
+    const txId = await payments.charge(ctx.steps.validate.orderId, ctx.input.amount);
     return { transactionId: txId };
   }, {
     compensate: async () => {
@@ -87,9 +88,9 @@ const orderFlow = new Workflow('order-pipeline')
     },
   })
   .step('confirm', async (ctx) => {
-    const { transactionId } = ctx.steps['charge'] as { transactionId: string };
-    await mailer.send('order-confirm', { txId: transactionId });
-    return { emailSent: true, transactionId };
+    // ctx.steps.charge is typed as { transactionId: string }
+    await mailer.send('order-confirm', { txId: ctx.steps.charge.transactionId });
+    return { emailSent: true, transactionId: ctx.steps.charge.transactionId };
   });
 
 // Create engine and run
@@ -104,6 +105,10 @@ const run = await engine.start('order-pipeline', {
 // Check status
 const exec = engine.getExecution(run.id);
 console.log(exec.state);  // 'running' | 'completed' | 'failed' | 'waiting' | 'compensating'
+
+// Recover orphaned executions after a crash/restart
+const recovered = await engine.recover();
+console.log(`Recovered ${recovered.total} executions`);
 ```
 
 :::tip
@@ -114,26 +119,24 @@ The Engine supports both **embedded** and **TCP** modes. Pass `connection: { por
 
 ### Steps
 
-Steps are the building blocks. Each step receives a context with the workflow input and all previous step results:
+Steps are the building blocks. Each step receives a context with the workflow input and all previous step results. When you provide a type parameter to `Workflow<TInput>`, all steps get full type inference — no casting needed:
 
 ```typescript
-const flow = new Workflow('data-pipeline')
+const flow = new Workflow<{ source: string }>('data-pipeline')
   .step('extract', async (ctx) => {
-    const { source } = ctx.input as { source: string };
-    const rawData = await fetchFromSource(source);
+    // ctx.input.source is typed as string
+    const rawData = await fetchFromSource(ctx.input.source);
     return { records: rawData.length, data: rawData };
   })
   .step('transform', async (ctx) => {
-    // Access previous step results via ctx.steps
-    const { data } = ctx.steps['extract'] as { data: RawRecord[] };
-    const cleaned = data.filter(r => r.valid).map(normalize);
-    return { cleaned, dropped: data.length - cleaned.length };
+    // ctx.steps.extract is typed as { records: number; data: RawRecord[] }
+    const cleaned = ctx.steps.extract.data.filter(r => r.valid).map(normalize);
+    return { cleaned, dropped: ctx.steps.extract.data.length - cleaned.length };
   })
   .step('load', async (ctx) => {
-    const { cleaned } = ctx.steps['transform'] as { cleaned: CleanRecord[] };
-    await db.insertBatch('analytics', cleaned);
-    // Access original input too
-    return { loaded: cleaned.length, source: (ctx.input as { source: string }).source };
+    // ctx.steps.transform is typed as { cleaned: CleanRecord[]; dropped: number }
+    await db.insertBatch('analytics', ctx.steps.transform.cleaned);
+    return { loaded: ctx.steps.transform.cleaned.length, source: ctx.input.source };
   });
 ```
 
@@ -141,12 +144,16 @@ const flow = new Workflow('data-pipeline')
 
 | Property | Type | Description |
 |---|---|---|
-| `ctx.input` | `unknown` | The input passed to `engine.start()` |
-| `ctx.steps` | `Record<string, unknown>` | Results from all completed steps (keyed by step name) |
+| `ctx.input` | `TInput` | The input passed to `engine.start()`. Typed when `Workflow<TInput>` is used. |
+| `ctx.steps` | `TSteps` | Results from all completed steps (keyed by step name). Accumulates types automatically. |
 | `ctx.signals` | `Record<string, unknown>` | Data from received signals (keyed by event name) |
 | `ctx.executionId` | `string` | Unique execution ID |
 
-Every step **must return a value** (or `undefined`). The return value becomes available to subsequent steps via `ctx.steps['step-name']`.
+Every step **must return a value** (or `undefined`). The return value becomes available to subsequent steps via `ctx.steps.stepName` (or `ctx.steps['step-name']` for hyphenated names).
+
+:::tip[Type-Safe Steps]
+Pass a type parameter to `Workflow<TInput>` to get full type inference. Each `.step()` return type is tracked automatically — subsequent steps see the accumulated types without any `as` casts. See [Type-Safe Steps](#type-safe-steps) for details.
+:::
 
 ### Compensation (Saga Pattern)
 
@@ -301,7 +308,7 @@ await engine.signal(run.id, 'editorial-review', {
 **Key behaviors:**
 
 - `waitFor('event')` transitions the execution to `state: 'waiting'`
-- The execution is persisted to SQLite — it survives process restarts. However, if the process crashes while a workflow is in `running` state, it will not auto-resume on restart. Only `waiting` workflows can be resumed via `signal()`
+- The execution is persisted to SQLite — it survives process restarts. Call `engine.recover()` on startup to re-enqueue orphaned `running` executions and re-arm `waiting` timeouts
 - `engine.signal(id, event, payload)` stores the payload and resumes execution
 - The signal data is available in `ctx.signals['event-name']`
 - You can have multiple `waitFor` calls in a single workflow (e.g., multi-stage approvals)
@@ -423,7 +430,7 @@ If the signal doesn't arrive within the timeout:
 4. A `signal:timeout` event is emitted
 
 :::caution
-The timeout is implemented with `setTimeout` in-memory. If the process restarts while a workflow is waiting, the timeout is lost and the workflow will wait indefinitely until a signal arrives or a new timeout is set manually.
+The timeout is implemented with `setTimeout` in-memory. If the process restarts while a workflow is waiting, call `engine.recover()` on startup to re-arm the timeout timer automatically. Without recovery, the workflow will wait indefinitely until a signal arrives.
 :::
 
 ### Nested Workflows (Sub-Workflows)
@@ -553,6 +560,117 @@ console.log(`Total archived: ${engine.getArchivedCount()}`);
 - `cleanup(maxAgeMs, states?)` — **Permanently deletes** executions older than `maxAgeMs`
 - `archive(maxAgeMs, states?)` — **Moves** executions to a separate `workflow_executions_archive` table (transactional, up to 1000 per call)
 - Both accept an optional `states` filter: `['completed']`, `['failed']`, `['completed', 'failed']`, etc.
+
+### Type-Safe Steps
+
+The Workflow DSL uses a **generic accumulator pattern** to track step return types at compile time. Each `.step()` call returns a narrower type, so subsequent steps see exactly what previous steps returned — no `as` casts needed.
+
+```typescript
+// With type parameter: full type inference
+const flow = new Workflow<{ userId: string; email: string }>('onboarding')
+  .step('create', async (ctx) => {
+    // ctx.input is { userId: string; email: string }
+    return { accountId: `acc_${ctx.input.userId}` };
+  })
+  .step('configure', async (ctx) => {
+    // ctx.steps.create is { accountId: string } — inferred automatically
+    await setupDefaults(ctx.steps.create.accountId);
+    return { configured: true };
+  })
+  .step('notify', async (ctx) => {
+    // Both previous steps are available and typed
+    const { accountId } = ctx.steps.create;     // string
+    const { configured } = ctx.steps.configure; // boolean
+    await mailer.send(ctx.input.email, { accountId });
+    return { notified: true };
+  });
+```
+
+**How it works:**
+
+The `Workflow` class has two type parameters: `Workflow<TInput, TSteps>`. Each `.step()` call returns `Workflow<TInput, TSteps & Record<TName, Awaited<TResult>>>` — the step name and return type are added to `TSteps`. This means:
+
+- `ctx.input` is typed as `TInput` (the type you pass to `Workflow<TInput>`)
+- `ctx.steps` accumulates all completed step results by name
+- TypeScript catches typos and type mismatches at compile time
+
+**Works with all node types:**
+
+```typescript
+const flow = new Workflow<{ items: string[] }>('typed-pipeline')
+  .step('init', async (ctx) => ({ count: ctx.input.items.length }))
+  .parallel<{ a: number; b: string }>((w) => w
+    .step('a', async () => 42)
+    .step('b', async () => 'hello')
+  )
+  // After parallel: ctx.steps has init + a + b
+  .map('summary', (ctx) => ({
+    total: ctx.steps.a + ctx.steps.init.count,
+  }))
+  // After map: ctx.steps has init + a + b + summary
+  .step('final', async (ctx) => {
+    return { result: ctx.steps.summary.total };
+  });
+```
+
+**Backward compatible:** If you don't pass a type parameter, `Workflow` defaults to `Workflow<unknown, {}>` and behaves exactly like before — you can still use `as` casts.
+
+### Crash Recovery
+
+After a crash or restart, orphaned executions (stuck in `running`, `waiting`, or `compensating`) can be recovered with `engine.recover()`:
+
+```typescript
+const engine = new Engine({ embedded: true, dataPath: './data/wf.db' });
+
+// Register all workflows before recovering
+engine.register(orderFlow);
+engine.register(paymentFlow);
+
+// Recover orphaned executions from the previous process
+const result = await engine.recover();
+console.log(`Recovered: ${result.running} running, ${result.waiting} waiting, ${result.compensating} compensating`);
+console.log(`Total: ${result.total}`);
+```
+
+**What `recover()` does for each state:**
+
+| State | Recovery action |
+|---|---|
+| `running` | Re-enqueues the step at `currentNodeIndex` so it resumes from where it left off |
+| `waiting` | Re-arms the signal timeout timer. If the signal already arrived while the process was down, immediately resumes the execution |
+| `compensating` | Re-runs compensation from the beginning (compensation handlers must be idempotent) |
+
+**Best practice:** Call `engine.recover()` right after registering all workflows, before starting new executions:
+
+```typescript
+const engine = new Engine({ embedded: true, dataPath: './data/wf.db' });
+engine.register(orderFlow);
+engine.register(paymentFlow);
+
+// Always recover on startup
+const recovered = await engine.recover();
+if (recovered.total > 0) {
+  console.log(`Recovered ${recovered.total} orphaned executions`);
+}
+
+// Now safe to start new workflows
+const run = await engine.start('process-order', { orderId: 'ORD-1' });
+```
+
+**`RecoverResult` shape:**
+
+```typescript
+interface RecoverResult {
+  running: number;      // Running executions re-enqueued
+  waiting: number;      // Waiting executions with re-armed timers
+  compensating: number; // Compensating executions re-run
+  total: number;        // Total recovered
+}
+```
+
+:::caution[At-most-once semantics]
+Recovery provides **at-most-once** execution. If a step partially committed (e.g., wrote to an external API) before the crash, the side effect happened but the engine doesn't know. The step will re-run on recovery. Design steps that interact with external services to be idempotent.
+:::
 
 ### Loops (doUntil / doWhile)
 
@@ -758,6 +876,7 @@ const engine = new Engine({
 | `engine.off(type, listener)` | `this` | Unsubscribe from a specific event type. Chainable. |
 | `engine.offAny(listener)` | `this` | Unsubscribe from all events. Chainable. |
 | `engine.subscribe(id, callback)` | `() => void` | Subscribe to events for a specific execution. Returns unsubscribe function. |
+| `engine.recover()` | `Promise<RecoverResult>` | Re-enqueue orphaned executions after crash/restart. Returns counts by state. |
 | `engine.cleanup(maxAgeMs, states?)` | `number` | Delete executions older than `maxAgeMs`. Returns count. |
 | `engine.archive(maxAgeMs, states?)` | `number` | Move old executions to archive table. Returns count. |
 | `engine.getArchivedCount()` | `number` | Count of archived executions. |
@@ -1107,6 +1226,9 @@ Wire up the ETL pipeline with monitoring and cleanup:
 ```typescript
 const engine = new Engine({ embedded: true, dataPath: './data/etl.db' });
 
+// Recover any orphaned executions from previous crashes
+await engine.recover();
+
 // Observability: track step durations and failures
 engine.on('step:started', (e) => {
   const { stepName } = e as StepEvent;
@@ -1282,10 +1404,9 @@ Before using the workflow engine in production, be aware of these trade-offs:
 | Limitation | Details |
 |---|---|
 | **Single-instance only** | The workflow engine runs in-process. There is no distributed coordination — you cannot run multiple engine instances on the same database. |
-| **No auto-resume after crash** | If the process crashes while a workflow is in `running` state, that execution stays in `running` forever. Only `waiting` workflows can be resumed via `signal()`. You need application-level recovery (e.g., query for stale `running` executions on startup). |
-| **At-most-once execution** | Steps are not replayed on restart. If a step partially commits (e.g., writes to an external API) and the process crashes before saving the result, the side effect happened but the engine doesn't know. |
-| **Compensation is not idempotent** | The engine doesn't track which compensations have run. If the process crashes mid-compensation, restarting may re-run already-completed handlers. Design compensations to be idempotent. |
-| **waitFor timeout not persisted** | Signal timeouts use in-memory `setTimeout`. If the process restarts, the timeout is lost and the workflow waits indefinitely. |
+| **At-most-once execution** | `engine.recover()` re-enqueues orphaned executions, but steps are not idempotent by default. If a step partially commits (e.g., writes to an external API) and the process crashes before saving the result, the step will re-run on recovery. Design external-facing steps to be idempotent. |
+| **Compensation must be idempotent** | The engine doesn't track which compensations have already run. If the process crashes mid-compensation, `engine.recover()` re-runs compensation from the beginning. Always design compensate handlers to be idempotent. |
+| **Recovery requires manual call** | `engine.recover()` must be called explicitly on startup — there is no automatic crash detection. Call it after registering all workflows and before starting new executions. |
 | **Sub-workflow 300s timeout** | Sub-workflows have a hardcoded 5-minute timeout (not configurable). Long-running child workflows will fail the parent. |
 | **listExecutions returns max 100** | `engine.listExecutions()` is capped at 100 results with no pagination support. For larger datasets, query the SQLite store directly. |
 

@@ -23,7 +23,9 @@ export { WorkflowEmitter } from './emitter';
 export type {
   StepContext,
   StepHandler,
+  TypedStepHandler,
   CompensateHandler,
+  TypedCompensateHandler,
   StepOptions,
   SchemaLike,
   Execution,
@@ -40,6 +42,7 @@ export type {
   LoopDefinition,
   ForEachDefinition,
   MapDefinition,
+  RecoverResult,
   CleanupOptions,
   WorkflowEventType,
   WorkflowEvent,

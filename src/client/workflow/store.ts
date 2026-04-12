@@ -60,6 +60,7 @@ export class WorkflowStore {
     listByName: ReturnType<Database['prepare']>;
     listByState: ReturnType<Database['prepare']>;
     listByBoth: ReturnType<Database['prepare']>;
+    listRecoverable: ReturnType<Database['prepare']>;
   };
 
   constructor(dbPath?: string) {
@@ -91,6 +92,9 @@ export class WorkflowStore {
       ),
       listByBoth: this.db.prepare(
         `SELECT * FROM workflow_executions WHERE workflow_name = ? AND state = ? ORDER BY created_at DESC LIMIT 100`
+      ),
+      listRecoverable: this.db.prepare(
+        `SELECT * FROM workflow_executions WHERE state IN ('running', 'waiting', 'compensating') ORDER BY updated_at ASC`
       ),
     };
   }
@@ -139,6 +143,12 @@ export class WorkflowStore {
     } else {
       rows = this.stmts.list.all() as Record<string, unknown>[];
     }
+    return rows.map((r) => this.rowToExecution(r));
+  }
+
+  /** List all executions in recoverable states (running, waiting, compensating) */
+  listRecoverable(): Execution[] {
+    const rows = this.stmts.listRecoverable.all() as Record<string, unknown>[];
     return rows.map((r) => this.rowToExecution(r));
   }
 

@@ -3,31 +3,39 @@ import type { Queue } from '../queue/queue';
 import type { Workflow } from './workflow';
 import type { WorkflowStore } from './store';
 import type { WorkflowEmitter } from './emitter';
-import type { Execution, StepJobData, RunHandle, WorkflowNode, StepDefinition } from './types';
+import type {
+  Execution,
+  StepJobData,
+  RunHandle,
+  RecoverResult,
+  WorkflowNode,
+  StepDefinition,
+} from './types';
 import {
   executeStepWithRetry,
   executeParallelSteps,
   executeSubWorkflow,
-  findStepDef,
   buildContext,
 } from './runner';
 import { executeDoUntil, executeDoWhile, executeForEach, executeMap } from './loops';
-
-class WaitForSignalError extends Error {
-  constructor(readonly event: string) {
-    super(`Waiting for signal: ${event}`);
-  }
-}
+import { WaitForSignalError, runCompensation } from './compensator';
+import { recoverExecutions } from './recovery';
 
 export class WorkflowExecutor {
   private readonly workflows = new Map<string, Workflow>();
   private readonly timeoutTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+  private readonly updateFn: (e: Execution) => void;
+
   constructor(
     private readonly store: WorkflowStore,
     private readonly queue: Queue,
     private readonly emitter: WorkflowEmitter | null = null
-  ) {}
+  ) {
+    this.updateFn = (e) => {
+      this.store.update(e);
+    };
+  }
 
   register(workflow: Workflow): void {
     const names = workflow.getStepNames();
@@ -42,10 +50,10 @@ export class WorkflowExecutor {
     const wf = this.workflows.get(workflowName);
     if (!wf) throw new Error(`Workflow "${workflowName}" not registered`);
     if (wf.nodes.length === 0) throw new Error(`Workflow "${workflowName}" has no steps`);
-
     const now = Date.now();
+    const id = `wf_${now}_${Math.random().toString(36).slice(2, 10)}`;
     const exec: Execution = {
-      id: `wf_${now}_${Math.random().toString(36).slice(2, 10)}`,
+      id,
       workflowName,
       state: 'running',
       input,
@@ -55,11 +63,10 @@ export class WorkflowExecutor {
       createdAt: now,
       updatedAt: now,
     };
-
     this.store.save(exec);
-    this.emitter?.emitWorkflow('workflow:started', exec.id, workflowName, 'running', { input });
+    this.emitter?.emitWorkflow('workflow:started', id, workflowName, 'running', { input });
     await this.enqueue(exec);
-    return { id: exec.id, workflowName };
+    return { id, workflowName };
   }
 
   async processStep(data: StepJobData): Promise<unknown> {
@@ -95,7 +102,6 @@ export class WorkflowExecutor {
   async signal(executionId: string, event: string, payload: unknown): Promise<void> {
     const exec = this.store.get(executionId);
     if (!exec) throw new Error(`Execution "${executionId}" not found`);
-    // Cancel any pending timeout timer for this execution
     const timer = this.timeoutTimers.get(executionId);
     if (timer) {
       clearTimeout(timer);
@@ -111,9 +117,8 @@ export class WorkflowExecutor {
   getExecution(id: string): Execution | null {
     return this.store.get(id);
   }
-
-  listExecutions(workflowName?: string, state?: Execution['state']): Execution[] {
-    return this.store.list(workflowName, state);
+  listExecutions(wfName?: string, state?: Execution['state']): Execution[] {
+    return this.store.list(wfName, state);
   }
 
   private async executeNode(
@@ -135,9 +140,7 @@ export class WorkflowExecutor {
 
   private async runStep(exec: Execution, def: StepDefinition, idx: number, wf: Workflow) {
     const ctx = buildContext(exec);
-    await executeStepWithRetry(def, ctx, exec, this.emitter, (e) => {
-      this.store.update(e);
-    });
+    await executeStepWithRetry(def, ctx, exec, this.emitter, this.updateFn);
     await this.advance(exec, idx + 1, wf);
   }
 
@@ -151,9 +154,7 @@ export class WorkflowExecutor {
     const pathSteps = node.def.paths.get(pathName);
     if (pathSteps && pathSteps.length > 0) {
       for (const step of pathSteps) {
-        await executeStepWithRetry(step, buildContext(exec), exec, this.emitter, (e) => {
-          this.store.update(e);
-        });
+        await executeStepWithRetry(step, buildContext(exec), exec, this.emitter, this.updateFn);
       }
     }
     await this.advance(exec, idx + 1, wf);
@@ -165,9 +166,13 @@ export class WorkflowExecutor {
     idx: number,
     wf: Workflow
   ) {
-    await executeParallelSteps(node.def.steps, buildContext(exec), exec, this.emitter, (e) => {
-      this.store.update(e);
-    });
+    await executeParallelSteps(
+      node.def.steps,
+      buildContext(exec),
+      exec,
+      this.emitter,
+      this.updateFn
+    );
     await this.advance(exec, idx + 1, wf);
   }
 
@@ -198,21 +203,18 @@ export class WorkflowExecutor {
       await this.advance(exec, idx + 1, wf);
       return;
     }
-
     const waitKey = `__waitFor:${node.event}`;
     if (node.timeout !== undefined) {
       const existing = exec.steps[waitKey] as { startedAt?: number } | undefined;
       const waitingSince = existing?.startedAt ?? Date.now();
-      if (!existing) {
-        exec.steps[waitKey] = { status: 'running', startedAt: waitingSince };
-      }
+      if (!existing) exec.steps[waitKey] = { status: 'running', startedAt: waitingSince };
       if (Date.now() - waitingSince >= node.timeout) {
         this.emitter?.emitSignal('signal:timeout', exec.id, exec.workflowName, node.event);
         exec.steps[waitKey] = {
           status: 'failed',
-          error: `Signal "${node.event}" timed out after ${node.timeout}ms`,
           startedAt: waitingSince,
           completedAt: Date.now(),
+          error: `Signal "${node.event}" timed out after ${node.timeout}ms`,
         };
         exec.state = 'failed';
         this.store.update(exec);
@@ -220,11 +222,9 @@ export class WorkflowExecutor {
         throw new Error(`Signal "${node.event}" timed out`);
       }
       this.store.update(exec);
-      // Schedule a timer to re-check after timeout
       const remaining = node.timeout - (Date.now() - waitingSince);
       this.scheduleTimeoutCheck(exec.id, exec.workflowName, exec.currentNodeIndex, remaining);
     }
-
     exec.state = 'waiting';
     this.store.update(exec);
     this.emitter?.emitWorkflow('workflow:waiting', exec.id, exec.workflowName, 'waiting');
@@ -238,9 +238,7 @@ export class WorkflowExecutor {
     wf: Workflow,
     loopFn: typeof executeDoUntil
   ) {
-    await loopFn(node.def, exec, this.emitter, (e) => {
-      this.store.update(e);
-    });
+    await loopFn(node.def, exec, this.emitter, this.updateFn);
     await this.advance(exec, idx + 1, wf);
   }
 
@@ -250,9 +248,7 @@ export class WorkflowExecutor {
     idx: number,
     wf: Workflow
   ) {
-    await executeForEach(node.def, exec, this.emitter, (e) => {
-      this.store.update(e);
-    });
+    await executeForEach(node.def, exec, this.emitter, this.updateFn);
     await this.advance(exec, idx + 1, wf);
   }
 
@@ -262,11 +258,10 @@ export class WorkflowExecutor {
     idx: number,
     wf: Workflow
   ) {
-    await executeMap(node.def, exec, this.emitter, (e) => {
-      this.store.update(e);
-    });
+    await executeMap(node.def, exec, this.emitter, this.updateFn);
     await this.advance(exec, idx + 1, wf);
   }
+
   private async advance(exec: Execution, nextIdx: number, wf: Workflow) {
     exec.currentNodeIndex = nextIdx;
     this.store.update(exec);
@@ -292,33 +287,28 @@ export class WorkflowExecutor {
     const timer = setTimeout(() => {
       this.timeoutTimers.delete(execId);
       const jobData: StepJobData = { executionId: execId, workflowName, nodeIndex: nodeIdx };
-      this.queue.add('wf:step', jobData as unknown as Record<string, unknown>).catch(() => {}); // Queue may be closed
+      this.queue.add('wf:step', jobData as unknown as Record<string, unknown>).catch(() => {
+        /* Queue may be closed */
+      });
     }, ms);
     this.timeoutTimers.set(execId, timer);
   }
 
   private async compensate(exec: Execution, wf: Workflow) {
-    const completed = Object.entries(exec.steps)
-      .filter(([name, s]) => s.status === 'completed' && !name.startsWith('__'))
-      .reverse();
-    if (completed.length === 0) return;
+    await runCompensation(exec, wf, this.store, this.emitter);
+  }
 
-    exec.state = 'compensating';
-    this.store.update(exec);
-    this.emitter?.emitWorkflow('workflow:compensating', exec.id, exec.workflowName, 'compensating');
-
-    const ctx = buildContext(exec);
-    for (const [name] of completed) {
-      const def = findStepDef(wf, name);
-      if (def?.compensate) {
-        try {
-          await def.compensate(ctx);
-        } catch {
-          // Compensation errors don't stop the chain
-        }
-      }
-    }
-    exec.state = 'failed';
-    this.store.update(exec);
+  /** Recover orphaned executions after a crash/restart */
+  async recover(): Promise<RecoverResult> {
+    return recoverExecutions({
+      store: this.store,
+      queue: this.queue,
+      workflows: this.workflows,
+      emitter: this.emitter,
+      timeoutTimers: this.timeoutTimers,
+      scheduleTimeoutCheck: (id, name, idx, ms) => {
+        this.scheduleTimeoutCheck(id, name, idx, ms);
+      },
+    });
   }
 }

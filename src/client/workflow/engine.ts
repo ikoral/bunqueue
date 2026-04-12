@@ -14,6 +14,7 @@ import type {
   RunHandle,
   Execution,
   ExecutionState,
+  RecoverResult,
   StepJobData,
   WorkflowEventType,
   WorkflowEventListener,
@@ -85,6 +86,16 @@ export class Engine {
   /** Send a signal to a waiting execution */
   async signal(executionId: string, event: string, payload?: unknown): Promise<void> {
     return this.executor.signal(executionId, event, payload);
+  }
+
+  /**
+   * Recover orphaned executions after a crash/restart.
+   * - 'running' executions: re-enqueued at their current step
+   * - 'waiting' executions: timeout timers re-armed (or resumed if signal arrived)
+   * - 'compensating' executions: compensation re-run (handlers must be idempotent)
+   */
+  async recover(): Promise<RecoverResult> {
+    return this.executor.recover();
   }
 
   // ============ Observability ============

@@ -5,25 +5,40 @@
 import type { ConnectionOptions } from '../types';
 
 /** Context passed to step handlers */
-export interface StepContext<TInput = unknown> {
+export interface StepContext<
+  TInput = unknown,
+  TSteps extends Record<string, unknown> = Record<string, unknown>,
+> {
   /** Original workflow input */
   readonly input: TInput;
   /** Results from completed steps (step name → result) */
-  readonly steps: Readonly<Record<string, unknown>>;
+  readonly steps: Readonly<TSteps>;
   /** Signals received via engine.signal() */
   readonly signals: Readonly<Record<string, unknown>>;
   /** Current execution ID */
   readonly executionId: string;
 }
 
-/** Step handler function */
+/** Step handler function (type-erased for internal storage) */
 export type StepHandler<TInput = unknown, TResult = unknown> = (
-  ctx: StepContext<TInput>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ctx: StepContext<TInput, any>
 ) => Promise<TResult> | TResult;
 
-/** Compensate handler (rollback on failure) */
+/** Typed step handler — preserves accumulated step types */
+export type TypedStepHandler<TInput, TSteps extends Record<string, unknown>, TResult> = (
+  ctx: StepContext<TInput, TSteps>
+) => Promise<TResult> | TResult;
+
+/** Compensate handler (type-erased for internal storage) */
 export type CompensateHandler<TInput = unknown> = (
-  ctx: StepContext<TInput>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ctx: StepContext<TInput, any>
+) => Promise<void> | void;
+
+/** Typed compensate handler — preserves accumulated step types */
+export type TypedCompensateHandler<TInput, TSteps extends Record<string, unknown>> = (
+  ctx: StepContext<TInput, TSteps>
 ) => Promise<void> | void;
 
 /** Schema-like object — any object with a .parse() method (Zod, ArkType, Valibot, etc.) */
@@ -32,10 +47,13 @@ export interface SchemaLike {
 }
 
 /** Options for a single step */
-export interface StepOptions<TInput = unknown> {
+export interface StepOptions<
+  TInput = unknown,
+  TSteps extends Record<string, unknown> = Record<string, unknown>,
+> {
   retry?: number;
   timeout?: number;
-  compensate?: CompensateHandler<TInput>;
+  compensate?: TypedCompensateHandler<TInput, TSteps> | CompensateHandler<TInput>;
   /** Validate step input before execution */
   inputSchema?: SchemaLike;
   /** Validate step output after execution */
@@ -54,11 +72,15 @@ export interface StepDefinition {
 }
 
 /** Branch condition function */
-export type BranchCondition = (ctx: StepContext) => string;
+export type BranchCondition<
+  TInput = unknown,
+  TSteps extends Record<string, unknown> = Record<string, unknown>,
+> = (ctx: StepContext<TInput, TSteps>) => string;
 
-/** Internal branch definition */
+/** Internal branch definition (type-erased) */
 export interface BranchDefinition {
-  condition: BranchCondition;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  condition: BranchCondition<any, any>;
   paths: Map<string, StepDefinition[]>;
 }
 
@@ -68,35 +90,50 @@ export interface ParallelDefinition {
 }
 
 /** Input mapper for sub-workflows */
-export type SubWorkflowInputMapper = (ctx: StepContext) => unknown;
+export type SubWorkflowInputMapper<
+  TInput = unknown,
+  TSteps extends Record<string, unknown> = Record<string, unknown>,
+> = (ctx: StepContext<TInput, TSteps>) => unknown;
 
 /** Loop condition: receives context + iteration count, returns boolean */
-export type LoopCondition = (ctx: StepContext, iteration: number) => boolean | Promise<boolean>;
+export type LoopCondition<
+  TInput = unknown,
+  TSteps extends Record<string, unknown> = Record<string, unknown>,
+> = (ctx: StepContext<TInput, TSteps>, iteration: number) => boolean | Promise<boolean>;
 
-/** Definition of a doUntil/doWhile loop */
+/** Definition of a doUntil/doWhile loop (type-erased) */
 export interface LoopDefinition {
-  condition: LoopCondition;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  condition: LoopCondition<any, any>;
   steps: StepDefinition[];
   maxIterations: number;
 }
 
 /** Item extractor for forEach */
-export type ForEachItemsExtractor = (ctx: StepContext) => unknown[];
+export type ForEachItemsExtractor<
+  TInput = unknown,
+  TSteps extends Record<string, unknown> = Record<string, unknown>,
+> = (ctx: StepContext<TInput, TSteps>) => unknown[];
 
-/** Definition of a forEach loop */
+/** Definition of a forEach loop (type-erased) */
 export interface ForEachDefinition {
-  items: ForEachItemsExtractor;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  items: ForEachItemsExtractor<any, any>;
   step: StepDefinition;
   maxIterations: number;
 }
 
 /** Transform function for map */
-export type MapTransformFn = (ctx: StepContext) => unknown;
+export type MapTransformFn<
+  TInput = unknown,
+  TSteps extends Record<string, unknown> = Record<string, unknown>,
+> = (ctx: StepContext<TInput, TSteps>) => unknown;
 
-/** Definition of a map node */
+/** Definition of a map node (type-erased) */
 export interface MapDefinition {
   name: string;
-  transform: MapTransformFn;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  transform: MapTransformFn<any, any>;
 }
 
 /** Workflow node (discriminated union) */
@@ -105,7 +142,8 @@ export type WorkflowNode =
   | { type: 'branch'; def: BranchDefinition }
   | { type: 'waitFor'; event: string; timeout?: number }
   | { type: 'parallel'; def: ParallelDefinition }
-  | { type: 'subWorkflow'; name: string; inputMapper: SubWorkflowInputMapper }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | { type: 'subWorkflow'; name: string; inputMapper: SubWorkflowInputMapper<any, any> }
   | { type: 'doUntil'; def: LoopDefinition }
   | { type: 'doWhile'; def: LoopDefinition }
   | { type: 'forEach'; def: ForEachDefinition }
@@ -214,6 +252,18 @@ export interface StepJobData {
   executionId: string;
   workflowName: string;
   nodeIndex: number;
+}
+
+/** Result of engine.recover() */
+export interface RecoverResult {
+  /** Number of running executions re-enqueued */
+  running: number;
+  /** Number of waiting executions with re-armed timers */
+  waiting: number;
+  /** Number of compensating executions re-run */
+  compensating: number;
+  /** Total recovered */
+  total: number;
 }
 
 /** Options for cleanup */
