@@ -10,6 +10,17 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.7.5] - 2026-04-16
+
+### Fixed
+- **`job.moveToFailed()` inside processor was a no-op** (Issue #82) — Calling `job.moveToFailed()` inside a worker processor silently did nothing because move method callbacks were not wired to `createPublicJob`. The worker then auto-ACKed the job, marking it as completed instead of failed. Now `moveToFailed()` and `moveToCompleted()` work correctly inside processors: they send the appropriate command and prevent the auto-ACK from overriding the state.
+
+### Changed
+- Extracted handler factories from `processor.ts` into new `src/client/worker/processorHandlers.ts` for single-responsibility compliance.
+
+### Tests
+- 3 new issue #82 reproduction tests (`test/issue-82-moveToFailed.test.ts`)
+
 ## [2.7.4] - 2026-04-13
 
 ### Added

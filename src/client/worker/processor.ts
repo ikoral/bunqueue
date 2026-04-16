@@ -5,14 +5,25 @@
 
 import type { EventEmitter } from 'events';
 import type { TcpConnection } from './types';
-import type { Processor, Job, FlowJobData, JobStateType } from '../types';
+import type { Processor, Job, FlowJobData } from '../types';
 import { createPublicJob } from '../types';
 import type { Job as InternalJob } from '../../domain/types/job';
-import { jobId } from '../../domain/types/job';
 import { getSharedManager } from '../manager';
 import { UnrecoverableError } from '../errors';
 import { DelayedError } from '../errors';
 import type { AckBatcher } from './ackBatcher';
+import {
+  createProgressHandler,
+  createLogHandler,
+  createGetStateHandler,
+  createGetChildrenValuesHandler,
+  createGetFailedChildrenValuesHandler,
+  createGetIgnoredChildrenFailuresHandler,
+  createRemoveChildDependencyHandler,
+  createRemoveUnprocessedChildrenHandler,
+  createMoveToFailedHandler,
+  createMoveToCompletedHandler,
+} from './processorHandlers';
 
 /** Processor configuration */
 export interface ProcessorConfig<T, R> {
@@ -42,6 +53,32 @@ export async function processJob<T, R>(
   type JobData = T & FlowJobData;
   const jobHolder: { current: Job<JobData> | null } = { current: null };
 
+  // Track whether moveToFailed/moveToCompleted was explicitly called (Issue #82)
+  // Use a mutable holder so TS doesn't narrow to `never` after closure mutation
+  const manualMove: {
+    result: { type: 'completed' | 'failed'; value?: unknown; error?: Error } | null;
+  } = { result: null };
+
+  const moveToFailedHandler = createMoveToFailedHandler(
+    embedded,
+    tcp,
+    internalJob,
+    token,
+    (error: Error) => {
+      manualMove.result = { type: 'failed', error };
+    }
+  );
+
+  const moveToCompletedHandler = createMoveToCompletedHandler(
+    embedded,
+    ackBatcher,
+    internalJob,
+    token,
+    (value: unknown) => {
+      manualMove.result = { type: 'completed', value };
+    }
+  );
+
   const job = createPublicJob<JobData>({
     job: internalJob,
     name: jobName,
@@ -53,6 +90,8 @@ export async function processJob<T, R>(
     getIgnoredChildrenFailures: createGetIgnoredChildrenFailuresHandler(embedded, tcp),
     removeChildDependency: createRemoveChildDependencyHandler(embedded, tcp),
     removeUnprocessedChildren: createRemoveUnprocessedChildrenHandler(embedded, tcp),
+    moveToFailed: moveToFailedHandler,
+    moveToCompleted: moveToCompletedHandler,
   });
 
   jobHolder.current = job;
@@ -62,6 +101,10 @@ export async function processJob<T, R>(
   try {
     const result = await processor(job);
 
+    // Issue #82: If moveToFailed/moveToCompleted was called, skip auto-ACK
+    if (handleManualMove(manualMove, job, config)) return;
+
+    // Normal path: auto-ACK
     try {
       if (embedded) {
         const manager = getSharedManager();
@@ -87,129 +130,32 @@ export async function processJob<T, R>(
     config.onOutcome?.(true);
     emitter.emit('completed', job, result);
   } catch (error) {
+    // Issue #82: If moveToFailed was already called, skip normal failure handling
+    if (handleManualMove(manualMove, job, config)) return;
     await handleJobFailure(internalJob, error, config, { job, jobIdStr, token });
   }
 }
 
-function createProgressHandler<T extends FlowJobData>(
-  embedded: boolean,
-  tcp: TcpConnection | null,
-  emitter: EventEmitter,
-  jobHolder: { current: Job<T> | null }
-) {
-  return async (id: string, progress: number, message?: string) => {
-    if (embedded) {
-      const manager = getSharedManager();
-      await manager.updateProgress(jobId(id), progress, message);
-    } else if (tcp) {
-      await tcp.send({ cmd: 'Progress', id, progress, message });
-    }
-    emitter.emit('progress', jobHolder.current, progress);
-  };
-}
-
-function createLogHandler<T extends FlowJobData>(
-  embedded: boolean,
-  tcp: TcpConnection | null,
-  emitter: EventEmitter,
-  jobHolder: { current: Job<T> | null }
-) {
-  return async (id: string, message: string) => {
-    if (embedded) {
-      const manager = getSharedManager();
-      // addLog is synchronous (in-memory Map update)
-      manager.addLog(jobId(id), message);
-    } else if (tcp) {
-      await tcp.send({ cmd: 'AddLog', id, message });
-    }
-    emitter.emit('log', jobHolder.current, message);
-  };
-}
-
-function createGetStateHandler(embedded: boolean, tcp: TcpConnection | null) {
-  return async (id: string): Promise<JobStateType> => {
-    if (embedded) {
-      const manager = getSharedManager();
-      return (await manager.getJobState(jobId(id))) as JobStateType;
-    } else if (tcp) {
-      const response = await tcp.send({ cmd: 'GetState', id });
-      return ((response as { state?: string }).state ?? 'unknown') as JobStateType;
-    }
-    return 'unknown' as JobStateType;
-  };
-}
-
-function createGetChildrenValuesHandler(embedded: boolean, tcp: TcpConnection | null) {
-  return async (id: string): Promise<Record<string, unknown>> => {
-    if (embedded) {
-      const manager = getSharedManager();
-      return manager.getChildrenValues(jobId(id));
-    } else if (tcp) {
-      const response = await tcp.send({ cmd: 'GetChildrenValues', id });
-      const data = (response as { data?: { values?: Record<string, unknown> } }).data;
-      return data?.values ?? {};
-    }
-    return {};
-  };
-}
-
-function createGetFailedChildrenValuesHandler(
-  embedded: boolean,
-  tcp: TcpConnection | null
-): (id: string) => Promise<Record<string, string>> {
-  return async (id: string) => {
-    if (embedded) {
-      const manager = getSharedManager();
-      return manager.getFailedChildrenValues(jobId(id));
-    }
-    if (!tcp) return {};
-    const res = await tcp.send({ cmd: 'GetFailedChildrenValues', id });
-    return (res.values as Record<string, string> | undefined) ?? {};
-  };
-}
-
-function createGetIgnoredChildrenFailuresHandler(
-  embedded: boolean,
-  tcp: TcpConnection | null
-): (id: string) => Promise<Record<string, string>> {
-  return async (id: string) => {
-    if (embedded) {
-      const manager = getSharedManager();
-      return manager.getIgnoredChildrenFailures(jobId(id));
-    }
-    if (!tcp) return {};
-    const res = await tcp.send({ cmd: 'GetIgnoredChildrenFailures', id });
-    return (res.values as Record<string, string> | undefined) ?? {};
-  };
-}
-
-function createRemoveChildDependencyHandler(
-  embedded: boolean,
-  tcp: TcpConnection | null
-): (id: string) => Promise<boolean> {
-  return async (id: string) => {
-    if (embedded) {
-      const manager = getSharedManager();
-      return manager.removeChildDependency(jobId(id));
-    }
-    if (!tcp) return false;
-    const res = await tcp.send({ cmd: 'RemoveChildDependency', id });
-    return res.ok === true;
-  };
-}
-
-function createRemoveUnprocessedChildrenHandler(
-  embedded: boolean,
-  tcp: TcpConnection | null
-): (id: string) => Promise<void> {
-  return async (id: string) => {
-    if (embedded) {
-      const manager = getSharedManager();
-      return manager.removeUnprocessedChildren(jobId(id));
-    }
-    if (!tcp) return;
-    await tcp.send({ cmd: 'RemoveUnprocessedChildren', id });
-  };
+/** Issue #82: Handle explicit moveToFailed/moveToCompleted called inside processor */
+function handleManualMove<T extends FlowJobData>(
+  manualMove: { result: { type: 'completed' | 'failed'; value?: unknown; error?: Error } | null },
+  job: Job<T>,
+  config: { onOutcome?: (succeeded: boolean) => void; emitter: EventEmitter }
+): boolean {
+  if (manualMove.result?.type === 'failed') {
+    const err = manualMove.result.error ?? new Error('Job manually moved to failed');
+    (job as { failedReason?: string }).failedReason = err.message;
+    config.onOutcome?.(false);
+    config.emitter.emit('failed', job, err);
+    return true;
+  }
+  if (manualMove.result?.type === 'completed') {
+    (job as { returnvalue?: unknown }).returnvalue = manualMove.result.value;
+    config.onOutcome?.(true);
+    config.emitter.emit('completed', job, manualMove.result.value);
+    return true;
+  }
+  return false;
 }
 
 interface FailureContext<T extends FlowJobData> {
