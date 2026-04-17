@@ -4,6 +4,8 @@
  */
 
 import { mkdir, unlink } from 'node:fs/promises';
+import { closeSync, fsyncSync, openSync, writeSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Escape a string for safe embedding in a template literal
@@ -68,14 +70,39 @@ self.onmessage = async (event) => {
 };
 `;
 
-  const tempDir = `${Bun.env.TMPDIR ?? '/tmp'}/bunqueue-workers`;
-  const tempDirFile = Bun.file(tempDir);
-  if (!(await tempDirFile.exists())) {
-    await mkdir(tempDir, { recursive: true });
+  // path.join normalizes double slashes ($TMPDIR often ends in '/').
+  const tempDir = join(Bun.env.TMPDIR ?? '/tmp', 'bunqueue-workers');
+  await mkdir(tempDir, { recursive: true });
+
+  const wrapperPath = join(
+    tempDir,
+    `worker-${queueName}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.ts`
+  );
+
+  // Write with explicit fsync so Bun's Worker spawn sees the file on macOS,
+  // where fs/promises.writeFile (no fdatasync) has produced ModuleNotFound.
+  const fd = openSync(wrapperPath, 'w');
+  try {
+    writeSync(fd, wrapperCode);
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
   }
 
-  const wrapperPath = `${tempDir}/worker-${queueName}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.ts`;
-  await Bun.write(wrapperPath, wrapperCode);
+  // Belt-and-braces: some macOS environments still need a moment for the
+  // dirent to be visible to a fresh Worker process. Poll, then throw if
+  // still missing — swallowing here just moves the failure into Worker spawn.
+  let visible = false;
+  for (let i = 0; i < 10; i++) {
+    if (await Bun.file(wrapperPath).exists()) {
+      visible = true;
+      break;
+    }
+    await Bun.sleep(5);
+  }
+  if (!visible) {
+    throw new Error(`Wrapper script not visible after fsync: ${wrapperPath}`);
+  }
 
   return wrapperPath;
 }

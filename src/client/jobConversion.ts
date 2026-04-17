@@ -131,7 +131,11 @@ export function createPublicJob<T>(opts: CreatePublicJobOptions): Job<T> {
     removeChildDependency: () =>
       removeChildDependency ? removeChildDependency(id) : Promise.resolve(false),
     removeDeduplicationKey: () =>
-      removeDeduplicationKey ? removeDeduplicationKey(id) : Promise.resolve(false),
+      removeDeduplicationKey
+        ? removeDeduplicationKey(id)
+        : Promise.reject(
+            new Error('removeDeduplicationKey is not implemented — no server primitive available')
+          ),
     removeUnprocessedChildren: () =>
       removeUnprocessedChildren ? removeUnprocessedChildren(id) : Promise.resolve(),
   };
@@ -241,7 +245,11 @@ export function toPublicJob<T>(opts: ToPublicJobOptions): Job<T> {
     removeChildDependency: () =>
       removeChildDependency ? removeChildDependency(id) : Promise.resolve(false),
     removeDeduplicationKey: () =>
-      removeDeduplicationKey ? removeDeduplicationKey(id) : Promise.resolve(false),
+      removeDeduplicationKey
+        ? removeDeduplicationKey(id)
+        : Promise.reject(
+            new Error('removeDeduplicationKey is not implemented — no server primitive available')
+          ),
     removeUnprocessedChildren: () =>
       removeUnprocessedChildren ? removeUnprocessedChildren(id) : Promise.resolve(),
   };

@@ -100,9 +100,18 @@ describe('createJobProxy', () => {
     expect(await job.moveToWait()).toBe(true);
     const ts = Date.now() + 5000;
     await job.moveToDelayed(ts);
-    expect(calls[3]).toEqual({ cmd: 'MoveToDelayed', id: 'j1', timestamp: ts });
-    expect(await job.moveToWaitingChildren()).toBe(false);
-    expect(await job.waitUntilFinished(null)).toBeUndefined();
+    // BullMQ API passes absolute timestamp; our TCP protocol expects relative delay
+    expect(calls[3].cmd).toBe('MoveToDelayed');
+    expect(calls[3].id).toBe('j1');
+    expect(calls[3].delay).toBeGreaterThan(4000);
+    expect(calls[3].delay).toBeLessThanOrEqual(5000);
+
+    // moveToWaitingChildren has no TCP primitive → throws explicit error
+    await expect(job.moveToWaitingChildren()).rejects.toThrow(
+      /moveToWaitingChildren is not supported in TCP mode/
+    );
+    // waitUntilFinished throws on timeout when mock response has no completed flag
+    await expect(job.waitUntilFinished(null)).rejects.toThrow(/waitUntilFinished timed out/);
   });
 
   test('state check methods delegate correctly for all states', async () => {
@@ -169,7 +178,10 @@ describe('createJobProxy', () => {
     expect(await job.getFailedChildrenValues()).toEqual({});
     expect(await job.getIgnoredChildrenFailures()).toEqual({});
     expect(await job.removeChildDependency()).toBe(false);
-    expect(await job.removeDeduplicationKey()).toBe(false);
+    // removeDeduplicationKey has no server primitive — explicit error instead of silent false
+    await expect(job.removeDeduplicationKey()).rejects.toThrow(
+      /removeDeduplicationKey is not implemented/
+    );
     await expect(job.removeUnprocessedChildren()).resolves.toBeUndefined();
   });
 });
@@ -206,15 +218,18 @@ describe('createSimpleJob', () => {
     await expect(job.clearLogs()).resolves.toBeUndefined();
   });
 
-  test('all move methods are no-ops with expected returns', async () => {
+  test('all move methods behave correctly without execution context', async () => {
     const ctx = createSimpleCtx();
     const job = createSimpleJob('s1', 'test', {}, 0, ctx);
     expect(await job.moveToCompleted({ ok: true })).toBeNull();
     await expect(job.moveToFailed(new Error('x'))).resolves.toBeUndefined();
     expect(await job.moveToWait()).toBe(false);
     await expect(job.moveToDelayed(Date.now())).resolves.toBeUndefined();
-    expect(await job.moveToWaitingChildren()).toBe(false);
-    expect(await job.waitUntilFinished(null)).toBeUndefined();
+    // Without embedded/tcp we have no TCP primitive → throws explicit error
+    await expect(job.moveToWaitingChildren()).rejects.toThrow(
+      /moveToWaitingChildren is not supported in TCP mode/
+    );
+    await expect(job.waitUntilFinished(null)).rejects.toThrow(/waitUntilFinished: no connection/);
   });
 
   test('state check methods delegate to context', async () => {
@@ -272,7 +287,9 @@ describe('createSimpleJob', () => {
     expect(await job.getDependenciesCount()).toEqual({ processed: 0, unprocessed: 0 });
     expect(await job.getFailedChildrenValues()).toEqual({});
     expect(await job.removeChildDependency()).toBe(false);
-    expect(await job.removeDeduplicationKey()).toBe(false);
+    await expect(job.removeDeduplicationKey()).rejects.toThrow(
+      /removeDeduplicationKey is not implemented/
+    );
     await expect(job.removeUnprocessedChildren()).resolves.toBeUndefined();
   });
 });

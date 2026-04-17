@@ -741,6 +741,54 @@ export class QueueManager {
 
   obliterate(queue: string): void {
     queueControl.obliterateQueue(queue, this.contextFactory.getQueueControlContext());
+    dlqOps.purgeDlqJobs(queue, this.contextFactory.getDlqContext());
+
+    // obliterateQueue() clears the waiting/delayed shard only. Active jobs in
+    // processingShards, plus completed/result/log/lock state in global indexes,
+    // plus SQLite rows, all survive unless we purge them here.
+    const toDrop = new Set<JobId>();
+    for (const [jid, loc] of this.jobIndex) {
+      if (loc.type === 'processing') {
+        const job = this.processingShards[loc.shardIdx]?.get(jid);
+        if (job?.queue === queue) toDrop.add(jid);
+      } else if (loc.queueName === queue) {
+        toDrop.add(jid);
+      }
+    }
+
+    for (const jid of toDrop) {
+      const loc = this.jobIndex.get(jid);
+      if (loc?.type === 'processing') {
+        this.processingShards[loc.shardIdx]?.delete(jid);
+      }
+      this.jobIndex.delete(jid);
+      this.completedJobs.delete(jid);
+      this.completedJobsData.delete(jid);
+      this.jobResults.delete(jid);
+      this.jobLogs.delete(jid);
+      this.jobLocks.delete(jid);
+      this.failedChildrenValues.delete(jid);
+      this.ignoredChildrenFailures.delete(jid);
+      this.pendingDepChecks.delete(jid);
+      this.stalledCandidates.delete(jid);
+      this.repeatChain.delete(jid);
+      this.storage?.deleteJob(jid);
+    }
+
+    // repeatChain maps oldId → newId; drop rows whose value is now a ghost.
+    const chainKeysToDelete: JobId[] = [];
+    for (const [oldId, newId] of this.repeatChain) {
+      if (toDrop.has(newId)) chainKeysToDelete.push(oldId);
+    }
+    for (const oldId of chainKeysToDelete) this.repeatChain.delete(oldId);
+
+    // Drop customId → JobId mappings that point at a dropped job
+    const customIdsToDelete: string[] = [];
+    for (const [cid, jid] of this.customIdMap.entries()) {
+      if (toDrop.has(jid)) customIdsToDelete.push(cid);
+    }
+    for (const cid of customIdsToDelete) this.customIdMap.delete(cid);
+
     this.unregisterQueueName(queue);
     this.dashboardEmit?.('queue:obliterated', { queue });
     this.dashboardEmit?.('queue:removed', { queue });
@@ -952,8 +1000,14 @@ export class QueueManager {
   }
 
   async changeDelay(jobId: JobId, delay: number): Promise<boolean> {
-    // Change delay is essentially moving to delayed with new delay
-    return jobMgmt.moveJobToDelayed(jobId, delay, this.contextFactory.getJobMgmtContext());
+    const ctx = this.contextFactory.getJobMgmtContext();
+    const loc = ctx.jobIndex.get(jobId);
+    // Jobs already in queue (waiting/delayed): mutate runAt in place
+    if (loc?.type === 'queue') {
+      return jobTransitions.changeWaitingDelay(jobId, delay, ctx);
+    }
+    // Active/processing jobs: move back to queue with new delay
+    return jobMgmt.moveJobToDelayed(jobId, delay, ctx);
   }
 
   async moveActiveToWait(jobId: JobId): Promise<boolean> {

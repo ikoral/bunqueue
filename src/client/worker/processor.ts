@@ -23,6 +23,22 @@ import {
   createRemoveUnprocessedChildrenHandler,
   createMoveToFailedHandler,
   createMoveToCompletedHandler,
+  createRemoveHandler,
+  createRetryHandler,
+  createUpdateDataHandler,
+  createPromoteHandler,
+  createChangeDelayHandler,
+  createChangePriorityHandler,
+  createExtendLockHandler,
+  createClearLogsHandler,
+  createMoveToWaitHandler,
+  createMoveToDelayedHandler,
+  createMoveToWaitingChildrenHandler,
+  createWaitUntilFinishedHandler,
+  createDiscardHandler,
+  createGetDependenciesHandler,
+  createGetDependenciesCountHandler,
+  createRemoveDeduplicationKeyHandler,
 } from './processorHandlers';
 
 /** Processor configuration */
@@ -92,6 +108,25 @@ export async function processJob<T, R>(
     removeUnprocessedChildren: createRemoveUnprocessedChildrenHandler(embedded, tcp),
     moveToFailed: moveToFailedHandler,
     moveToCompleted: moveToCompletedHandler,
+    // Issue #82 follow-up: wire all remaining mutation/query methods so they
+    // no longer silently no-op inside the Worker processor.
+    remove: createRemoveHandler(embedded, tcp),
+    retry: createRetryHandler(embedded, tcp, internalJob),
+    updateData: createUpdateDataHandler(embedded, tcp),
+    promote: createPromoteHandler(embedded, tcp),
+    changeDelay: createChangeDelayHandler(embedded, tcp),
+    changePriority: createChangePriorityHandler(embedded, tcp),
+    extendLock: createExtendLockHandler(embedded, tcp),
+    clearLogs: createClearLogsHandler(embedded, tcp),
+    moveToWait: createMoveToWaitHandler(embedded, tcp),
+    moveToDelayed: createMoveToDelayedHandler(embedded, tcp),
+    moveToWaitingChildren: createMoveToWaitingChildrenHandler(embedded, tcp),
+    waitUntilFinished: createWaitUntilFinishedHandler(embedded, tcp),
+    discard: createDiscardHandler(embedded, tcp),
+    getDependencies: createGetDependenciesHandler(embedded, tcp, internalJob),
+    getDependenciesCount: createGetDependenciesCountHandler(embedded, tcp, internalJob),
+    removeDeduplicationKey: createRemoveDeduplicationKeyHandler(),
+    token: token ?? undefined,
   });
 
   jobHolder.current = job;

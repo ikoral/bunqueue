@@ -7,9 +7,35 @@ import { EventEmitter } from 'events';
 import { getSharedManager } from '../manager';
 import { getSharedPool, releaseSharedPool, type TcpConnectionPool } from '../tcpPool';
 import { createPublicJob } from '../jobConversion';
-import type { Job, JobStateType } from '../types';
+import type { Job } from '../types';
 import type { Job as DomainJob } from '../../domain/types/job';
 import { jobId } from '../../domain/types/job';
+import {
+  createProgressHandler,
+  createLogHandler,
+  createGetStateHandler,
+  createGetChildrenValuesHandler,
+  createGetFailedChildrenValuesHandler,
+  createGetIgnoredChildrenFailuresHandler,
+  createRemoveChildDependencyHandler,
+  createRemoveUnprocessedChildrenHandler,
+  createRemoveHandler,
+  createRetryHandler,
+  createUpdateDataHandler,
+  createPromoteHandler,
+  createChangeDelayHandler,
+  createChangePriorityHandler,
+  createExtendLockHandler,
+  createClearLogsHandler,
+  createMoveToWaitHandler,
+  createMoveToDelayedHandler,
+  createMoveToWaitingChildrenHandler,
+  createWaitUntilFinishedHandler,
+  createDiscardHandler,
+  createGetDependenciesHandler,
+  createGetDependenciesCountHandler,
+  createRemoveDeduplicationKeyHandler,
+} from '../worker/processorHandlers';
 import type {
   SandboxedWorkerOptions,
   RequiredSandboxedWorkerOptions,
@@ -132,12 +158,17 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
 
     this.wrapperPath = await createWrapperScript(this.queueName, this.options.processor);
 
-    // Spawn all workers and wait for them to be ready
-    const spawnPromises: Promise<void>[] = [];
-    for (let i = 0; i < this.options.concurrency; i++) {
-      spawnPromises.push(this.spawnWorker(i));
+    // Spawn the first worker synchronously so Bun's bundler resolves and caches
+    // the wrapper entry point before concurrent siblings race for it. Remaining
+    // workers can then spawn in parallel without a ModuleNotFound flake.
+    await this.spawnWorker(0);
+    if (this.options.concurrency > 1) {
+      const spawnPromises: Promise<void>[] = [];
+      for (let i = 1; i < this.options.concurrency; i++) {
+        spawnPromises.push(this.spawnWorker(i));
+      }
+      await Promise.all(spawnPromises);
     }
-    await Promise.all(spawnPromises);
 
     this.startHeartbeat();
     this.emit('ready');
@@ -565,19 +596,57 @@ export class SandboxedWorker<T = unknown> extends EventEmitter {
   /** Create a public Job object from a DomainJob for event payloads */
   private createEventJob(domainJob: DomainJob): Job {
     const data = domainJob.data as { name?: string } | null;
+    const embedded = !this.tcp;
+    const tcp = this.tcp;
+    // Event-context moveToCompleted/moveToFailed: direct ack/fail without manual-move tracking
+    const moveToCompleted = async (
+      id: string,
+      returnValue: unknown,
+      _token?: string
+    ): Promise<unknown> => {
+      if (embedded) {
+        await getSharedManager().ack(jobId(id), returnValue);
+      } else if (tcp) {
+        await tcp.send({ cmd: 'ACK', id, result: returnValue });
+      }
+      return null;
+    };
+    const moveToFailed = async (id: string, error: Error, _token?: string): Promise<void> => {
+      if (embedded) {
+        await getSharedManager().fail(jobId(id), error.message);
+      } else if (tcp) {
+        await tcp.send({ cmd: 'FAIL', id, error: error.message });
+      }
+    };
     return createPublicJob({
       job: domainJob,
       name: data?.name ?? 'default',
-      updateProgress: async () => {},
-      log: async () => {},
-      getState: async (id: string): Promise<JobStateType> => {
-        if (this.tcp) {
-          const response = await this.tcp.send({ cmd: 'GetState', id });
-          return ((response as { state?: string }).state ?? 'unknown') as JobStateType;
-        }
-        const manager = getSharedManager();
-        return (await manager.getJobState(jobId(id))) as JobStateType;
-      },
+      updateProgress: createProgressHandler(embedded, tcp, this, { current: null }),
+      log: createLogHandler(embedded, tcp, this, { current: null }),
+      getState: createGetStateHandler(embedded, tcp),
+      getChildrenValues: createGetChildrenValuesHandler(embedded, tcp),
+      getFailedChildrenValues: createGetFailedChildrenValuesHandler(embedded, tcp),
+      getIgnoredChildrenFailures: createGetIgnoredChildrenFailuresHandler(embedded, tcp),
+      removeChildDependency: createRemoveChildDependencyHandler(embedded, tcp),
+      removeUnprocessedChildren: createRemoveUnprocessedChildrenHandler(embedded, tcp),
+      remove: createRemoveHandler(embedded, tcp),
+      retry: createRetryHandler(embedded, tcp, domainJob),
+      updateData: createUpdateDataHandler(embedded, tcp),
+      promote: createPromoteHandler(embedded, tcp),
+      changeDelay: createChangeDelayHandler(embedded, tcp),
+      changePriority: createChangePriorityHandler(embedded, tcp),
+      extendLock: createExtendLockHandler(embedded, tcp),
+      clearLogs: createClearLogsHandler(embedded, tcp),
+      moveToWait: createMoveToWaitHandler(embedded, tcp),
+      moveToDelayed: createMoveToDelayedHandler(embedded, tcp),
+      moveToWaitingChildren: createMoveToWaitingChildrenHandler(embedded, tcp),
+      waitUntilFinished: createWaitUntilFinishedHandler(embedded, tcp),
+      discard: createDiscardHandler(embedded, tcp),
+      getDependencies: createGetDependenciesHandler(embedded, tcp, domainJob),
+      getDependenciesCount: createGetDependenciesCountHandler(embedded, tcp, domainJob),
+      removeDeduplicationKey: createRemoveDeduplicationKeyHandler(),
+      moveToCompleted,
+      moveToFailed,
     });
   }
 }

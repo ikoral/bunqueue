@@ -249,6 +249,8 @@ export async function addBulk<T>(
     return ids.map((id, i) =>
       createSimpleJob(String(id), jobs[i].name, jobs[i].data, now, {
         queueName: ctx.name,
+        embedded: ctx.embedded,
+        tcp: ctx.tcp,
         getJobState: ctx.getJobState,
         removeAsync: ctx.removeAsync,
         retryJob: ctx.retryJob,

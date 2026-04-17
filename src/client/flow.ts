@@ -305,6 +305,8 @@ export class FlowProducer extends EventEmitter {
   private buildCallbacks(queueName: string): FlowJobCallbacks {
     const ctx = { name: queueName, embedded: this.embedded, tcp: this.tcp };
     return {
+      embedded: this.embedded,
+      tcp: this.tcp,
       updateData: (id, data) => managementOps.updateJobData(ctx, id, data),
       updateProgress: (id, progress) => managementOps.updateJobProgress(ctx, id, progress),
       log: (id, msg) => managementOps.addJobLog(ctx, id, msg).then(() => {}),

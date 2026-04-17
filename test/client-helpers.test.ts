@@ -1319,7 +1319,7 @@ describe('jobConversion', () => {
       expect(await publicJob.removeChildDependency()).toBe(false);
     });
 
-    test('removeDeduplicationKey should return false when no callback', async () => {
+    test('removeDeduplicationKey throws explicit error when no callback', async () => {
       const internalJob = makeInternalJob();
 
       const publicJob = createPublicJob({
@@ -1329,7 +1329,9 @@ describe('jobConversion', () => {
         log: async () => {},
       });
 
-      expect(await publicJob.removeDeduplicationKey()).toBe(false);
+      await expect(publicJob.removeDeduplicationKey()).rejects.toThrow(
+        /removeDeduplicationKey is not implemented/
+      );
     });
 
     test('removeUnprocessedChildren should resolve when no callback', async () => {

@@ -37,6 +37,17 @@ interface QueryContext {
     id: string,
     opts?: GetDependenciesOpts
   ) => Promise<JobDependenciesCount>;
+  // Move / wait callbacks
+  moveJobToCompleted?: (id: string, returnValue: unknown, token?: string) => Promise<unknown>;
+  moveJobToFailed?: (id: string, error: Error, token?: string) => Promise<void>;
+  moveJobToWait?: (id: string, token?: string) => Promise<boolean>;
+  moveJobToDelayed?: (id: string, timestamp: number, token?: string) => Promise<void>;
+  moveJobToWaitingChildren?: (
+    id: string,
+    token?: string,
+    opts?: { child?: { id: string; queue: string } }
+  ) => Promise<boolean>;
+  waitJobUntilFinished?: (id: string, queueEvents: unknown, ttl?: number) => Promise<unknown>;
 }
 
 /** Get a single job by ID */
@@ -46,8 +57,9 @@ export async function getJob<T>(ctx: QueryContext, id: string): Promise<Job<T> |
     if (!job) return null;
     const name = (job.data as { name?: string })?.name ?? 'unknown';
 
-    // Use toPublicJob if extended context is available (for full opts support)
+    // Use toPublicJob with full wiring (all callbacks route to the shared manager)
     if (ctx.updateJobData) {
+      const mgr = getSharedManager();
       return toPublicJob<T>({
         job,
         name,
@@ -63,12 +75,33 @@ export async function getJob<T>(ctx: QueryContext, id: string): Promise<Job<T> |
         clearLogs: ctx.clearJobLogs,
         getDependencies: ctx.getJobDependencies,
         getDependenciesCount: ctx.getJobDependenciesCount,
+        // Move / wait callbacks
+        moveToCompleted: ctx.moveJobToCompleted,
+        moveToFailed: ctx.moveJobToFailed,
+        moveToWait: ctx.moveJobToWait,
+        moveToDelayed: ctx.moveJobToDelayed
+          ? (jid, ts, tok) => ctx.moveJobToDelayed!(jid, ts, tok)
+          : undefined,
+        moveToWaitingChildren: ctx.moveJobToWaitingChildren,
+        waitUntilFinished: ctx.waitJobUntilFinished,
+        // Direct-to-manager callbacks (no server primitive or Queue-level wrapper)
+        discard: (jid) => {
+          void mgr.discard(jobId(jid));
+        },
+        getFailedChildrenValues: (jid) => mgr.getFailedChildrenValues(jobId(jid)),
+        getIgnoredChildrenFailures: (jid) => mgr.getIgnoredChildrenFailures(jobId(jid)),
+        removeChildDependency: (jid) => mgr.removeChildDependency(jobId(jid)),
+        removeUnprocessedChildren: async (jid) => {
+          await mgr.removeUnprocessedChildren(jobId(jid));
+        },
       });
     }
 
     // Fallback to simple job
     return createSimpleJob(String(job.id), name, job.data as T, job.createdAt, {
       queueName: ctx.name,
+      embedded: ctx.embedded,
+      tcp: ctx.tcp,
       getJobState: ctx.getJobState,
       removeAsync: ctx.removeAsync,
       retryJob: ctx.retryJob,
@@ -88,6 +121,8 @@ export async function getJob<T>(ctx: QueryContext, id: string): Promise<Job<T> |
   const name = (j.data as { name?: string })?.name ?? 'unknown';
   const result = createSimpleJob(j.id, name, j.data, Date.now(), {
     queueName: ctx.name,
+    embedded: ctx.embedded,
+    tcp: ctx.tcp,
     getJobState: ctx.getJobState,
     removeAsync: ctx.removeAsync,
     retryJob: ctx.retryJob,
@@ -164,6 +199,8 @@ export function getJobs<T>(ctx: QueryContext, options: GetJobsOptions = {}): Job
     const name = (j.data as { name?: string })?.name ?? 'unknown';
     return createSimpleJob(String(j.id), name, j.data as T, j.createdAt, {
       queueName: ctx.name,
+      embedded: ctx.embedded,
+      tcp: ctx.tcp,
       getJobState: ctx.getJobState,
       removeAsync: ctx.removeAsync,
       retryJob: ctx.retryJob,
@@ -216,6 +253,8 @@ export async function getJobsAsync<T>(
     const name = (j.data as { name?: string })?.name ?? 'unknown';
     const result = createSimpleJob(j.id, name, j.data, j.createdAt ?? now, {
       queueName: ctx.name,
+      embedded: ctx.embedded,
+      tcp: ctx.tcp,
       getJobState: ctx.getJobState,
       removeAsync: ctx.removeAsync,
       retryJob: ctx.retryJob,

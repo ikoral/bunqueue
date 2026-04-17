@@ -66,10 +66,11 @@ describe('Job Advanced Methods - BullMQ v5', () => {
       expect(typeof job.removeDeduplicationKey).toBe('function');
     });
 
-    test('removeDeduplicationKey should return false for job without dedupe key', async () => {
+    test('removeDeduplicationKey throws explicit error (no server primitive)', async () => {
       const job = await queue.add('test', { value: 1 });
-      const removed = await job.removeDeduplicationKey();
-      expect(removed).toBe(false);
+      await expect(job.removeDeduplicationKey()).rejects.toThrow(
+        /removeDeduplicationKey is not implemented/
+      );
     });
   });
 

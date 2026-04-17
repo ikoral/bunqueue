@@ -296,14 +296,39 @@ export async function handleChangeDelay(
     : resp.error('Job not found or cannot change delay', reqId);
 }
 
-/** Handle MoveToWait command - promote a delayed job to waiting */
+/** Handle MoveToWait command - move a job back to waiting.
+ *  Dispatch by state to match embedded branching in jobMove.ts.
+ *  - active  -> moveActiveToWait
+ *  - delayed -> promote
+ *  - failed  -> retryDlq
+ *  - waiting / prioritized -> already there, no-op success
+ */
 export async function handleMoveToWait(
   cmd: Extract<Command, { cmd: 'MoveToWait' }>,
   ctx: HandlerContext,
   reqId?: string
 ): Promise<Response> {
-  const success = await ctx.queueManager.promote(jobId(cmd.id));
-  return success ? resp.ok(undefined, reqId) : resp.error('Job not found or not delayed', reqId);
+  const id = jobId(cmd.id);
+  const state = await ctx.queueManager.getJobState(id);
+
+  if (state === 'active') {
+    const ok = await ctx.queueManager.moveActiveToWait(id);
+    return ok ? resp.ok(undefined, reqId) : resp.error('Job not found or not active', reqId);
+  }
+  if (state === 'delayed') {
+    const ok = await ctx.queueManager.promote(id);
+    return ok ? resp.ok(undefined, reqId) : resp.error('Job not found or not delayed', reqId);
+  }
+  if (state === 'failed') {
+    const job = await ctx.queueManager.getJob(id);
+    if (!job) return resp.error('Job not found', reqId);
+    const count = ctx.queueManager.retryDlq(job.queue, id);
+    return count > 0 ? resp.ok(undefined, reqId) : resp.error('Failed job not in DLQ', reqId);
+  }
+  if (state === 'waiting' || state === 'prioritized') {
+    return resp.ok(undefined, reqId);
+  }
+  return resp.error(`Cannot move job from state '${state}' to waiting`, reqId);
 }
 
 /** Handle PromoteJobs command - promote all delayed jobs in a queue */

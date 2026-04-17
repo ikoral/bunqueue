@@ -33,13 +33,29 @@ export async function removeAsync(ctx: ManagementContext, id: string): Promise<v
 
 // ============ Retry Operations ============
 
-/** Retry a specific job */
+/** Retry a specific job — BullMQ contract: failed → waiting. */
 export async function retryJob(ctx: ManagementContext, id: string): Promise<void> {
   if (ctx.embedded) {
-    getSharedManager().retryDlq(ctx.name, jobId(id));
-    return;
+    const mgr = getSharedManager();
+    const state = await mgr.getJobState(jobId(id));
+    if (state === 'failed') {
+      const count = mgr.retryDlq(ctx.name, jobId(id));
+      if (count === 0) throw new Error(`Job ${id} is failed but not present in DLQ`);
+      return;
+    }
+    if (state === 'active') {
+      const ok = await mgr.moveActiveToWait(jobId(id));
+      if (!ok) throw new Error(`Failed to retry active job ${id}`);
+      return;
+    }
+    if (state === 'waiting' || state === 'prioritized' || state === 'delayed') return;
+    throw new Error(`Cannot retry job ${id} from state '${state}'`);
   }
-  await ctx.tcp!.send({ cmd: 'RetryDlq', queue: ctx.name, id });
+  const res = await ctx.tcp!.send({ cmd: 'MoveToWait', id });
+  if (res.ok !== true) {
+    const err = typeof res.error === 'string' ? res.error : 'retry failed';
+    throw new Error(err);
+  }
 }
 
 /** Retry jobs matching criteria */
@@ -228,7 +244,7 @@ export async function changeJobDelay(
   delay: number
 ): Promise<void> {
   if (ctx.embedded) {
-    // Not directly supported in embedded mode
+    await getSharedManager().changeDelay(jobId(id), delay);
     return;
   }
   await ctx.tcp!.send({ cmd: 'ChangeDelay', id, delay });

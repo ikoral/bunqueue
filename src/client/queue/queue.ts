@@ -182,6 +182,18 @@ export class Queue<T = unknown> {
       getJobDependencies: (id: string, o?: GetDependenciesOpts) => this.getJobDependencies(id, o),
       getJobDependenciesCount: (id: string, o?: GetDependenciesOpts) =>
         this.getJobDependenciesCount(id, o),
+      // Move / wait callbacks
+      moveJobToCompleted: (id: string, r: unknown, t?: string) => this.moveJobToCompleted(id, r, t),
+      moveJobToFailed: (id: string, e: Error, t?: string) => this.moveJobToFailed(id, e, t),
+      moveJobToWait: (id: string, t?: string) => this.moveJobToWait(id, t),
+      moveJobToDelayed: (id: string, ts: number, t?: string) => this.moveJobToDelayed(id, ts, t),
+      moveJobToWaitingChildren: (
+        id: string,
+        t?: string,
+        o?: { child?: { id: string; queue: string } }
+      ) => this.moveJobToWaitingChildren(id, t, o),
+      waitJobUntilFinished: (id: string, qe: unknown, ttl?: number) =>
+        this.waitJobUntilFinished(id, qe, ttl),
     };
   }
 

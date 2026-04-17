@@ -111,10 +111,11 @@ describe('flowJobFactory', () => {
       await expect(job.retry()).resolves.toBeUndefined();
     });
 
-    test('should return waiting state by default', async () => {
+    test('should return unknown state when no execution context is provided', async () => {
+      // Without embedded/tcp/getState callback, there is no way to resolve state.
       const job = createFlowJobObject('j1', 'test', {}, 'q');
       const state = await job.getState();
-      expect(state).toBe('waiting');
+      expect(state).toBe('unknown');
     });
 
     test('should return empty children values', async () => {
@@ -123,10 +124,11 @@ describe('flowJobFactory', () => {
       expect(children).toEqual({});
     });
 
-    test('should provide BullMQ v5 state check methods', async () => {
+    test('should provide BullMQ v5 state check methods (unknown without context)', async () => {
       const job = createFlowJobObject('j1', 'test', {}, 'q');
 
-      expect(await job.isWaiting()).toBe(true);
+      // Without execution context, state is 'unknown' → every isX check returns false.
+      expect(await job.isWaiting()).toBe(false);
       expect(await job.isActive()).toBe(false);
       expect(await job.isDelayed()).toBe(false);
       expect(await job.isCompleted()).toBe(false);
@@ -191,27 +193,37 @@ describe('flowJobFactory', () => {
       expect(raw.stacktrace).toBeNull();
     });
 
-    test('should provide move method no-ops', async () => {
+    test('move methods are no-ops or throw explicit errors without context', async () => {
       const job = createFlowJobObject('j1', 'test', {}, 'q');
 
+      // Without embedded/tcp, there is nothing to dispatch to — ack-style methods
+      // quietly succeed (nothing to do), waitUntilFinished/moveToWaitingChildren
+      // surface explicit errors rather than silent no-ops.
       expect(await job.moveToCompleted('result')).toBeNull();
       await expect(job.moveToFailed(new Error('fail'))).resolves.toBeUndefined();
       expect(await job.moveToWait()).toBe(false);
       await expect(job.moveToDelayed(Date.now() + 5000)).resolves.toBeUndefined();
-      expect(await job.moveToWaitingChildren()).toBe(false);
-      expect(await job.waitUntilFinished(null)).toBeUndefined();
+      await expect(job.moveToWaitingChildren()).rejects.toThrow(
+        /moveToWaitingChildren is not supported in TCP mode/
+      );
+      await expect(job.waitUntilFinished(null)).rejects.toThrow(
+        /waitUntilFinished: no connection/
+      );
     });
 
-    test('should provide additional BullMQ v5 no-op methods', async () => {
+    test('additional BullMQ v5 methods wire correctly or throw explicitly', async () => {
       const job = createFlowJobObject('j1', 'test', {}, 'q');
 
-      // discard is synchronous void
+      // discard is synchronous void — no-ops safely without context
       expect(() => job.discard()).not.toThrow();
 
       expect(await job.getFailedChildrenValues()).toEqual({});
       expect(await job.getIgnoredChildrenFailures()).toEqual({});
       expect(await job.removeChildDependency()).toBe(false);
-      expect(await job.removeDeduplicationKey()).toBe(false);
+      // removeDeduplicationKey has no server primitive → must throw rather than silently succeed
+      await expect(job.removeDeduplicationKey()).rejects.toThrow(
+        /removeDeduplicationKey is not implemented/
+      );
       await expect(job.removeUnprocessedChildren()).resolves.toBeUndefined();
     });
   });

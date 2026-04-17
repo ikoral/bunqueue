@@ -124,14 +124,19 @@ async function runTests() {
     }
   })();
 
-  // Test 10: removeDeduplicationKey returns false for job without dedupe
-  await test('removeDeduplicationKey returns false for job without dedupe', async () => {
+  // Test 10: removeDeduplicationKey throws explicit error (no server primitive)
+  await test('removeDeduplicationKey throws explicit error', async () => {
     const job = await queue.add('test', { value: 10 });
-    const removed = await job.removeDeduplicationKey();
-
-    if (removed !== false) {
-      throw new Error('Expected false');
+    let threw = false;
+    try {
+      await job.removeDeduplicationKey();
+    } catch (err) {
+      threw = true;
+      if (!/removeDeduplicationKey is not implemented/.test(String(err))) {
+        throw new Error(`Wrong error: ${err}`);
+      }
     }
+    if (!threw) throw new Error('Expected throw');
   })();
 
   // Test 11: Job has removeUnprocessedChildren method
