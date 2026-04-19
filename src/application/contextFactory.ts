@@ -260,6 +260,12 @@ export class ContextFactory {
     return {
       shards: this.deps.shards,
       jobIndex: this.deps.jobIndex,
+      processingShards: this.deps.processingShards,
+      completedJobs: this.deps.completedJobs,
+      completedJobsData: this.deps.completedJobsData,
+      jobResults: this.deps.jobResults,
+      jobLogs: this.deps.jobLogs,
+      storage: this.deps.storage,
     };
   }
 }

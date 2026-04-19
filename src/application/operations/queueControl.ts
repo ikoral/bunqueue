@@ -3,14 +3,22 @@
  * Pause, resume, drain, obliterate, clean, list queues
  */
 
-import type { JobId } from '../../domain/types/job';
+import type { Job, JobId } from '../../domain/types/job';
 import type { Shard } from '../../domain/queue/shard';
+import type { SqliteStorage } from '../../infrastructure/persistence/sqlite';
+import type { MapLike, SetLike } from '../../shared/lru';
 import { shardIndex, SHARD_COUNT } from '../../shared/hash';
 
 /** Context for queue control operations */
 export interface QueueControlContext {
   shards: Shard[];
   jobIndex: Map<JobId, { type: string; shardIdx?: number; queueName?: string }>;
+  processingShards?: Map<JobId, Job>[];
+  completedJobs?: SetLike<JobId>;
+  completedJobsData?: MapLike<JobId, Job>;
+  jobResults?: MapLike<JobId, unknown>;
+  jobLogs?: MapLike<JobId, unknown>;
+  storage?: SqliteStorage | null;
 }
 
 /** Pause a queue */
@@ -59,9 +67,116 @@ export function listAllQueues(ctx: QueueControlContext): string[] {
   return Array.from(queues);
 }
 
+/** Normalize BullMQ-compatible state aliases */
+function normalizeCleanState(state?: string): string | undefined {
+  if (!state) return undefined;
+  if (state === 'wait') return 'waiting';
+  return state;
+}
+
+function safeDeleteJob(ctx: QueueControlContext, jobId: JobId): void {
+  try {
+    ctx.storage?.deleteJob(jobId);
+  } catch {
+    // SQLite write may fail (e.g. SQLITE_FULL). In-memory state already cleared;
+    // orphan row will be GC'd by crash-recovery on restart.
+  }
+}
+
+function safeDeleteDlqEntry(ctx: QueueControlContext, jobId: JobId): void {
+  try {
+    ctx.storage?.deleteDlqEntry(jobId);
+  } catch {
+    // Same rationale as safeDeleteJob.
+  }
+}
+
+function cleanWaitingLike(
+  queue: string,
+  graceMs: number,
+  ctx: QueueControlContext,
+  maxJobs: number
+): number {
+  const idx = shardIndex(queue);
+  const shard = ctx.shards[idx];
+  const q = shard.getQueue(queue);
+  const oldJobs = shard.getOldJobs(queue, graceMs, maxJobs);
+  let cleaned = 0;
+  for (const { jobId } of oldJobs) {
+    if (q.has(jobId)) {
+      q.remove(jobId);
+      shard.decrementQueued(jobId);
+      shard.removeFromTemporalIndex(jobId);
+      ctx.jobIndex.delete(jobId);
+      safeDeleteJob(ctx, jobId);
+      cleaned++;
+    }
+  }
+  return cleaned;
+}
+
+function cleanCompleted(
+  queue: string,
+  graceMs: number,
+  ctx: QueueControlContext,
+  maxJobs: number
+): number {
+  if (!ctx.completedJobs || !ctx.completedJobsData) return 0;
+  const threshold = Date.now() - graceMs;
+  const toRemove: JobId[] = [];
+  for (const [jid, loc] of ctx.jobIndex) {
+    if (loc.type !== 'completed' || loc.queueName !== queue) continue;
+    const job = ctx.completedJobsData.get(jid) ?? ctx.storage?.getJob(jid) ?? null;
+    const ts = job?.completedAt ?? job?.createdAt ?? 0;
+    if (ts && ts > threshold) continue;
+    toRemove.push(jid);
+    if (toRemove.length >= maxJobs) break;
+  }
+  for (const jid of toRemove) {
+    ctx.completedJobs.delete(jid);
+    ctx.completedJobsData.delete(jid);
+    ctx.jobResults?.delete(jid);
+    ctx.jobLogs?.delete(jid);
+    ctx.jobIndex.delete(jid);
+    safeDeleteJob(ctx, jid);
+  }
+  return toRemove.length;
+}
+
+function cleanFailed(
+  queue: string,
+  graceMs: number,
+  ctx: QueueControlContext,
+  maxJobs: number
+): number {
+  const idx = shardIndex(queue);
+  const shard = ctx.shards[idx];
+  const entries = shard.getDlqEntries(queue);
+  const threshold = Date.now() - graceMs;
+  const toRemove: JobId[] = [];
+  for (const entry of entries) {
+    const ts = entry.enteredAt ?? entry.job.createdAt;
+    if (ts > threshold) continue;
+    toRemove.push(entry.job.id);
+    if (toRemove.length >= maxJobs) break;
+  }
+  for (const jid of toRemove) {
+    shard.removeFromDlq(queue, jid);
+    ctx.jobIndex.delete(jid);
+    ctx.jobResults?.delete(jid);
+    ctx.jobLogs?.delete(jid);
+    safeDeleteDlqEntry(ctx, jid);
+    safeDeleteJob(ctx, jid);
+  }
+  return toRemove.length;
+}
+
 /**
- * Clean old jobs from queue
- * Uses temporal index for O(log n + k) instead of O(n) full scan
+ * Clean old jobs from queue.
+ * Supported states: waiting/wait, delayed, prioritized, paused, completed, failed.
+ * State='active' is intentionally unsupported: cleaning in-flight jobs races with
+ * the worker's ack path and would leak concurrency/uniqueKey/groupId slots. Use
+ * `fail(jobId)` or `cancelJob(jobId)` to terminate an active job safely.
  */
 export function cleanQueue(
   queue: string,
@@ -70,32 +185,24 @@ export function cleanQueue(
   state?: string,
   limit?: number
 ): number {
-  const idx = shardIndex(queue);
-  const shard = ctx.shards[idx];
   const maxJobs = limit ?? 1000;
-  let cleaned = 0;
+  const normalized = normalizeCleanState(state);
 
-  if (!state || state === 'waiting' || state === 'delayed') {
-    const q = shard.getQueue(queue);
-
-    // Use temporal index for efficient lookup of old jobs
-    const oldJobs = shard.getOldJobs(queue, graceMs, maxJobs);
-
-    for (const { jobId } of oldJobs) {
-      // Verify job still exists in queue before removing
-      if (q.has(jobId)) {
-        q.remove(jobId);
-        // Update counters
-        shard.decrementQueued(jobId);
-        // Remove from temporal index
-        shard.removeFromTemporalIndex(jobId);
-        ctx.jobIndex.delete(jobId);
-        cleaned++;
-      }
-    }
+  switch (normalized) {
+    case undefined:
+    case 'waiting':
+    case 'delayed':
+    case 'prioritized':
+    case 'paused':
+      return cleanWaitingLike(queue, graceMs, ctx, maxJobs);
+    case 'completed':
+      return cleanCompleted(queue, graceMs, ctx, maxJobs);
+    case 'failed':
+      return cleanFailed(queue, graceMs, ctx, maxJobs);
+    case 'active':
+    default:
+      return 0;
   }
-
-  return cleaned;
 }
 
 /** Get count of jobs in queue */

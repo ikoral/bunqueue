@@ -884,16 +884,20 @@ describe('ContextFactory', () => {
       expect(ctx.jobIndex).toBe(deps.jobIndex);
     });
 
-    test('should be the most minimal context with only 2 fields', () => {
+    test('should include stores needed to clean completed/failed/active jobs', () => {
       const ctx = factory.getQueueControlContext();
-      const keys = Object.keys(ctx);
-      expect(keys.length).toBe(2);
+      expect(ctx.processingShards).toBe(deps.processingShards);
+      expect(ctx.completedJobs).toBe(deps.completedJobs);
+      expect(ctx.completedJobsData).toBe(deps.completedJobsData);
+      expect(ctx.jobResults).toBe(deps.jobResults);
+      expect(ctx.jobLogs).toBe(deps.jobLogs);
+      expect(ctx.storage).toBe(deps.storage);
     });
 
-    test('should not include locks or processing data', () => {
+    test('should not include locks', () => {
       const ctx = factory.getQueueControlContext();
       expect((ctx as any).shardLocks).toBeUndefined();
-      expect((ctx as any).processingShards).toBeUndefined();
+      expect((ctx as any).processingLocks).toBeUndefined();
     });
   });
 

@@ -674,6 +674,97 @@ describe('Management Operations', () => {
 
       expect(Array.isArray(result)).toBe(true);
     });
+
+    it('should remove completed jobs (regression: issue #84)', async () => {
+      const qname = 'bug-84-completed';
+      const q = new Queue(qname, { embedded: true });
+      const w = new Worker(qname, async () => ({ ok: true }), {
+        embedded: true,
+      });
+      try {
+        const job = await q.add('t', {});
+        // Wait for processing
+        for (let i = 0; i < 50; i++) {
+          const info = await q.getJob(job.id);
+          if (info && (info as { finishedOn?: number }).finishedOn) break;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        const before = q.getJobCounts();
+        expect(before.completed).toBeGreaterThanOrEqual(1);
+        const removed = await q.cleanAsync(0, 1000, 'completed');
+        expect(removed.length).toBeGreaterThanOrEqual(1);
+        const after = q.getJobCounts();
+        expect(after.completed).toBe(0);
+      } finally {
+        await w.close();
+        await q.close();
+      }
+    });
+
+    it('should remove failed jobs (regression: issue #84)', async () => {
+      const qname = 'bug-84-failed';
+      const q = new Queue(qname, { embedded: true });
+      const w = new Worker(
+        qname,
+        async () => {
+          throw new Error('boom');
+        },
+        { embedded: true }
+      );
+      try {
+        await q.add('t', {}, { attempts: 1 });
+        // Wait for failure → DLQ
+        for (let i = 0; i < 50; i++) {
+          const counts = q.getJobCounts();
+          if (counts.failed >= 1) break;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        const before = q.getJobCounts();
+        expect(before.failed).toBeGreaterThanOrEqual(1);
+        const removed = await q.cleanAsync(0, 1000, 'failed');
+        expect(removed.length).toBeGreaterThanOrEqual(1);
+        const after = q.getJobCounts();
+        expect(after.failed).toBe(0);
+      } finally {
+        await w.close();
+        await q.close();
+      }
+    });
+
+    it('should respect grace period for completed jobs (regression: issue #84)', async () => {
+      const qname = 'bug-84-grace';
+      const q = new Queue(qname, { embedded: true });
+      const w = new Worker(qname, async () => ({ ok: true }), { embedded: true });
+      try {
+        const job = await q.add('t', {});
+        for (let i = 0; i < 50; i++) {
+          const info = await q.getJob(job.id);
+          if (info && (info as { finishedOn?: number }).finishedOn) break;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        // grace = 1 hour → nothing should be cleaned
+        const removed = await q.cleanAsync(3_600_000, 1000, 'completed');
+        expect(removed.length).toBe(0);
+        expect(q.getJobCounts().completed).toBeGreaterThanOrEqual(1);
+      } finally {
+        await w.close();
+        await q.close();
+      }
+    });
+
+    it('should normalize wait alias to waiting (regression: issue #84)', async () => {
+      const qname = 'bug-84-wait-alias';
+      const q = new Queue(qname, { embedded: true });
+      try {
+        await q.add('a', {});
+        await q.add('b', {});
+        const removed = await q.cleanAsync(0, 1000, 'wait');
+        expect(removed.length).toBe(2);
+        expect(q.getJobCounts().waiting).toBe(0);
+      } finally {
+        await q.close();
+      }
+    });
   });
 });
 
