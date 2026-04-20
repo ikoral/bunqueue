@@ -142,7 +142,7 @@ export interface McpBackend {
   obliterateQueue(queue: string): Promise<void>;
   listQueues(): Promise<string[]>;
   countJobs(queue: string): Promise<number>;
-  cleanQueue(queue: string, graceMs: number, state?: string, limit?: number): Promise<number>;
+  cleanQueue(queue: string, graceMs: number, state?: string, limit?: number): Promise<string[]>;
   isPaused(queue: string): Promise<boolean>;
   getCountsPerPriority(queue: string): Promise<Record<number, number>>;
 
@@ -907,7 +907,7 @@ export class TcpBackend implements McpBackend {
 
   async cleanQueue(queue: string, graceMs: number, state?: string, limit?: number) {
     const res = await this.send({ cmd: 'Clean', queue, grace: graceMs, state, limit });
-    return (res.removed as number) ?? 0;
+    return (res.ids as string[]) ?? [];
   }
 
   async isPaused(queue: string) {

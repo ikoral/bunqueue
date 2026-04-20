@@ -731,6 +731,74 @@ describe('Management Operations', () => {
       }
     });
 
+    it('should return actual job ids, not empty strings (regression: issue #84)', async () => {
+      const qname = 'bug-84-ids';
+      const q = new Queue(qname, { embedded: true });
+      try {
+        const a = await q.add('a', {});
+        const b = await q.add('b', {});
+        const removed = await q.cleanAsync(0, 1000, 'wait');
+        expect(removed.sort()).toEqual([a.id, b.id].sort());
+        for (const id of removed) {
+          expect(typeof id).toBe('string');
+          expect(id.length).toBeGreaterThan(0);
+        }
+      } finally {
+        await q.close();
+      }
+    });
+
+    it('should clean completed jobs after server restart (regression: issue #84)', async () => {
+      const { shutdownManager: sd } = await import('../src/client');
+      const qname = 'bug-84-restart';
+      const dbPath = `/tmp/bq-test-84-restart-${Date.now()}.db`;
+
+      // Reset singleton so Boot 1 actually uses our dataPath.
+      sd();
+
+      // Boot 1: add + complete
+      {
+        const q = new Queue(qname, { embedded: true, dataPath: dbPath });
+        const w = new Worker(qname, async () => ({ ok: true }), {
+          embedded: true,
+          dataPath: dbPath,
+        });
+        try {
+          const job = await q.add('t', {});
+          for (let i = 0; i < 50; i++) {
+            const info = await q.getJob(job.id);
+            if (info && (info as { finishedOn?: number }).finishedOn) break;
+            await new Promise((r) => setTimeout(r, 20));
+          }
+          expect(q.getJobCounts().completed).toBeGreaterThanOrEqual(1);
+        } finally {
+          await w.close();
+          await q.close();
+          sd();
+        }
+      }
+
+      // Boot 2: restart → cleanAsync should find completed jobs
+      {
+        const q2 = new Queue(qname, { embedded: true, dataPath: dbPath });
+        try {
+          const removed = await q2.cleanAsync(0, 1000, 'completed');
+          expect(removed.length).toBeGreaterThanOrEqual(1);
+          expect(q2.getJobCounts().completed).toBe(0);
+        } finally {
+          await q2.close();
+          sd();
+        }
+      }
+
+      // Cleanup db file
+      try {
+        await import('fs').then((m) => m.promises.unlink(dbPath));
+      } catch {
+        // ignore
+      }
+    });
+
     it('should respect grace period for completed jobs (regression: issue #84)', async () => {
       const qname = 'bug-84-grace';
       const q = new Queue(qname, { embedded: true });

@@ -168,7 +168,7 @@ describe('Queue Control', () => {
 
       // Clean with 1 hour grace period (should not remove)
       const cleaned = qm.clean('test-queue', 3600000);
-      expect(cleaned).toBe(0);
+      expect(cleaned).toEqual([]);
 
       const job = await qm.pull('test-queue');
       expect(job).not.toBeNull();

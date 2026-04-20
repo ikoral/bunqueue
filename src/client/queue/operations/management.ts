@@ -85,8 +85,7 @@ export function clean(
   type?: 'completed' | 'wait' | 'active' | 'paused' | 'delayed' | 'failed'
 ): string[] {
   if (!ctx.embedded) return [];
-  const count = getSharedManager().clean(ctx.name, grace, type, limit);
-  return new Array<string>(count).fill('');
+  return getSharedManager().clean(ctx.name, grace, type, limit);
 }
 
 /** Clean old jobs (async) */

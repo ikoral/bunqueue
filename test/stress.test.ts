@@ -347,7 +347,8 @@ describe('Stress Tests', () => {
         if (job) await manager.ack(job.id, {});
       }
       stats = manager.getStats();
-      expect(stats.completed).toBe(100);
+      // 100 recovered from Phase 2 + 100 freshly acked in Phase 3 (issue #84 fix).
+      expect(stats.completed).toBe(200);
 
       manager.shutdown();
       await cleanup();

@@ -94,6 +94,10 @@ CREATE INDEX IF NOT EXISTS idx_jobs_group_id
 CREATE INDEX IF NOT EXISTS idx_jobs_pending_priority
     ON jobs(queue, state, priority DESC, run_at ASC) WHERE state IN ('waiting', 'delayed');
 
+-- Completed jobs: index for recovery ordering (issue #84)
+CREATE INDEX IF NOT EXISTS idx_jobs_completed_order
+    ON jobs(completed_at DESC) WHERE state = 'completed';
+
 -- Cron jobs (BLOB for MessagePack)
 CREATE TABLE IF NOT EXISTS cron_jobs (
     name TEXT PRIMARY KEY,
@@ -131,7 +135,7 @@ CREATE TABLE IF NOT EXISTS migrations (
 `;
 
 /** Current schema version */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 /** All migrations in order */
 export const MIGRATIONS: Record<number, string> = {
@@ -173,5 +177,10 @@ ALTER TABLE cron_jobs ADD COLUMN skip_if_no_worker INTEGER NOT NULL DEFAULT 0;
   // Migration 10: Add preventOverlap to cron_jobs (default 1 = enabled)
   10: `
 ALTER TABLE cron_jobs ADD COLUMN prevent_overlap INTEGER NOT NULL DEFAULT 1;
+`,
+  // Migration 11: Index for completed-job recovery ordering (issue #84)
+  11: `
+CREATE INDEX IF NOT EXISTS idx_jobs_completed_order
+    ON jobs(completed_at DESC) WHERE state = 'completed';
 `,
 };

@@ -96,12 +96,12 @@ function cleanWaitingLike(
   graceMs: number,
   ctx: QueueControlContext,
   maxJobs: number
-): number {
+): JobId[] {
   const idx = shardIndex(queue);
   const shard = ctx.shards[idx];
   const q = shard.getQueue(queue);
   const oldJobs = shard.getOldJobs(queue, graceMs, maxJobs);
-  let cleaned = 0;
+  const removed: JobId[] = [];
   for (const { jobId } of oldJobs) {
     if (q.has(jobId)) {
       q.remove(jobId);
@@ -109,10 +109,10 @@ function cleanWaitingLike(
       shard.removeFromTemporalIndex(jobId);
       ctx.jobIndex.delete(jobId);
       safeDeleteJob(ctx, jobId);
-      cleaned++;
+      removed.push(jobId);
     }
   }
-  return cleaned;
+  return removed;
 }
 
 function cleanCompleted(
@@ -120,8 +120,8 @@ function cleanCompleted(
   graceMs: number,
   ctx: QueueControlContext,
   maxJobs: number
-): number {
-  if (!ctx.completedJobs || !ctx.completedJobsData) return 0;
+): JobId[] {
+  if (!ctx.completedJobs || !ctx.completedJobsData) return [];
   const threshold = Date.now() - graceMs;
   const toRemove: JobId[] = [];
   for (const [jid, loc] of ctx.jobIndex) {
@@ -140,7 +140,7 @@ function cleanCompleted(
     ctx.jobIndex.delete(jid);
     safeDeleteJob(ctx, jid);
   }
-  return toRemove.length;
+  return toRemove;
 }
 
 function cleanFailed(
@@ -148,7 +148,7 @@ function cleanFailed(
   graceMs: number,
   ctx: QueueControlContext,
   maxJobs: number
-): number {
+): JobId[] {
   const idx = shardIndex(queue);
   const shard = ctx.shards[idx];
   const entries = shard.getDlqEntries(queue);
@@ -168,7 +168,7 @@ function cleanFailed(
     safeDeleteDlqEntry(ctx, jid);
     safeDeleteJob(ctx, jid);
   }
-  return toRemove.length;
+  return toRemove;
 }
 
 /**
@@ -177,6 +177,7 @@ function cleanFailed(
  * State='active' is intentionally unsupported: cleaning in-flight jobs races with
  * the worker's ack path and would leak concurrency/uniqueKey/groupId slots. Use
  * `fail(jobId)` or `cancelJob(jobId)` to terminate an active job safely.
+ * @returns Array of removed JobIds.
  */
 export function cleanQueue(
   queue: string,
@@ -184,7 +185,7 @@ export function cleanQueue(
   ctx: QueueControlContext,
   state?: string,
   limit?: number
-): number {
+): JobId[] {
   const maxJobs = limit ?? 1000;
   const normalized = normalizeCleanState(state);
 
@@ -201,7 +202,7 @@ export function cleanQueue(
       return cleanFailed(queue, graceMs, ctx, maxJobs);
     case 'active':
     default:
-      return 0;
+      return [];
   }
 }
 

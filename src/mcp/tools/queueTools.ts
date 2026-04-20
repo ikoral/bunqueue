@@ -155,10 +155,13 @@ export function registerQueueTools(server: McpServer, backend: McpBackend) {
       limit: z.number().optional().describe('Maximum number of jobs to remove'),
     },
     withErrorHandler('bunqueue_clean_queue', async ({ queue, graceMs, state, limit }) => {
-      const removed = await backend.cleanQueue(queue, graceMs, state, limit);
+      const ids = await backend.cleanQueue(queue, graceMs, state, limit);
       return {
         content: [
-          { type: 'text' as const, text: JSON.stringify({ success: true, queue, removed }) },
+          {
+            type: 'text' as const,
+            text: JSON.stringify({ success: true, queue, removed: ids.length, ids }),
+          },
         ],
       };
     })

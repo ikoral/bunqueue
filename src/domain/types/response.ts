@@ -119,6 +119,8 @@ export interface BoolResponse extends BaseResponse {
 export interface CountResponse extends BaseResponse {
   readonly ok: true;
   readonly count: number;
+  /** Populated by Clean handler with the JobIds that were removed */
+  readonly ids?: string[];
 }
 
 /** Stats response */

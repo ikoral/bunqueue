@@ -101,8 +101,8 @@ export const COMMANDS: Partial<Record<string, Handler>> = {
     return { queue: cmd.queue, drained: count };
   },
   'queue:clean': (qm, cmd) => {
-    const count = qm.clean(cmd.queue ?? '', cmd.graceMs ?? 0, cmd.state, cmd.limit);
-    return { queue: cmd.queue, cleaned: count };
+    const ids = qm.clean(cmd.queue ?? '', cmd.graceMs ?? 0, cmd.state, cmd.limit);
+    return { queue: cmd.queue, cleaned: ids.length, ids };
   },
   'queue:obliterate': (qm, cmd) => {
     qm.obliterate(cmd.queue ?? '');

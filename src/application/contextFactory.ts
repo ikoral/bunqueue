@@ -124,6 +124,7 @@ export class ContextFactory {
       dashboardEmit: this.callbacks.emitDashboardEvent,
       workerManager: this.deps.workerManager,
       monitoringState: this.deps.monitoringState,
+      completedJobsData: this.deps.completedJobsData,
     };
   }
 

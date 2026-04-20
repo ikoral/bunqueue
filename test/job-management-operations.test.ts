@@ -769,7 +769,7 @@ describe('Job Management Operations', () => {
 
       // With a grace of 0ms, all jobs are "old"
       const cleaned = qm.clean('test-queue', 0);
-      expect(cleaned).toBe(2);
+      expect(cleaned.length).toBe(2);
       expect(qm.count('test-queue')).toBe(0);
     });
 
@@ -779,7 +779,7 @@ describe('Job Management Operations', () => {
 
       // Very large grace period - no jobs should be cleaned
       const cleaned = qm.clean('test-queue', 999999999);
-      expect(cleaned).toBe(0);
+      expect(cleaned).toEqual([]);
       expect(qm.count('test-queue')).toBe(2);
     });
 
@@ -790,7 +790,7 @@ describe('Job Management Operations', () => {
 
       // Clean at most 2 jobs
       const cleaned = qm.clean('test-queue', 0, undefined, 2);
-      expect(cleaned).toBeLessThanOrEqual(2);
+      expect(cleaned.length).toBeLessThanOrEqual(2);
     });
   });
 

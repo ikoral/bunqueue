@@ -8,7 +8,7 @@ import type { JobLogEntry } from '../domain/types/worker';
 import type { Shard } from '../domain/queue/shard';
 import type { SqliteStorage } from '../infrastructure/persistence/sqlite';
 import type { RWLock } from '../shared/lock';
-import type { LRUMap, BoundedSet, SetLike } from '../shared/lru';
+import type { LRUMap, BoundedSet, BoundedMap, SetLike } from '../shared/lru';
 import type { EventsManager } from './eventsManager';
 import type { WebhookManager } from './webhookManager';
 import type { WorkerManager } from './workerManager';
@@ -115,6 +115,8 @@ export interface BackgroundContext extends QueueManagerState {
   // Monitoring
   workerManager: WorkerManager;
   monitoringState: MonitoringState;
+  // Completed-job full data (for recovery of post-restart cleanup)
+  completedJobsData: BoundedMap<JobId, Job>;
 }
 
 /** Context for stats operations */

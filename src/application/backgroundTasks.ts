@@ -333,6 +333,37 @@ export function recover(ctx: BackgroundContext): void {
     }
     ctx.registerQueueName(queue);
   }
+
+  // === PHASE 3: Recover completed jobs ===
+  // Required for clean('completed'), stats.completed, and in-memory lookups
+  // on jobs that completed before a server restart (issue #84).
+  // Capped at maxCompletedJobs (matches BoundedSet cap) so we don't exceed
+  // the in-memory budget when SQLite contains more rows than the cap.
+  // Note: we deliberately do NOT populate customIdMap here — Phase 2 owns
+  // dedup for pending jobs, and push.ts handles customId collision against
+  // completed jobs via the storage fallback. Touching customIdMap here would
+  // LRU-evict pending-job mappings when many completed jobs have customIds.
+  const completedCap = ctx.config.maxCompletedJobs;
+  let completedLoaded = 0;
+  let completedOffset = 0;
+
+  while (completedLoaded < completedCap) {
+    const remaining = completedCap - completedLoaded;
+    const batchSize = Math.min(RECOVERY_BATCH_SIZE, remaining);
+    const completedBatch = ctx.storage.loadCompletedJobs(batchSize, completedOffset);
+    if (completedBatch.length === 0) break;
+
+    for (const job of completedBatch) {
+      ctx.jobIndex.set(job.id, { type: 'completed', queueName: job.queue });
+      ctx.completedJobs.add(job.id);
+      ctx.completedJobsData.set(job.id, job);
+      ctx.registerQueueName(job.queue);
+    }
+
+    completedLoaded += completedBatch.length;
+    completedOffset += completedBatch.length;
+    if (completedBatch.length < batchSize) break;
+  }
 }
 
 // Re-export for backward compatibility

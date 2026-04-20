@@ -461,7 +461,7 @@ describe('Queue Control Edge Cases', () => {
     // Clean with 0 grace period
     const cleaned = qm.clean(QUEUE, 0);
 
-    expect(cleaned).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(cleaned)).toBe(true);
   });
 
   test('listQueues returns all queue names', async () => {
@@ -1351,7 +1351,7 @@ describe('Clean Operation Edge Cases', () => {
     const cleaned = qm.clean(QUEUE, 0, undefined, 3);
 
     // Should clean at most 3
-    expect(cleaned).toBeLessThanOrEqual(3);
+    expect(cleaned.length).toBeLessThanOrEqual(3);
   });
 
   test('clean with state filter should only affect that state', async () => {
@@ -1364,10 +1364,10 @@ describe('Clean Operation Edge Cases', () => {
     await Bun.sleep(50);
 
     // Clean cleans waiting/delayed together in current implementation
-    // Just verify it doesn't throw and returns a count
+    // Just verify it doesn't throw and returns an array of removed ids
     const cleaned = qm.clean(QUEUE, 0, 'waiting');
-    expect(typeof cleaned).toBe('number');
-    expect(cleaned).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(cleaned)).toBe(true);
+    expect(cleaned.length).toBeGreaterThanOrEqual(0);
   });
 });
 

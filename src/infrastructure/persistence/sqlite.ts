@@ -450,6 +450,22 @@ export class SqliteStorage {
   }
 
   /**
+   * Load completed jobs with pagination.
+   * Uses job_results join to get only jobs that were successfully completed.
+   * @param limit Max jobs to return (default: 10000)
+   * @param offset Skip first N jobs (default: 0)
+   */
+  loadCompletedJobs(limit: number = 10000, offset: number = 0): Job[] {
+    const rows = this.db
+      .query<
+        DbJob,
+        [number, number]
+      >("SELECT * FROM jobs WHERE state = 'completed' ORDER BY completed_at DESC LIMIT ? OFFSET ?")
+      .all(limit, offset);
+    return rows.map((row) => rowToJob(row));
+  }
+
+  /**
    * Count pending jobs (for pagination)
    */
   countPendingJobs(): number {

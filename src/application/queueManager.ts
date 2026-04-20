@@ -808,7 +808,7 @@ export class QueueManager {
     this.queueNamesCache.delete(queue);
   }
 
-  clean(queue: string, graceMs: number, state?: string, limit?: number): number {
+  clean(queue: string, graceMs: number, state?: string, limit?: number): JobId[] {
     return queueControl.cleanQueue(
       queue,
       graceMs,

@@ -158,15 +158,15 @@ export function handleClean(
   ctx: HandlerContext,
   reqId?: string
 ): Response {
-  const count = ctx.queueManager.clean(cmd.queue, cmd.grace, cmd.state, cmd.limit);
-  if (count > 0) {
+  const ids = ctx.queueManager.clean(cmd.queue, cmd.grace, cmd.state, cmd.limit);
+  if (ids.length > 0) {
     ctx.queueManager.emitDashboardEvent('queue:cleaned', {
       queue: cmd.queue,
       state: cmd.state,
-      count,
+      count: ids.length,
     });
   }
-  return { ok: true, count, reqId } as Response;
+  return { ok: true, count: ids.length, ids, reqId } as Response;
 }
 
 /** Handle Count command */

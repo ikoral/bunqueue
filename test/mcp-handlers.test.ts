@@ -204,10 +204,10 @@ describe('EmbeddedBackend - Queue Control', () => {
     }
   });
 
-  test('cleanQueue returns number removed', async () => {
+  test('cleanQueue returns removed ids', async () => {
     await backend.addJob('clean-q', 'j1', {});
     const removed = await backend.cleanQueue('clean-q', 0);
-    expect(typeof removed).toBe('number');
+    expect(Array.isArray(removed)).toBe(true);
   });
 
   test('getCountsPerPriority returns priority breakdown', async () => {
