@@ -11,6 +11,7 @@ export type StatementName =
   | 'updateJobState'
   | 'completeJob'
   | 'deleteJob'
+  | 'deleteJobResult'
   | 'getJob'
   | 'insertResult'
   | 'getResult'
@@ -43,6 +44,8 @@ export const SQL_STATEMENTS: Record<StatementName, string> = {
     'UPDATE jobs SET state = ?, completed_at = ?, progress = 100, timeline = ? WHERE id = ?',
 
   deleteJob: 'DELETE FROM jobs WHERE id = ?',
+
+  deleteJobResult: 'DELETE FROM job_results WHERE job_id = ?',
 
   getJob: 'SELECT * FROM jobs WHERE id = ?',
 

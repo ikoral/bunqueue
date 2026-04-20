@@ -10,6 +10,18 @@ head:
 
 All notable changes to bunqueue are documented here.
 
+## [2.7.10] - 2026-04-20
+
+### Fixed
+- **`clean()` left orphan rows in `job_results` table** (Issue #84, follow-up from @jdorner) — `storage.deleteJob()` executed only `DELETE FROM jobs`, so cleaned completed jobs' result rows persisted forever in `job_results`. `deleteJob()` now runs both `DELETE FROM jobs` and `DELETE FROM job_results WHERE job_id = ?` inside a single `db.transaction(...)` block, atomically cascading the removal. DLQ is intentionally not cascaded here: `moveFailedJobToDlq()` relies on `saveDlqEntry` + `deleteJob` preserving the DLQ row. Callers that clean DLQ (e.g. `cleanFailed`) explicitly call `deleteDlqEntry` beforehand.
+
+### Added
+- `deleteJobResult` prepared statement in `src/infrastructure/persistence/statements.ts`.
+
+### Tests
+- 2 regression tests in `test/client-queue-operations.test.ts`: clean('completed') leaves no orphan `job_results` rows; clean('failed') leaves no orphan rows in jobs/dlq/job_results.
+- Updated `test/sqlite-serializer.test.ts` statement count (13 → 14).
+
 ## [2.7.9] - 2026-04-20
 
 ### Fixed

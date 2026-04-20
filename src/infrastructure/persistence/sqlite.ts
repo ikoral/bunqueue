@@ -286,7 +286,19 @@ export class SqliteStorage {
   deleteJob(jobId: JobId): void {
     this.writeBuffer.removePending(jobId);
     this.safeWrite(() => {
-      this.statements.get('deleteJob')!.run(jobId);
+      // Atomic cascade: job row + result must succeed or fail together so
+      // cleanAsync cannot leave orphan job_results rows (issue #84).
+      // DLQ is NOT cascaded here: moveFailedJobToDlq() intentionally calls
+      // saveDlqEntry() then deleteJob() to drop the jobs row while keeping
+      // the DLQ entry. Callers that want DLQ cleanup (e.g. cleanFailed)
+      // explicitly call deleteDlqEntry() before deleteJob().
+      const deleteStmt = this.statements.get('deleteJob')!;
+      const deleteResultStmt = this.statements.get('deleteJobResult')!;
+      const tx = this.db.transaction((id: JobId) => {
+        deleteStmt.run(id);
+        deleteResultStmt.run(id);
+      });
+      tx(jobId);
     });
   }
 

@@ -833,6 +833,101 @@ describe('Management Operations', () => {
         await q.close();
       }
     });
+
+    it('should not leave orphan job_results rows after clean (regression: issue #84 @jdorner)', async () => {
+      const { Database } = await import('bun:sqlite');
+      const { shutdownManager: sd } = await import('../src/client');
+      sd();
+      const qname = 'bug-84-orphan';
+      const dbPath = `/tmp/bq-test-84-orphan-${Date.now()}.db`;
+
+      const q = new Queue(qname, { embedded: true, dataPath: dbPath });
+      const w = new Worker(qname, async () => ({ ok: true }), {
+        embedded: true,
+        dataPath: dbPath,
+      });
+      try {
+        const job = await q.add('t', {});
+        for (let i = 0; i < 50; i++) {
+          const info = await q.getJob(job.id);
+          if (info && (info as { finishedOn?: number }).finishedOn) break;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        const removed = await q.cleanAsync(0, 1000, 'completed');
+        expect(removed.length).toBeGreaterThanOrEqual(1);
+
+        const db = new Database(dbPath, { readonly: true });
+        try {
+          const orphans = db
+            .query<{ count: number }, []>('SELECT COUNT(*) as count FROM job_results')
+            .get();
+          expect(orphans?.count ?? 0).toBe(0);
+        } finally {
+          db.close();
+        }
+      } finally {
+        await w.close();
+        await q.close();
+        sd();
+        try {
+          await import('fs').then((m) => m.promises.unlink(dbPath));
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    it('should not leave orphan dlq rows after cleaning failed jobs (regression: issue #84 @jdorner)', async () => {
+      const { Database } = await import('bun:sqlite');
+      const { shutdownManager: sd } = await import('../src/client');
+      sd();
+      const qname = 'bug-84-dlq-orphan';
+      const dbPath = `/tmp/bq-test-84-dlq-orphan-${Date.now()}.db`;
+
+      const q = new Queue(qname, { embedded: true, dataPath: dbPath });
+      const w = new Worker(
+        qname,
+        async () => {
+          throw new Error('boom');
+        },
+        { embedded: true, dataPath: dbPath }
+      );
+      try {
+        await q.add('t', {}, { attempts: 1 });
+        for (let i = 0; i < 100; i++) {
+          const counts = q.getJobCounts();
+          if (counts.failed >= 1) break;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        const removed = await q.cleanAsync(0, 1000, 'failed');
+        expect(removed.length).toBeGreaterThanOrEqual(1);
+
+        const db = new Database(dbPath, { readonly: true });
+        try {
+          const jobs = db
+            .query<{ count: number }, []>('SELECT COUNT(*) as count FROM jobs')
+            .get();
+          const dlq = db.query<{ count: number }, []>('SELECT COUNT(*) as count FROM dlq').get();
+          const results = db
+            .query<{ count: number }, []>('SELECT COUNT(*) as count FROM job_results')
+            .get();
+          expect(jobs?.count ?? 0).toBe(0);
+          expect(dlq?.count ?? 0).toBe(0);
+          expect(results?.count ?? 0).toBe(0);
+        } finally {
+          db.close();
+        }
+      } finally {
+        await w.close();
+        await q.close();
+        sd();
+        try {
+          await import('fs').then((m) => m.promises.unlink(dbPath));
+        } catch {
+          // ignore
+        }
+      }
+    });
   });
 });
 
